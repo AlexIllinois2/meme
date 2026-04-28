@@ -1,0 +1,194 @@
+/* 全局主题变量 - 现代浮动卡片风格 */
+:root {
+  /* 主色调 - Indigo */
+  --theme-primary: #6366f1;
+  --theme-primary-light: rgba(99, 102, 241, 0.12);
+  --theme-primary-dark: #4f46e5;
+  
+  /* 中性色 */
+  --theme-text: #1f2937;
+  --theme-text-secondary: #6b7280;
+  --theme-text-tertiary: #9ca3af;
+  --theme-bg: #f8fafc;
+  --theme-bg-secondary: #ffffff;
+  --theme-bg-tertiary: #f1f5f9;
+  --theme-border: #e2e8f0;
+  
+  /* 功能色 */
+  --theme-success: #10b981;
+  --theme-warning: #f59e0b;
+  --theme-danger: #ef4444;
+  --theme-info: #6366f1;
+  
+  /* 圆角 - 更大更现代 */
+  --theme-radius-sm: 8px;
+  --theme-radius-md: 12px;
+  --theme-radius-lg: 16px;
+  --theme-radius-xl: 20px;
+  --theme-radius-2xl: 24px;
+  --theme-radius-full: 9999px;
+  
+  /* 阴影 - 浮动感 */
+  --theme-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --theme-shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --theme-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --theme-shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  
+  /* 图标大小 */
+  --theme-icon-size: 24px;
+  --theme-icon-size-sm: 20px;
+  --theme-icon-size-lg: 32px;
+  
+  /* 间距系统 */
+  --theme-space-1: 4px;
+  --theme-space-2: 8px;
+  --theme-space-3: 12px;
+  --theme-space-4: 16px;
+  --theme-space-5: 20px;
+  --theme-space-6: 24px;
+  --theme-space-8: 32px;
+}
+
+/* 深色模式 */
+.dark-mode {
+  --theme-primary: #818cf8;
+  --theme-primary-light: rgba(129, 140, 248, 0.15);
+  --theme-primary-dark: #6366f1;
+  --theme-text: #f1f5f9;
+  --theme-text-secondary: #94a3b8;
+  --theme-text-tertiary: #64748b;
+  --theme-bg: #0f172a;
+  --theme-bg-secondary: #1e293b;
+  --theme-bg-tertiary: #334155;
+  --theme-border: #334155;
+}
+
+/* 统一按钮样式 - 镂空风格 */
+.btn-outline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--theme-primary);
+  background-color: transparent;
+  border: 1px solid var(--theme-primary);
+  border-radius: var(--theme-radius-md);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-outline:hover {
+  background-color: var(--theme-primary-light);
+}
+
+.btn-outline:active {
+  transform: scale(0.98);
+}
+
+/* 图标按钮样式 - 现代风格 */
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  color: var(--theme-text-secondary);
+  background-color: transparent;
+  border: none;
+  border-radius: var(--theme-radius-lg);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-icon:hover {
+  color: var(--theme-primary);
+  background-color: var(--theme-primary-light);
+}
+
+.btn-icon:active {
+  transform: scale(0.92);
+}
+
+/* 现代卡片样式 */
+.card-modern {
+  background: var(--theme-bg-secondary);
+  border-radius: var(--theme-radius-xl);
+  box-shadow: var(--theme-shadow-md);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card-modern:hover {
+  box-shadow: var(--theme-shadow-lg);
+  transform: translateY(-2px);
+}
+
+/* 设置项样式 - 可点击行 */
+.setting-row {
+  display: flex;
+  align-items: center;
+  gap: var(--theme-space-4);
+  padding: var(--theme-space-4) var(--theme-space-5);
+  background: var(--theme-bg-secondary);
+  border: 1px solid var(--theme-border);
+  border-radius: var(--theme-radius-lg);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.setting-row:hover {
+  background: var(--theme-bg-tertiary);
+  border-color: var(--theme-primary-light);
+}
+
+.setting-row:active {
+  transform: scale(0.995);
+}
+
+/* 分类容器 - 线性边框 */
+.section-container {
+  padding: var(--theme-space-5);
+  background: transparent;
+  border: 1.5px solid var(--theme-border);
+  border-radius: var(--theme-radius-2xl);
+}
+
+/* 浮动 AppBar */
+.app-bar-floating {
+  background: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--theme-border);
+}
+
+.dark-mode .app-bar-floating {
+  background: rgba(15, 23, 42, 0.85) !important;
+}
+
+/* 主要操作按钮 */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: white;
+  background-color: var(--theme-primary);
+  border: none;
+  border-radius: var(--theme-radius-md);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+  background-color: var(--theme-primary-dark);
+}
+
+.btn-primary:active {
+  transform: scale(0.98);
+}
