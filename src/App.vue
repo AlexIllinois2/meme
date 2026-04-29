@@ -130,53 +130,55 @@ async function handleBatchDelete() {
   if (imageCount > 0) message += `• ${imageCount} 张图片\n`;
   message += '\n注意：删除分组会同时删除其下所有图片！';
   
-  Dialog({
+  const result = await Dialog({
     title: '确认批量删除',
     message,
     confirmButton: true,
     cancelButton: true,
     confirmButtonText: '删除',
     cancelButtonText: '取消'
-  }).then(async () => {
-    try {
-      // 1. 删除选中的模式
-      if (selectedModeIds.value.length > 0) {
-        await invoke('delete_modes', { modeIds: selectedModeIds.value });
-      }
-      
-      // 2. 删除选中的分组
-      if (selectedGroupIds.value.length > 0) {
-        await invoke('delete_groups', { groupIds: selectedGroupIds.value });
-      }
-      
-      // 3. 删除选中的图片（只删除未被分组删除覆盖的）
-      // 过滤掉属于已删除分组的图片
-      const remainingImageIds = selectedImages.value.filter(imgId => {
-        const img = images.value.find(i => i.id === imgId);
-        // 如果图片所在的分组没有被删除，才删除这张图片
-        return img && !selectedGroupIds.value.includes(img.group_id);
-      });
-      
-      if (remainingImageIds.length > 0) {
-        await invoke('delete_images', { imageIds: remainingImageIds });
-      }
-      
-      Snackbar.success('批量删除成功');
-      exitGlobalEditMode();
-      
-      // 刷新数据
-      await loadModes();
-      if (selectedModeId.value) {
-        await loadGroups(selectedModeId.value);
-      }
-      if (selectedGroupId.value) {
-        await loadImages(selectedGroupId.value);
-      }
-    } catch (error) {
-      console.error('Failed to batch delete:', error);
-      Snackbar.error('批量删除失败');
-    }
   });
+  
+  if (result !== 'confirm') return;
+  
+  try {
+    // 1. 删除选中的模式
+    if (selectedModeIds.value.length > 0) {
+      await invoke('delete_modes', { modeIds: selectedModeIds.value });
+    }
+    
+    // 2. 删除选中的分组
+    if (selectedGroupIds.value.length > 0) {
+      await invoke('delete_groups', { groupIds: selectedGroupIds.value });
+    }
+    
+    // 3. 删除选中的图片（只删除未被分组删除覆盖的）
+    // 过滤掉属于已删除分组的图片
+    const remainingImageIds = selectedImages.value.filter(imgId => {
+      const img = images.value.find(i => i.id === imgId);
+      // 如果图片所在的分组没有被删除，才删除这张图片
+      return img && !selectedGroupIds.value.includes(img.group_id);
+    });
+    
+    if (remainingImageIds.length > 0) {
+      await invoke('delete_images', { imageIds: remainingImageIds });
+    }
+    
+    Snackbar.success('批量删除成功');
+    exitGlobalEditMode();
+    
+    // 刷新数据
+    await loadModes();
+    if (selectedModeId.value) {
+      await loadGroups(selectedModeId.value);
+    }
+    if (selectedGroupId.value) {
+      await loadImages(selectedGroupId.value);
+    }
+  } catch (error) {
+    console.error('Failed to batch delete:', error);
+    Snackbar.error('批量删除失败');
+  }
 }
 
 // 新增模式弹窗状态
@@ -321,7 +323,7 @@ async function handleEditModeUpload() {
 
 const currentColorMode = ref<'system' | 'light' | 'dark'>('system');
 const shareApp = ref<'wechat' | 'qq' | ''>('wechat');
-const gridColumns = ref<number>(4);
+const gridColumns = ref<number>(5);
 const activeMenu = ref('home');
 const isSideMenuOpen = ref(false);
 const isMenuPopupOpen = ref(false);
@@ -776,27 +778,29 @@ async function uploadImages() {
 async function deleteSelectedImages() {
   if (selectedImages.value.length === 0) return;
   
-  Dialog({
+  const result = await Dialog({
     title: '确认删除',
     message: `确定要删除选中的 ${selectedImages.value.length} 张表情包吗？`,
     confirmButton: true,
     cancelButton: true,
     confirmButtonText: '确定',
     cancelButtonText: '取消'
-  }).then(async () => {
-    try {
-      await invoke("delete_images", { imageIds: selectedImages.value });
-      if (selectedGroupId.value) {
-        await loadImages(selectedGroupId.value);
-      }
-      selectedImages.value = [];
-      isEditMode.value = false;
-      Snackbar.success('删除成功');
-    } catch (error) {
-      console.error("Failed to delete images:", error);
-      Snackbar.error('删除失败');
-    }
   });
+  
+  if (result !== 'confirm') return;
+  
+  try {
+    await invoke("delete_images", { imageIds: selectedImages.value });
+    if (selectedGroupId.value) {
+      await loadImages(selectedGroupId.value);
+    }
+    selectedImages.value = [];
+    isEditMode.value = false;
+    Snackbar.success('删除成功');
+  } catch (error) {
+    console.error("Failed to delete images:", error);
+    Snackbar.error('删除失败');
+  }
 }
 
 async function copySelectedImages() {
@@ -1110,27 +1114,27 @@ async function handleDeleteGroup() {
   closeGroupActionMenu();
   
   // 使用 Dialog 确认删除
-  Dialog({
+  const result = await Dialog({
     title: '确认删除',
     message: `确定要删除分组 "${group.name}" 吗？此操作不可恢复！`,
     confirmButton: true,
     cancelButton: true,
     confirmButtonText: '删除',
     cancelButtonText: '取消'
-  }).then(async (result) => {
-    if (result === 'confirm') {
-      try {
-        await invoke('delete_group', { groupId: group.id });
-        Snackbar.success('分组已删除');
-        if (selectedModeId.value) {
-          await loadGroups(selectedModeId.value);
-        }
-      } catch (error) {
-        console.error('Failed to delete group:', error);
-        Snackbar.error('删除分组失败');
-      }
-    }
   });
+  
+  if (result !== 'confirm') return;
+  
+  try {
+    await invoke('delete_group', { groupId: group.id });
+    Snackbar.success('分组已删除');
+    if (selectedModeId.value) {
+      await loadGroups(selectedModeId.value);
+    }
+  } catch (error) {
+    console.error('Failed to delete group:', error);
+    Snackbar.error('删除分组失败');
+  }
 }
 
 function handleManageKeywords() {
@@ -1195,25 +1199,28 @@ async function handleModeMenuSelect(mode: Mode, action: string) {
       editingModeSortOrder.value = mode.sort_order;
       showModeEditPopup.value = true;
       break;
-    case 'delete':
-      Dialog({
+    case 'delete': {
+      const result = await Dialog({
         title: '确认删除',
         message: `确定要删除模式 "${mode.name}" 吗？相关文件将移动到回收站。`,
         confirmButton: true,
         cancelButton: true,
         confirmButtonText: '删除',
         cancelButtonText: '取消'
-      }).then(async () => {
-        try {
-          await invoke('delete_mode', { modeId: mode.id });
-          Snackbar.success('模式已删除');
-          await loadModes();
-        } catch (error) {
-          console.error('Failed to delete mode:', error);
-          Snackbar.error('删除模式失败');
-        }
       });
+      
+      if (result !== 'confirm') return;
+      
+      try {
+        await invoke('delete_mode', { modeId: mode.id });
+        Snackbar.success('模式已删除');
+        await loadModes();
+      } catch (error) {
+        console.error('Failed to delete mode:', error);
+        Snackbar.error('删除模式失败');
+      }
       break;
+    }
   }
 }
 
@@ -1256,27 +1263,30 @@ async function handleGroupMenuSelect(group: Group, action: string) {
     case 'keywords':
       showKeywordManager.value = true;
       break;
-    case 'delete':
-      Dialog({
+    case 'delete': {
+      const result = await Dialog({
         title: '确认删除',
         message: `确定要删除分组 "${group.name}" 吗？相关文件将移动到回收站。`,
         confirmButton: true,
         cancelButton: true,
         confirmButtonText: '删除',
         cancelButtonText: '取消'
-      }).then(async () => {
-        try {
-          await invoke('delete_group', { groupId: group.id });
-          Snackbar.success('分组已删除');
-          if (selectedModeId.value) {
-            await loadGroups(selectedModeId.value);
-          }
-        } catch (error) {
-          console.error('Failed to delete group:', error);
-          Snackbar.error('删除分组失败');
-        }
       });
+      
+      if (result !== 'confirm') return;
+      
+      try {
+        await invoke('delete_group', { groupId: group.id });
+        Snackbar.success('分组已删除');
+        if (selectedModeId.value) {
+          await loadGroups(selectedModeId.value);
+        }
+      } catch (error) {
+        console.error('Failed to delete group:', error);
+        Snackbar.error('删除分组失败');
+      }
       break;
+    }
   }
 }
 
@@ -1344,27 +1354,30 @@ async function handleImageMenuSelect(img: Image, action: string) {
   selectedImageForMenu.value = img;
   
   switch (action) {
-    case 'delete':
-      Dialog({
+    case 'delete': {
+      const result = await Dialog({
         title: '确认删除',
         message: '确定要删除这张表情包吗？',
         confirmButton: true,
         cancelButton: true,
         confirmButtonText: '删除',
         cancelButtonText: '取消'
-      }).then(async () => {
-        try {
-          await invoke('delete_images', { imageIds: [img.id] });
-          Snackbar.success('图片已删除');
-          if (selectedGroupId.value) {
-            await loadImages(selectedGroupId.value);
-          }
-        } catch (error) {
-          console.error('Failed to delete image:', error);
-          Snackbar.error('删除图片失败');
-        }
       });
+      
+      if (result !== 'confirm') return;
+      
+      try {
+        await invoke('delete_images', { imageIds: [img.id] });
+        Snackbar.success('图片已删除');
+        if (selectedGroupId.value) {
+          await loadImages(selectedGroupId.value);
+        }
+      } catch (error) {
+        console.error('Failed to delete image:', error);
+        Snackbar.error('删除图片失败');
+      }
       break;
+    }
   }
 }
 </script>
@@ -1557,7 +1570,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
                       active: selectedModeId === mode.id,
                       'is-selected': selectedModeIds.includes(mode.id)
                     }"
-                    @click="!isGlobalEditMode && switchMode(mode.id)"
+                    @click="isGlobalEditMode ? toggleModeSelection(mode.id) : switchMode(mode.id)"
                   >
                     {{ mode.name }}
                   </div>
@@ -1606,7 +1619,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
                       active: selectedGroupId === group.id,
                       'is-selected': selectedGroupIds.includes(group.id)
                     }"
-                    @click="!isGlobalEditMode && switchGroup(group.id)"
+                    @click="isGlobalEditMode ? toggleGroupSelection(group.id) : switchGroup(group.id)"
                   >
                     {{ group.name }}
                   </div>
@@ -1641,6 +1654,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
             selected: selectedImages.includes(img.id),
             'is-selectable': isGlobalEditMode 
           }"
+          @click="isGlobalEditMode && toggleImageSelection(img.id)"
         >
             <!-- 多选复选框 -->
             <div
@@ -1663,6 +1677,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
               />
             </div>
             <ContextMenu
+              v-if="!isGlobalEditMode"
               :items="imageMenuItems"
               @select="(action) => handleImageMenuSelect(img, action)"
             >
@@ -1670,9 +1685,15 @@ async function handleImageMenuSelect(img: Image, action: string) {
                 :src="toAssetPath(img.thumbnail_path || img.image_path)"
                 fit="cover"
                 class="image-content"
-                @click="!isGlobalEditMode && copySingleImage(img)"
+                @click="copySingleImage(img)"
               />
             </ContextMenu>
+            <var-image
+              v-else
+              :src="toAssetPath(img.thumbnail_path || img.image_path)"
+              fit="cover"
+              class="image-content"
+            />
             <div v-if="selectedImages.includes(img.id) && !isGlobalEditMode" class="check-overlay">
               <var-icon name="check-circle" size="24" color="#fff" />
             </div>
@@ -1680,7 +1701,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
         </div>
 
         <!-- 模式编辑弹窗 -->
-        <var-popup :show="showModeEditPopup" @click-overlay="showModeEditPopup = false">
+        <var-popup class="edit-mode-popup" :show="showModeEditPopup" @click-overlay="showModeEditPopup = false">
           <div class="edit-popup">
             <div class="edit-popup-header">
               <h3>编辑模式</h3>
@@ -1712,7 +1733,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
         </var-popup>
 
         <!-- 分组编辑弹窗 -->
-        <var-popup :show="showGroupEditPopup" @click-overlay="showGroupEditPopup = false">
+        <var-popup class="edit-mode-popup" :show="showGroupEditPopup" @click-overlay="showGroupEditPopup = false">
           <div class="edit-popup">
             <div class="edit-popup-header">
               <h3>重命名分组</h3>
@@ -1737,7 +1758,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
         </var-popup>
 
         <!-- 新增模式弹窗 -->
-        <var-popup :show="showAddModePopup" @click-overlay="showAddModePopup = false">
+        <var-popup class="edit-mode-popup" :show="showAddModePopup" @click-overlay="showAddModePopup = false">
           <div class="edit-popup">
             <div class="edit-popup-header">
               <h3>新增模式</h3>
@@ -1762,7 +1783,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
         </var-popup>
 
         <!-- 新增分组弹窗 -->
-        <var-popup :show="showAddGroupPopup" @click-overlay="showAddGroupPopup = false">
+        <var-popup class="edit-mode-popup" :show="showAddGroupPopup" @click-overlay="showAddGroupPopup = false">
           <div class="edit-popup">
             <div class="edit-popup-header">
               <h3>新增分组</h3>
@@ -1791,7 +1812,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
         </var-popup>
 
         <!-- 新增图片弹窗 -->
-        <var-popup :show="showAddImagePopup" @click-overlay="showAddImagePopup = false">
+        <var-popup class="edit-mode-popup" :show="showAddImagePopup" @click-overlay="showAddImagePopup = false">
           <div class="edit-popup">
             <div class="edit-popup-header">
               <h3>添加图片</h3>
@@ -1867,7 +1888,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
 .app-container {
   display: flex;
   height: 100vh;
-  background-color: var(--color-bg);
+  background-color: var(--color-body);
   position: relative;
 }
 
@@ -1892,7 +1913,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
 
 .top-search-bar {
   padding: 12px;
-  background-color: var(--color-bg);
+  background-color: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   z-index: 10;
@@ -1907,7 +1928,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
 .search-input {
   flex: 1;
   border-radius: 16px;
-  background-color: var(--color-bg-2);
+  background-color: var(--color-surface-variant);
 }
 
 .search-actions {
@@ -1925,12 +1946,12 @@ async function handleImageMenuSelect(img: Image, action: string) {
 .modern-tabs-container {
   position: relative;
   border-bottom: 1px solid var(--color-border);
-  background-color: var(--color-bg);
+  background-color: var(--color-surface);
   padding: 8px 12px;
 }
 
 .modern-tabs-container.secondary {
-  background-color: var(--color-bg-2);
+  background-color: var(--color-surface);
 }
 
 .modern-tabs-scroll {
@@ -1968,7 +1989,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
 }
 
 .modern-tab:hover {
-  background-color: var(--color-bg-2);
+  background-color: var(--color-surface-variant);
   color: var(--color-text);
 }
 
@@ -2027,7 +2048,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
 }
 
 .select-checkbox:hover {
-  background-color: var(--color-bg-2);
+  background-color: var(--color-surface-variant);
 }
 
 .select-checkbox.is-checked {
@@ -2041,11 +2062,23 @@ async function handleImageMenuSelect(img: Image, action: string) {
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
-  background-color: var(--color-bg-2);
+  background-color: var(--color-surface-variant);
   border-radius: 8px;
   margin-bottom: 16px;
   font-size: 14px;
-  color: var(--color-text-2);
+  color: var(--color-text-secondary);
+}
+.current-mode-display,
+.current-group-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background-color: var(--color-surface-variant);
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  color: var(--color-text-secondary);
 }
 
 .current-mode-display span,
@@ -2103,7 +2136,20 @@ async function handleImageMenuSelect(img: Image, action: string) {
   width: 100%;
   height: calc(100vh - 250px);
   box-sizing: border-box;
-  background-color: var(--color-bg);
+  background-color: var(--color-body);
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+.image-grid {
+  flex: 1;
+  min-height: 300px;
+  padding: 12px;
+  overflow-y: auto;
+  width: 100%;
+  height: calc(100vh - 250px);
+  box-sizing: border-box;
+  background-color: var(--color-body);
   display: grid;
   gap: 12px;
   align-content: start;
@@ -2711,7 +2757,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: var(--color-bg-2);
+  background-color: var(--color-surface-variant);
   border-radius: 16px;
 }
 
@@ -2732,7 +2778,15 @@ async function handleImageMenuSelect(img: Image, action: string) {
   grid-column: 1 / -1;
   text-align: center;
   padding: 60px 20px;
-  background-color: var(--color-bg-2);
+  background-color: var(--color-surface-variant);
+  border-radius: 16px;
+  margin: 20px 0;
+}
+.empty-state {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 60px 20px;
+  background-color: var(--color-surface-variant);
   border-radius: 16px;
   margin: 20px 0;
 }
@@ -2740,7 +2794,13 @@ async function handleImageMenuSelect(img: Image, action: string) {
 .edit-actions {
   padding: 12px;
   border-top: 1px solid var(--color-border);
-  background-color: var(--color-bg);
+  background-color: var(--color-surface);
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.08);
+}
+.edit-actions {
+  padding: 12px;
+  border-top: 1px solid var(--color-border);
+  background-color: var(--color-surface);
   box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.08);
 }
 
@@ -2781,7 +2841,11 @@ async function handleImageMenuSelect(img: Image, action: string) {
 }
 
 .image-grid::-webkit-scrollbar-track {
-  background: var(--color-bg-2);
+  background: var(--color-surface-variant);
+  border-radius: 3px;
+}
+.image-grid::-webkit-scrollbar-track {
+  background: var(--color-surface-variant);
   border-radius: 3px;
 }
 
@@ -2808,7 +2872,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
   padding: 8px 0;
   border-radius: 16px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-  background-color: var(--color-bg);
+  background-color: var(--color-surface);
   backdrop-filter: blur(10px);
   min-width: 180px;
 }
@@ -2831,7 +2895,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
 }
 
 .menu-item:hover {
-  background-color: var(--color-bg-2);
+  background-color: var(--color-surface-variant);
 }
 
 .menu-item:active {
@@ -2868,7 +2932,18 @@ async function handleImageMenuSelect(img: Image, action: string) {
   z-index: 10000;
   width: 280px;
   max-width: 90vw;
-  background-color: var(--color-bg);
+  background-color: var(--color-surface);
+  border-radius: 20px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  animation: menuAppear 0.2s ease;
+}
+.group-action-menu {
+  position: relative;
+  z-index: 10000;
+  width: 280px;
+  max-width: 90vw;
+  background-color: var(--color-surface);
   border-radius: 20px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
   overflow: hidden;
@@ -2892,7 +2967,15 @@ async function handleImageMenuSelect(img: Image, action: string) {
   justify-content: space-between;
   padding: 16px 20px;
   border-bottom: 1px solid var(--color-border);
-  background-color: var(--color-bg-2);
+  background-color: var(--color-surface-variant);
+}
+.group-action-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-border);
+  background-color: var(--color-surface-variant);
 }
 
 .group-action-header h3 {
@@ -2920,7 +3003,10 @@ async function handleImageMenuSelect(img: Image, action: string) {
 }
 
 .group-action-item:hover {
-  background-color: var(--color-bg-2);
+  background-color: var(--color-surface-variant);
+}
+.group-action-item:hover {
+  background-color: var(--color-surface-variant);
 }
 
 .group-action-item:active {
@@ -2970,9 +3056,10 @@ async function handleImageMenuSelect(img: Image, action: string) {
 .edit-popup {
   width: 320px;
   max-width: 90vw;
-  background-color: var(--color-bg);
+  background-color: var(--color-surface);
   border-radius: 16px;
   overflow: hidden;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
 }
 
 .edit-popup-header {
@@ -2981,7 +3068,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
   justify-content: space-between;
   padding: 16px 20px;
   border-bottom: 1px solid var(--color-border);
-  background-color: var(--color-bg-2);
+  background-color: var(--color-surface-variant);
 }
 
 .edit-popup-header h3 {
@@ -3007,6 +3094,37 @@ async function handleImageMenuSelect(img: Image, action: string) {
 
 .edit-popup-actions .var-button {
   flex: 1;
+}
+
+/* 覆盖 var-popup 默认样式 - 针对编辑弹窗 */
+.edit-mode-popup :deep(.var-popup__overlay) {
+  background-color: rgba(0, 0, 0, 0.5) !important;
+}
+
+.edit-mode-popup :deep(.var-popup__content) {
+  background-color: transparent !important;
+  border-radius: 16px !important;
+  box-shadow: none !important;
+  overflow: hidden !important;
+}
+
+.edit-mode-popup :deep(.var-popup) {
+  border-radius: 16px !important;
+  overflow: hidden !important;
+  background-color: transparent !important;
+}
+
+/* 全局覆盖所有 var-popup 确保没有白色背景 */
+:global(.var-popup) {
+  background-color: transparent !important;
+}
+
+:global(.var-popup--center) {
+  background-color: transparent !important;
+}
+
+:global(.var-popup__content) {
+  background-color: transparent !important;
 }
 
 @media (max-width: 768px) {

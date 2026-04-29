@@ -141,7 +141,7 @@ onUnmounted(() => {
       @touchstart="handleTouchStart"
       @click="handleClick"
     >
-      <Icon name="search" :size="24" />
+      <Icon name="search" color="rgba(256, 256, 256, 0.7)" :size="24" />
     </div>
   </Transition>
 </template>
@@ -149,10 +149,10 @@ onUnmounted(() => {
 <style scoped>
 .floating-search-btn {
   position: fixed;
-  width: 56px;
-  height: 56px;
+  width: 42px;
+  height: 42px;
   border-radius: 50%;
-  background: rgba(99, 102, 241, 0.75);
+  background: rgba(99, 101, 241, 0.507);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   display: flex;
@@ -172,7 +172,7 @@ onUnmounted(() => {
 }
 
 .floating-search-btn:hover {
-  background: rgba(99, 102, 241, 0.9);
+  background: rgba(99, 101, 241, 0.692);
   transform: scale(1.05);
   box-shadow: 
     0 6px 20px rgba(99, 102, 241, 0.5),
@@ -181,11 +181,7 @@ onUnmounted(() => {
 
 .floating-search-btn:active {
   transform: scale(0.95);
-  background: rgba(79, 70, 229, 0.85);
-}
-
-.floating-search-btn :deep(.icon) {
-  color: white;
+  background: rgba(99, 101, 241, 0.692);
 }
 
 /* 过渡动画 */

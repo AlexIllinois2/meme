@@ -107,7 +107,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <var-popup :show="show" @click-overlay="close">
+  <var-popup class="keyword-manager-popup" :show="show" @click-overlay="close">
     <div class="keyword-manager">
       <div class="keyword-manager-header">
         <h3>管理关键词</h3>
@@ -184,9 +184,41 @@ onMounted(() => {
 .keyword-manager {
   width: 320px;
   max-width: 90vw;
-  background-color: var(--color-bg);
+  background-color: var(--color-surface);
   border-radius: 16px;
   overflow: hidden;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+/* 覆盖 var-popup 默认样式 */
+.keyword-manager-popup :deep(.var-popup__overlay) {
+  background-color: rgba(0, 0, 0, 0.5) !important;
+}
+
+.keyword-manager-popup :deep(.var-popup__content) {
+  background-color: transparent !important;
+  border-radius: 16px !important;
+  box-shadow: none !important;
+  overflow: hidden !important;
+}
+
+.keyword-manager-popup :deep(.var-popup) {
+  border-radius: 16px !important;
+  overflow: hidden !important;
+  background-color: transparent !important;
+}
+
+/* 全局覆盖 */
+:global(.var-popup) {
+  background-color: transparent !important;
+}
+
+:global(.var-popup--center) {
+  background-color: transparent !important;
+}
+
+:global(.var-popup__content) {
+  background-color: transparent !important;
 }
 
 .keyword-manager-header {
@@ -195,7 +227,7 @@ onMounted(() => {
   justify-content: space-between;
   padding: 16px 20px;
   border-bottom: 1px solid var(--color-border);
-  background-color: var(--color-bg-2);
+  background-color: var(--color-surface-variant);
 }
 
 .keyword-manager-header h3 {
@@ -214,11 +246,11 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
-  background-color: var(--color-bg-2);
+  background-color: var(--color-surface-variant);
   border-radius: 8px;
   margin-bottom: 16px;
   font-size: 14px;
-  color: var(--color-text-2);
+  color: var(--color-text-secondary);
 }
 
 .group-name-display span {
@@ -241,7 +273,7 @@ onMounted(() => {
   justify-content: center;
   padding: 24px;
   gap: 8px;
-  color: var(--color-text-3);
+  color: var(--color-text-tertiary);
 }
 
 .empty-state p {

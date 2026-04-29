@@ -153,7 +153,7 @@ defineExpose({
 .context-menu {
   min-width: 160px;
   max-width: 220px;
-  background-color: var(--color-bg);
+  background-color: var(--color-surface);
   border-radius: 12px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   overflow: hidden;
@@ -189,7 +189,7 @@ defineExpose({
 }
 
 .context-menu-item:hover {
-  background-color: var(--color-bg-2);
+  background-color: var(--color-surface-variant);
 }
 
 .context-menu-item:active {

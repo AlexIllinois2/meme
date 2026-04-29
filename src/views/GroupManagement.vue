@@ -350,7 +350,7 @@ async function deleteSelectedGroups() {
 .batch-actions {
   margin-bottom: 16px;
   padding: 12px;
-  background-color: var(--color-bg-2);
+  background-color: var(--color-bg-3);
   border-radius: 8px;
 }
 
