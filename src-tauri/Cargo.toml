@@ -30,11 +30,18 @@ rusqlite = { version = "0.31", features = ["bundled"] }
 image = "0.24"
 uuid = { version = "1", features = ["v4"] }
 dirs = "5"
-clipboard-rs = "0.3"
 pinyin = "0.10"
 toml = "0.8"
 toml_edit = "0.22"
 percent-encoding = "2"
 chrono = "0.4"
 rand = "0.8"
+log = "0.4"
+base64 = "0.22"
+
+[target.'cfg(not(target_os = "android"))'.dependencies]
+clipboard-rs = "0.3"
+
+[target.'cfg(target_os = "android")'.dependencies]
+tauri-plugin-share = "2"
 

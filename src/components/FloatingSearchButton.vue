@@ -34,12 +34,17 @@ onMounted(() => {
 });
 
 function resetPosition() {
-  // 默认位置：右下角，距离边缘 24px
+  // 默认位置：右下角，距离边缘 24px（考虑安全区域）
   const vw = window.innerWidth;
   const vh = window.innerHeight;
+  
+  // 获取底部安全区域
+  const rootStyle = getComputedStyle(document.documentElement);
+  const safeAreaBottom = parseInt(rootStyle.getPropertyValue('--safe-area-bottom')) || 0;
+  
   position.value = {
     x: vw - 80,
-    y: vh - 120
+    y: vh - 120 - safeAreaBottom
   };
 }
 
@@ -93,9 +98,17 @@ function updatePosition(x: number, y: number) {
   const vh = window.innerHeight;
   const btnSize = 56; // 按钮大小
   
-  // 边界检测
+  // 获取安全区域大小（从 CSS 变量读取，单位是 px）
+  const rootStyle = getComputedStyle(document.documentElement);
+  const safeAreaTop = parseInt(rootStyle.getPropertyValue('--safe-area-top')) || 0;
+  const safeAreaBottom = parseInt(rootStyle.getPropertyValue('--safe-area-bottom')) || 0;
+  
+  // 边界检测（考虑安全区域）
+  const minY = Math.max(8, safeAreaTop);
+  const maxY = vh - btnSize - Math.max(8, safeAreaBottom);
+  
   x = Math.max(8, Math.min(vw - btnSize - 8, x));
-  y = Math.max(8, Math.min(vh - btnSize - 8, y));
+  y = Math.max(minY, Math.min(maxY, y));
   
   position.value = { x, y };
 }

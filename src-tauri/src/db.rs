@@ -4,8 +4,19 @@ use std::path::PathBuf;
 
 /// 获取应用数据目录
 pub fn get_app_data_dir() -> PathBuf {
-    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-    PathBuf::from(home).join(".local/share/meme")
+    // Android 使用应用私有目录
+    #[cfg(target_os = "android")]
+    {
+        // Android 上返回 /data/data/com.v.meme/files
+        PathBuf::from("/data/data/com.v.meme/files")
+    }
+    
+    // 桌面端使用标准目录
+    #[cfg(not(target_os = "android"))]
+    {
+        let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+        PathBuf::from(home).join(".local/share/meme")
+    }
 }
 
 /// 获取数据库路径

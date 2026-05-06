@@ -323,6 +323,7 @@ async function deleteSelectedGroups() {
   height: 100%;
   display: flex;
   flex-direction: column;
+  padding-top: env(safe-area-inset-top);
 }
 
 .content {

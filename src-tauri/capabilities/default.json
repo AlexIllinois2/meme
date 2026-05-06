@@ -1,5 +1,5 @@
 {
-  "$schema": "../gen/schemas/desktop-schema.json",
+  "$schema": "../gen/schemas/mobile-schema.json",
   "identifier": "default",
   "description": "Capability for the main window",
   "windows": ["main"],
@@ -8,6 +8,47 @@
     "opener:default",
     "dialog:default",
     "fs:default",
-    "clipboard-manager:allow-read-image"
-  ]
+    "fs:allow-read-dir",
+    {
+      "identifier": "fs:allow-read-dir",
+      "allow": [
+        {
+          "path": "/sdcard"
+        },
+        {
+          "path": "/sdcard/**"
+        },
+        {
+          "path": "/storage"
+        },
+        {
+          "path": "/storage/**"
+        },
+        {
+          "path": "/storage/emulated/0"
+        },
+        {
+          "path": "/storage/emulated/0/**"
+        }
+      ]
+    },
+    "fs:allow-read-file",
+    {
+      "identifier": "fs:allow-read-file",
+      "allow": [
+        {
+          "path": "/sdcard/**"
+        },
+        {
+          "path": "/storage/**"
+        },
+        {
+          "path": "/storage/emulated/0/**"
+        }
+      ]
+    },
+    "clipboard-manager:allow-read-image",
+    "share:default"
+  ],
+  "platforms": ["linux", "android", "macOS", "windows", "iOS"]
 }

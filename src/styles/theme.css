@@ -1,5 +1,11 @@
 /* 全局主题变量 - 现代浮动卡片风格 */
 :root {
+  /* 安全区域 - 用于处理状态栏和导航栏 */
+  --safe-area-top: env(safe-area-inset-top);
+  --safe-area-bottom: env(safe-area-inset-bottom);
+  --safe-area-left: env(safe-area-inset-left);
+  --safe-area-right: env(safe-area-inset-right);
+  
   /* 主色调 - Indigo */
   --theme-primary: #6366f1;
   --theme-primary-light: rgba(99, 102, 241, 0.12);
@@ -47,6 +53,20 @@
   --theme-space-5: 20px;
   --theme-space-6: 24px;
   --theme-space-8: 32px;
+}
+
+/* 全局安全区域处理 */
+/* 注意：Android 端的 WindowInsets 处理由 MainActivity.kt 负责，
+   这里只定义 CSS 变量供组件使用，不直接设置 padding 避免双重偏移 */
+html, body {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+#app {
+  min-height: 100vh;
+  box-sizing: border-box;
 }
 
 /* 深色模式 */
@@ -111,6 +131,39 @@
 
 .btn-icon:active {
   transform: scale(0.92);
+  background-color: var(--theme-primary-light);
+}
+
+/* 移除 Android WebView 默认的焦点 outline */
+.btn-icon:focus,
+.btn-icon:focus-visible {
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+  background-color: transparent;
+}
+
+/* 移动端禁用 hover 效果，修复点击后高亮状态保持问题 */
+@media (hover: none) {
+  .btn-icon:hover {
+    background-color: transparent;
+    color: var(--theme-text-secondary);
+  }
+  
+  .btn-icon:active {
+    background-color: var(--theme-primary-light);
+    color: var(--theme-primary);
+  }
+}
+
+/* 所有按钮元素移除默认 outline */
+button:focus,
+button:focus-visible {
+  outline: none;
+}
+
+/* Android 点击高亮透明 */
+* {
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* 现代卡片样式 */

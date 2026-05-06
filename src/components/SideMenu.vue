@@ -201,6 +201,7 @@ function setActiveMenu(menu: string) {
   justify-content: space-between;
   align-items: center;
   padding: 24px 24px 20px;
+  padding-top: max(24px, env(safe-area-inset-top));
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -281,6 +282,7 @@ function setActiveMenu(menu: string) {
   justify-content: space-between;
   align-items: center;
   padding: 24px 24px 20px;
+  padding-top: max(24px, env(safe-area-inset-top));
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -370,6 +372,7 @@ function setActiveMenu(menu: string) {
   
   .menu-header {
     padding: 20px 20px 16px;
+    padding-top: max(20px, env(safe-area-inset-top));
   }
   
   .menu-header h2 {

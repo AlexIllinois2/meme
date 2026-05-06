@@ -16,14 +16,17 @@ export default defineConfig(async () => ({
   server: {
     port: 1420,
     strictPort: true,
-    host: host || false,
+    // 必须设置为 true 或 "0.0.0.0" 以支持 Android 设备访问开发服务器
+    host: host || true,
+    // HMR 仅在桌面端开发时使用
+    // Android 端通过局域网 IP 加载，HMR 不工作，禁用以避免报错
     hmr: host
       ? {
           protocol: "ws",
           host,
           port: 1421,
         }
-      : undefined,
+      : false,
     watch: {
       // 3. tell Vite to ignore watching `src-tauri`
       ignored: ["**/src-tauri/**"],

@@ -35,6 +35,8 @@ const modernLightVars = {
   
   // 文字
   '--color-text': '#1f2937',
+  '--color-text-2': '#6b7280',
+  '--color-text-3': '#9ca3af',
   '--color-text-secondary': '#6b7280',
   '--color-text-tertiary': '#9ca3af',
   
@@ -79,6 +81,8 @@ const modernDarkVars = {
   '--color-surface-variant': '#334155',
   
   '--color-text': '#f1f5f9',
+  '--color-text-2': '#94a3b8',
+  '--color-text-3': '#64748b',
   '--color-text-secondary': '#94a3b8',
   '--color-text-tertiary': '#64748b',
   
@@ -117,6 +121,8 @@ const minimalLightVars = {
   '--color-surface-variant': '#fafafa',
   
   '--color-text': '#18181b',
+  '--color-text-2': '#71717a',
+  '--color-text-3': '#a1a1aa',
   '--color-text-secondary': '#71717a',
   '--color-text-tertiary': '#a1a1aa',
   
@@ -155,6 +161,8 @@ const minimalDarkVars = {
   '--color-surface-variant': '#27272a',
   
   '--color-text': '#fafafa',
+  '--color-text-2': '#a1a1aa',
+  '--color-text-3': '#71717a',
   '--color-text-secondary': '#a1a1aa',
   '--color-text-tertiary': '#71717a',
   
@@ -193,6 +201,8 @@ const defaultLightVars = {
   '--color-surface-variant': '#f3f4f6',
   
   '--color-text': '#1f2937',
+  '--color-text-2': '#6b7280',
+  '--color-text-3': '#9ca3af',
   '--color-text-secondary': '#6b7280',
   '--color-text-tertiary': '#9ca3af',
   
@@ -231,6 +241,8 @@ const defaultDarkVars = {
   '--color-surface-variant': '#374151',
   
   '--color-text': '#f3f4f6',
+  '--color-text-2': '#9ca3af',
+  '--color-text-3': '#6b7280',
   '--color-text-secondary': '#9ca3af',
   '--color-text-tertiary': '#6b7280',
   

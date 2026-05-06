@@ -22,6 +22,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_share::init())
         .invoke_handler(tauri::generate_handler![
             // 配置
             config::get_config,
@@ -67,10 +68,13 @@ pub fn run() {
             image::share_image_to_app,
             image::increment_share_count,
             image::copy_images,
-            // 剪贴板粘贴
+            // 剪贴板粘贴（桌面端支持，Android 返回错误）
+            image::paste_image_from_clipboard,
             image::paste_image_from_clipboard_raw,
             // 索引刷新
             image::refresh_index,
+            // Android 图片上传（Base64）
+            image::upload_images_android,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 深色模式下的颜色 -->
+    <color name="surface">#FF1A1A1A</color>
+    <color name="surface_variant">#FF2D2D2D</color>
+</resources>

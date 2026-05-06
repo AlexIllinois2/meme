@@ -2,7 +2,7 @@
 import { ref, onMounted, computed } from "vue";
 import * as tauri from "@tauri-apps/api/core";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { Snackbar, Dialog } from '@varlet/ui';
+import { Snackbar, Dialog, ActionSheet } from '@varlet/ui';
 import SideMenu from "./components/SideMenu.vue";
 import ModeManagement from "./views/ModeManagement.vue";
 import GroupManagement from "./views/GroupManagement.vue";
@@ -20,6 +20,11 @@ const invoke = isTauri ? tauri.invoke : async () => {
   console.warn("Tauri is not available, running in browser mode");
   return null;
 };
+
+// 检测是否为 Android Tauri 环境
+function isAndroidTauri() {
+  return isTauri && /android/i.test(navigator.userAgent);
+}
 
 function toAssetPath(filePath: string | null | undefined): string {
   if (!filePath) return '';
@@ -45,7 +50,7 @@ async function selectDirectory() {
         const dirPath = Array.isArray(selected) ? selected[0] : selected;
         if (config.value) {
           config.value.meme_dir = dirPath;
-          await invoke("update_config", { config: config.value });
+          await safeUpdateConfig(config.value);
         }
         return dirPath;
       }
@@ -276,7 +281,12 @@ async function submitAddGroup() {
 }
 
 // 显示新增图片弹窗
-function showAddImageDialog() {
+async function showAddImageDialog() {
+  // Android 端直接调用系统图片选择器
+  if (isAndroidTauri()) {
+    await uploadImagesAndroid();
+    return;
+  }
   showAddImagePopup.value = true;
 }
 
@@ -322,7 +332,7 @@ async function handleEditModeUpload() {
 }
 
 const currentColorMode = ref<'system' | 'light' | 'dark'>('system');
-const shareApp = ref<'wechat' | 'qq' | ''>('wechat');
+const shareApp = ref<'wechat' | 'qq' | ''>('qq');
 const gridColumns = ref<number>(5);
 const activeMenu = ref('home');
 const isSideMenuOpen = ref(false);
@@ -353,6 +363,33 @@ const showKeywordManager = ref(false);
 
 const isMobile = computed(() => window.innerWidth < 768);
 const isSidebarMode = computed(() => !isMobile.value);
+
+/**
+ * 创建类型安全的配置对象
+ * 确保 Config 中所有字段类型正确，防止 UI 组件返回非预期类型
+ */
+function createSafeConfig(cfg: Config): Config {
+  return {
+    meme_dir: String(cfg.meme_dir || ''),
+    color_mode: typeof cfg.color_mode === 'string' ? cfg.color_mode : 'system',
+    theme_style: typeof cfg.theme_style === 'string' ? cfg.theme_style : 'modern',
+    last_mode: Number(cfg.last_mode) || 1,
+    last_group: Number(cfg.last_group) || 1,
+    share_app: typeof cfg.share_app === 'string' ? cfg.share_app : '',
+    grid_size: Number(cfg.grid_size) || 4,
+    pinyin_search: Boolean(cfg.pinyin_search),
+    acronym_search: Boolean(cfg.acronym_search),
+  };
+}
+
+/**
+ * 安全更新配置到后端
+ */
+async function safeUpdateConfig(cfg: Config | null) {
+  if (!cfg) return;
+  const safeConfig = createSafeConfig(cfg);
+  await invoke("update_config", { config: safeConfig });
+}
 
 const menuPopupStyle = computed(() => {
   if (menuAnchor.value) {
@@ -443,6 +480,98 @@ onMounted(async () => {
       }
     }
   });
+
+  // 监听颜色模式变化（从 Settings 页面触发）
+  window.addEventListener('colorModeChanged', (event: any) => {
+    const mode = event.detail;
+    if (mode) {
+      currentColorMode.value = mode;
+      applyTheme();
+    }
+  });
+
+  // 监听生成关键词文件后刷新索引
+  window.addEventListener('refreshIndexAfterKeywordsGenerated', async () => {
+    await refreshIndex();
+  });
+
+  // 监听存储目录变化
+  window.addEventListener('memeDirChanged', async (event: any) => {
+    const { newDir } = event.detail;
+    if (!newDir) return;
+    
+    try {
+      // 检查新目录下是否存在 keywords.toml
+      const fs = await import('@tauri-apps/plugin-fs');
+      const keywordsFileExists = await fs.exists(`${newDir}/keywords.toml`);
+      
+      if (!keywordsFileExists) {
+        // 没有关键词文件，询问用户是否生成分组名关键词
+        const result = await Dialog({
+          title: '生成关键词文件',
+          message: '新目录下没有关键词文件，是否根据分组文件夹名自动生成关键词？',
+          confirmButton: true,
+          cancelButton: true,
+          confirmButtonText: '生成',
+          cancelButtonText: '跳过'
+        });
+        
+        if (result === 'confirm') {
+          await invoke('generate_keywords_file', { 
+            memeDir: newDir,
+            generatePinyin: true,
+            generateAcronym: true
+          });
+          Snackbar.success('关键词文件生成成功');
+        }
+      }
+      
+      // 刷新索引
+      await refreshIndex();
+    } catch (error) {
+      console.error('Failed to handle dir change:', error);
+      Snackbar.error('处理目录变化失败');
+    }
+  });
+
+  // Android 返回键处理
+  if (isAndroidTauri()) {
+    window.addEventListener('tauri-android-back', (event: Event) => {
+      // 如果在编辑模式，先退出编辑模式
+      if (isGlobalEditMode.value) {
+        exitGlobalEditMode();
+        event.preventDefault?.();
+        return;
+      }
+
+      // 如果在子页面，返回主页
+      if (activeMenu.value !== 'home') {
+        activeMenu.value = 'home';
+        // 阻止默认退出行为
+        event.preventDefault?.();
+      } else {
+        // 在主页时，可以显示确认对话框或直接退出
+        // 当前直接退出（不阻止事件）
+      }
+    });
+
+    // 检查 AndroidNative 接口是否可用
+    setTimeout(() => {
+      if (typeof (window as any).AndroidNative === 'undefined') {
+        console.warn('[Android] AndroidNative interface not ready, waiting...');
+        // 再等待一下
+        setTimeout(() => {
+          if (typeof (window as any).AndroidNative === 'undefined') {
+            console.error('[Android] AndroidNative interface still not available after waiting');
+          } else {
+            console.log('[Android] AndroidNative interface is now available');
+          }
+        }, 2000);
+      } else {
+        console.log('[Android] AndroidNative interface is available');
+      }
+    }, 1000);
+  }
 });
 
 function handleResize() {
@@ -462,7 +591,20 @@ async function loadConfig() {
       config.value = result;
       selectedModeId.value = config.value.last_mode || null;
       selectedGroupId.value = config.value.last_group || null;
-      shareApp.value = config.value.share_app || 'wechat';
+      
+      // 分享目标app：只在配置为空字符串（首次启动）时默认QQ，其他情况使用用户的选择
+      // null/undefined 视为首次启动，空字符串也视为首次启动
+      const savedShareApp = config.value.share_app;
+      if (!savedShareApp) {
+        // 首次启动，默认QQ并保存
+        shareApp.value = 'qq';
+        config.value.share_app = 'qq';
+        await safeUpdateConfig(config.value);
+      } else {
+        // 使用用户之前的选择
+        shareApp.value = savedShareApp as 'wechat' | 'qq';
+      }
+      
       gridColumns.value = config.value.grid_size || 4;
       currentColorMode.value = config.value.color_mode as 'system' | 'light' | 'dark';
       pinyinSearchEnabled.value = config.value.pinyin_search || false;
@@ -490,13 +632,13 @@ async function setupInitialConfig() {
       theme_style: "modern",
       last_mode: 1,
       last_group: 1,
-      share_app: "wechat",
+      share_app: "qq",
       grid_size: 4,
       pinyin_search: false,
       acronym_search: false
     };
     config.value = newConfig;
-    await invoke("update_config", { config: config.value });
+    await safeUpdateConfig(config.value);
     applyTheme();
     
     // 首次初始化后，检查是否需要生成 keywords.toml
@@ -509,13 +651,13 @@ async function setupInitialConfig() {
       theme_style: "modern",
       last_mode: 1,
       last_group: 1,
-      share_app: "wechat",
+      share_app: "qq",
       grid_size: 4,
       pinyin_search: false,
       acronym_search: false
     };
     config.value = defaultConfig;
-    await invoke("update_config", { config: config.value });
+    await safeUpdateConfig(config.value);
     applyTheme();
   }
 }
@@ -706,7 +848,7 @@ async function switchMode(active: string | number) {
   await loadGroups(modeId);
   if (config.value) {
     config.value.last_mode = modeId;
-    await invoke("update_config", { config: config.value });
+    await safeUpdateConfig(config.value);
   }
 }
 
@@ -716,7 +858,7 @@ async function switchGroup(active: string | number) {
   await loadImages(groupId);
   if (config.value) {
     config.value.last_group = groupId;
-    await invoke("update_config", { config: config.value });
+    await safeUpdateConfig(config.value);
   }
 }
 
@@ -741,6 +883,12 @@ function toggleImageSelection(imageId: number) {
 
 async function uploadImages() {
   if (!config.value) return;
+  
+  // Android 端使用原生方式选择文件
+  if (isAndroidTauri()) {
+    await uploadImagesAndroid();
+    return;
+  }
   
   try {
     const { open } = await import("@tauri-apps/plugin-dialog");
@@ -773,6 +921,113 @@ async function uploadImages() {
     console.error("Failed to upload images:", error);
     Snackbar.warning("上传图片失败: " + error);
   }
+}
+
+/**
+ * Android 端上传图片
+ * 
+ * 标准流程：
+ * 1. open() → 拿到 content:// URI
+ * 2. 前端读取文件内容并转为 Base64
+ * 3. invoke 传给 Rust 后端
+ * 4. 后端解码 Base64 并保存
+ * 5. 前端接收结果 → 更新 UI
+ */
+async function uploadImagesAndroid() {
+	console.log('[Android] uploadImagesAndroid 开始');
+	console.log('[Android] config:', config.value);
+	console.log('[Android] selectedGroupId:', selectedGroupId.value);
+	console.log('[Android] selectedModeId:', selectedModeId.value);
+	
+	if (!config.value || !selectedGroupId.value || !selectedModeId.value) {
+		Snackbar.warning('请先选择分组');
+		return;
+	}
+	
+	try {
+		// 步骤1：打开系统图片选择器，获取 content:// URI
+		console.log('[Android] 打开图片选择器...');
+		const { open } = await import("@tauri-apps/plugin-dialog");
+		
+		const selected = await open({
+			multiple: true,
+			filters: [{
+				name: "Images",
+				extensions: ["png", "jpg", "jpeg", "gif", "webp", "bmp"]
+			}]
+		});
+		
+		console.log('[Android] 选择器返回结果:', selected);
+		
+		if (!selected || (Array.isArray(selected) && selected.length === 0)) {
+			console.log('[Android] 未选择文件');
+			return;
+		}
+		
+		// 统一转为数组
+		const uris: string[] = Array.isArray(selected) ? selected : [selected];
+		console.log('[Android] 待上传 URI 列表:', uris);
+		
+		// 步骤2：读取文件内容并转为 Base64
+		console.log('[Android] 读取文件内容...');
+		const { readFile } = await import("@tauri-apps/plugin-fs");
+		
+		const imagesData: Array<{ name: string; data: string }> = [];
+		
+		for (const uri of uris) {
+			try {
+				// 读取文件内容
+				const fileData = await readFile(uri);
+				
+				// 转换为 Base64
+				const base64 = arrayBufferToBase64(fileData);
+				
+				// 提取文件名
+				const name = uri.split('/').pop() || 'image.png';
+				
+				imagesData.push({ name, data: base64 });
+				console.log('[Android] 读取文件成功:', name, '大小:', fileData.length);
+			} catch (err) {
+				console.error('[Android] 读取文件失败:', uri, err);
+			}
+		}
+		
+		if (imagesData.length === 0) {
+			Snackbar.warning('没有成功读取任何文件');
+			return;
+		}
+		
+		// 步骤3：调用后端上传接口
+		console.log('[Android] 调用后端 upload_images_android...');
+		const successCount = await invoke<number>("upload_images_android", {
+			imagesData: imagesData,
+			groupId: selectedGroupId.value,
+			modeId: selectedModeId.value
+		});
+		
+		console.log('[Android] 上传完成，成功数量:', successCount);
+		
+		// 步骤4：刷新图片列表
+		await loadImages(selectedGroupId.value);
+		
+		Snackbar.success(`成功上传 ${successCount} 张图片`);
+		console.log('[Android] uploadImagesAndroid 完成');
+	} catch (error) {
+		console.error("[Android] 上传失败:", error);
+		Snackbar.error('上传失败: ' + error);
+	}
+}
+
+/**
+ * 将 ArrayBuffer 转换为 Base64 字符串
+ */
+function arrayBufferToBase64(buffer: Uint8Array): string {
+	let binary = '';
+	const len = buffer.byteLength;
+	for (let i = 0; i < len; i++) {
+		binary += String.fromCharCode(buffer[i]);
+	}
+	return btoa(binary);
 }
 
 async function deleteSelectedImages() {
@@ -898,10 +1153,9 @@ async function addNewGroup() {
 }
 
 function handleShareAppChange(app: string) {
-  shareApp.value = app as 'wechat' | 'qq' | '';
   if (config.value) {
-    config.value.share_app = shareApp.value;
-    invoke("update_config", { config: config.value });
+    config.value.share_app = app as 'wechat' | 'qq' | '';
+    safeUpdateConfig(config.value);
   }
 }
 
@@ -920,7 +1174,7 @@ function handleWheel(event: WheelEvent) {
     }
     if (config.value) {
       config.value.grid_size = gridColumns.value;
-      invoke("update_config", { config: config.value });
+      safeUpdateConfig(config.value);
     }
   }
 }
@@ -945,7 +1199,7 @@ function handleTouchMove(event: TouchEvent) {
     gridColumns.value = Math.max(2, Math.min(8, newColumns));
     if (config.value) {
       config.value.grid_size = gridColumns.value;
-      invoke("update_config", { config: config.value });
+      safeUpdateConfig(config.value);
     }
   }
 }
@@ -1153,7 +1407,7 @@ function togglePinyinSearch() {
   pinyinSearchEnabled.value = !pinyinSearchEnabled.value;
   if (config.value) {
     config.value.pinyin_search = pinyinSearchEnabled.value;
-    invoke("update_config", { config: config.value });
+    safeUpdateConfig(config.value);
   }
 }
 
@@ -1161,7 +1415,7 @@ function toggleAcronymSearch() {
   acronymSearchEnabled.value = !acronymSearchEnabled.value;
   if (config.value) {
     config.value.acronym_search = acronymSearchEnabled.value;
-    invoke("update_config", { config: config.value });
+    safeUpdateConfig(config.value);
   }
 }
 
@@ -1328,7 +1582,18 @@ async function submitGroupEdit() {
   }
 }
 
-// 复制单张图片
+// 处理图片点击：Android 端分享，桌面端复制
+async function handleImageClick(img: Image) {
+  if (isAndroidTauri()) {
+    // Android 端：直接分享到当前选中的 app
+    await shareImageToApp(img);
+  } else {
+    // 桌面端：复制到剪贴板
+    await copySingleImage(img);
+  }
+}
+
+// 复制单张图片（桌面端）
 async function copySingleImage(img: Image) {
   try {
     await invoke("copy_images", { imageIds: [img.id] });
@@ -1336,6 +1601,47 @@ async function copySingleImage(img: Image) {
   } catch (error) {
     console.error("Failed to copy image:", error);
     Snackbar.error('复制失败');
+  }
+}
+
+// 分享图片到 App（Android 端）
+async function shareImageToApp(img: Image) {
+  try {
+    const imagePath = img.image_path;
+    console.log(`[Android] 分享图片:`, imagePath);
+    console.log(`[Android] shareApp:`, shareApp.value);
+    console.log(`[Android] AndroidNative available:`, typeof (window as any).AndroidNative);
+    
+    if (isAndroidTauri() && shareApp.value) {
+      if (typeof (window as any).AndroidNative !== 'undefined' && (window as any).AndroidNative.shareImageToApp) {
+        console.log(`[Android] 调用原生分享接口:`, imagePath, shareApp.value);
+        (window as any).AndroidNative.shareImageToApp(imagePath, shareApp.value);
+        await invoke("share_image", { imageId: img.id });
+        Snackbar.success('正在分享...');
+      } else {
+        console.error('[Android] AndroidNative interface not available');
+        console.log('[Android] Window keys:', Object.keys(window));
+        Snackbar.error('Android原生接口不可用，请重启应用');
+      }
+    } else {
+      const { shareFile } = await import('tauri-plugin-share');
+      const ext = imagePath.split('.').pop()?.toLowerCase() || 'png';
+      const mimeMap: Record<string, string> = {
+        png: 'image/png',
+        jpg: 'image/jpeg',
+        jpeg: 'image/jpeg',
+        gif: 'image/gif',
+        webp: 'image/webp',
+        bmp: 'image/bmp',
+      };
+      const mime = mimeMap[ext] || 'image/png';
+      await shareFile(imagePath, mime);
+      await invoke("share_image", { imageId: img.id });
+      Snackbar.success('已打开分享菜单');
+    }
+  } catch (error) {
+    console.error("Failed to share image:", error);
+    Snackbar.error('分享失败: ' + error);
   }
 }
 
@@ -1445,11 +1751,10 @@ async function handleImageMenuSelect(img: Image, action: string) {
             </button>
           </div>
           </div>
-          
           <div v-if="isMobile" class="share-app-selector">
             <var-radio-group v-model="shareApp" direction="horizontal" size="small" @change="handleShareAppChange">
-              <var-radio name="wechat">微信</var-radio>
-              <var-radio name="qq">QQ</var-radio>
+              <var-radio checked-value="wechat">微信</var-radio>
+              <var-radio checked-value="qq">QQ</var-radio>
             </var-radio-group>
           </div>
         </div>
@@ -1462,24 +1767,6 @@ async function handleImageMenuSelect(img: Image, action: string) {
               @click.stop
             >
               <div class="menu-popup-content">
-                <div class="menu-item" @click="handleMenuAction('edit')">
-                  <var-icon name="pencil" size="18" />
-                  <span>{{ isEditMode ? '退出管理' : '管理图片' }}</span>
-                </div>
-                <div class="menu-item" @click="handleMenuAction('editGroup')">
-                  <var-icon name="folder-edit" size="18" />
-                  <span>编辑分组</span>
-                </div>
-                <div class="menu-divider"></div>
-                <div class="menu-item" @click="handleMenuAction('addMode')">
-                  <var-icon name="folder-plus" size="18" />
-                  <span>添加模式</span>
-                </div>
-                <div class="menu-item" @click="handleMenuAction('addGroup')">
-                  <var-icon name="folder-outline" size="18" />
-                  <span>添加分组</span>
-                </div>
-                <div class="menu-divider"></div>
                 <div class="menu-item" @click="togglePinyinSearch">
                   <var-icon :name="pinyinSearchEnabled ? 'checkbox-marked' : 'checkbox-blank-outline'" size="18" />
                   <span>拼音搜索</span>
@@ -1535,13 +1822,16 @@ async function handleImageMenuSelect(img: Image, action: string) {
         <div class="modern-tabs-container" :class="{ 'edit-mode': isGlobalEditMode }">
           <div class="modern-tabs-scroll">
             <div class="modern-tabs">
-              <!-- 添加模式按钮（编辑模式下显示） -->
+              <!-- 添加模式按钮（编辑模式下或没有模式时显示） -->
               <div
-                v-if="isGlobalEditMode"
+                v-if="isGlobalEditMode || modes.length === 0"
                 class="modern-tab add-tab"
                 @click="showAddModeDialog"
               >
-                <var-icon name="plus" size="18" />
+                <div class="add-tab-content">
+                  <var-icon name="plus" size="18" />
+                  <span class="add-tab-text">添加模式</span>
+                </div>
               </div>
               <!-- 模式列表 -->
               <div
@@ -1558,7 +1848,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
                   @click.stop="toggleModeSelection(mode.id)"
                 >
                   <var-icon v-if="selectedModeIds.includes(mode.id)" name="checkbox-marked" size="18" color="var(--color-primary)" />
-                  <var-icon v-else name="checkbox-blank-outline" size="18" color="var(--color-text-3)" />
+                  <var-icon v-else name="checkbox-blank-outline" size="18" color="var(--color-text)" />
                 </div>
                 <ContextMenu
                   :items="modeMenuItems"
@@ -1584,13 +1874,16 @@ async function handleImageMenuSelect(img: Image, action: string) {
         <div class="modern-tabs-container secondary" :class="{ 'edit-mode': isGlobalEditMode }">
           <div class="modern-tabs-scroll">
             <div class="modern-tabs">
-              <!-- 添加分组按钮（编辑模式下显示） -->
+              <!-- 添加分组按钮（编辑模式下或没有分组时显示） -->
               <div
-                v-if="isGlobalEditMode"
+                v-if="isGlobalEditMode || groups.length === 0"
                 class="modern-tab add-tab"
                 @click="showAddGroupDialog"
               >
-                <var-icon name="plus" size="18" />
+                <div class="add-tab-content">
+                  <var-icon name="plus" size="18" />
+                  <span class="add-tab-text">添加分组</span>
+                </div>
               </div>
               <!-- 分组列表 -->
               <div
@@ -1607,7 +1900,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
                   @click.stop="toggleGroupSelection(group.id)"
                 >
                   <var-icon v-if="selectedGroupIds.includes(group.id)" name="checkbox-marked" size="18" color="var(--color-primary)" />
-                  <var-icon v-else name="checkbox-blank-outline" size="18" color="var(--color-text-3)" />
+                  <var-icon v-else name="checkbox-blank-outline" size="18" color="var(--color-text)" />
                 </div>
                 <ContextMenu
                   :items="groupMenuItems"
@@ -1634,9 +1927,9 @@ async function handleImageMenuSelect(img: Image, action: string) {
           :style="{ gridTemplateColumns: `repeat(${gridColumns}, 1fr)` }"
           :class="{ 'edit-mode': isGlobalEditMode }"
         >
-          <!-- 添加图片按钮（编辑模式下显示） -->
+          <!-- 添加图片按钮（编辑模式下或没有图片时显示） -->
           <div
-            v-if="isGlobalEditMode"
+            v-if="isGlobalEditMode || images.length === 0"
             class="image-item add-image-item"
             @click="showAddImageDialog"
           >
@@ -1673,7 +1966,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
                 v-else 
                 name="checkbox-blank-outline" 
                 size="20" 
-                color="var(--color-text-3)" 
+                color="white" 
               />
             </div>
             <ContextMenu
@@ -1685,7 +1978,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
                 :src="toAssetPath(img.thumbnail_path || img.image_path)"
                 fit="cover"
                 class="image-content"
-                @click="copySingleImage(img)"
+                @click="handleImageClick(img)"
               />
             </ContextMenu>
             <var-image
@@ -1913,6 +2206,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
 
 .top-search-bar {
   padding: 12px;
+  padding-top: max(12px, env(safe-area-inset-top));
   background-color: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
@@ -1979,7 +2273,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
   padding: 8px 16px;
   font-size: 14px;
   font-weight: 500;
-  color: var(--color-text-2);
+  color: var(--color-text);
   background-color: transparent;
   border-radius: 20px;
   cursor: pointer;
@@ -2016,6 +2310,22 @@ async function handleImageMenuSelect(img: Image, action: string) {
   background-color: var(--color-primary);
   color: white;
   border-style: solid;
+}
+
+/* 添加按钮内容布局 */
+.add-tab-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+
+.add-tab-text {
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 /* Tab 包装器和选择模式 */
@@ -2817,6 +3127,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
   
   .top-search-bar {
     padding: 8px 12px;
+    padding-top: max(8px, env(safe-area-inset-top));
   }
   
   .image-grid {
@@ -3144,5 +3455,75 @@ async function handleImageMenuSelect(img: Image, action: string) {
   .edit-popup-body {
     padding: 16px;
   }
+}
+
+/* 修复移动端按钮点击后高亮状态不自动取消的问题 */
+@media (hover: none) {
+  /* 搜索栏按钮 */
+  .btn-icon {
+    -webkit-tap-highlight-color: transparent;
+    transition: transform 0.1s ease, background-color 0.1s ease;
+  }
+  
+  .btn-icon:active {
+    transform: scale(0.92);
+    background-color: var(--color-primary-light);
+  }
+  
+  /* 确保点击后不会保持高亮 */
+  .btn-icon:not(:active) {
+    background-color: transparent;
+  }
+  
+  /* 添加图片按钮 */
+  .image-item.add-image-item {
+    -webkit-tap-highlight-color: transparent;
+    transition: all 0.2s ease;
+  }
+  
+  .image-item.add-image-item:active {
+    transform: scale(0.95);
+    background-color: var(--color-primary);
+  }
+  
+  .image-item.add-image-item:not(:active) {
+    background-color: var(--color-primary-light);
+  }
+  
+  /* 添加模式/分组按钮 */
+  .modern-tab.add-tab {
+    -webkit-tap-highlight-color: transparent;
+    transition: all 0.2s ease;
+  }
+  
+  .modern-tab.add-tab:active {
+    transform: scale(0.95);
+    background-color: var(--color-primary);
+    color: white;
+  }
+}
+
+/* 桌面端保持原有hover效果 */
+@media (hover: hover) {
+  .btn-icon:hover {
+    color: var(--color-primary);
+    background-color: var(--color-primary-light);
+  }
+}
+
+/* 移除所有按钮的focus outline */
+.btn-icon:focus,
+.btn-icon:focus-visible {
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 添加图片item文字颜色修复 */
+.add-image-content span {
+  color: var(--color-text);
+}
+
+.image-item.add-image-item:hover .add-image-content span {
+  color: white;
 }
 </style>

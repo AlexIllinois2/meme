@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
-import { Snackbar, Dialog } from '@varlet/ui';
+import { Snackbar, Dialog, ActionSheet } from '@varlet/ui';
 import Icon from "../components/Icon.vue";
+import FolderPicker from "../components/FolderPicker.vue";
 import type { Config } from "../types";
 
 const config = ref<Config>({
@@ -20,16 +21,44 @@ const config = ref<Config>({
 
 const isSaving = ref(false);
 const appVersion = '1.0.0';
+const showFolderPicker = ref(false);
+
+// 用于存储 matchMedia 监听器引用，以便在组件卸载时移除
+let colorSchemeListener: ((e: MediaQueryListEvent) => void) | null = null;
+let colorSchemeQuery: MediaQueryList | null = null;
+
+// 记录进入设置页时的原始目录，用于返回时判断是否变化
+const originalMemeDir = ref('');
 
 onMounted(async () => {
   await loadConfig();
+  // 保存原始目录
+  originalMemeDir.value = config.value.meme_dir || '';
+});
+
+onUnmounted(() => {
+  // 清理 matchMedia 监听器
+  if (colorSchemeQuery && colorSchemeListener) {
+    colorSchemeQuery.removeEventListener('change', colorSchemeListener);
+    colorSchemeQuery = null;
+    colorSchemeListener = null;
+  }
 });
 
 async function loadConfig() {
   try {
     const result = await invoke<Config>('get_config');
     if (result) {
-      config.value = result;
+      // 逐个字段赋值，确保响应式更新
+      config.value.meme_dir = result.meme_dir || '';
+      config.value.color_mode = result.color_mode || 'system';
+      config.value.theme_style = result.theme_style || 'modern';
+      config.value.last_mode = result.last_mode || 1;
+      config.value.last_group = result.last_group || 1;
+      config.value.share_app = result.share_app || '';
+      config.value.grid_size = result.grid_size || 4;
+      config.value.pinyin_search = result.pinyin_search || false;
+      config.value.acronym_search = result.acronym_search || false;
       updateColorMode(result.color_mode);
     }
   } catch (error) {
@@ -37,12 +66,32 @@ async function loadConfig() {
   }
 }
 
-function goBack() {
+async function goBack() {
+  // 检查目录是否发生变化
+  const currentDir = config.value.meme_dir || '';
+  if (currentDir && currentDir !== originalMemeDir.value) {
+    // 目录发生变化，需要检查新目录是否有效并决定是否刷新
+    try {
+      // 触发目录变化事件，让主页处理刷新逻辑
+      window.dispatchEvent(new CustomEvent('memeDirChanged', { 
+        detail: { newDir: currentDir, oldDir: originalMemeDir.value } 
+      }));
+    } catch (e) {
+      console.error('Failed to handle dir change:', e);
+    }
+  }
   window.dispatchEvent(new CustomEvent('navigateHome'));
 }
 
 function updateColorMode(mode: string) {
   const htmlElement = document.documentElement;
+  
+  // 清理旧的监听器
+  if (colorSchemeQuery && colorSchemeListener) {
+    colorSchemeQuery.removeEventListener('change', colorSchemeListener);
+    colorSchemeQuery = null;
+    colorSchemeListener = null;
+  }
   
   if (mode === 'system') {
     if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
@@ -51,7 +100,9 @@ function updateColorMode(mode: string) {
       htmlElement.classList.remove('var-dark');
     }
     
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+    // 设置新的监听器
+    colorSchemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    colorSchemeListener = (e: MediaQueryListEvent) => {
       if (config.value.color_mode === 'system') {
         if (e.matches) {
           htmlElement.classList.add('var-dark');
@@ -59,7 +110,8 @@ function updateColorMode(mode: string) {
           htmlElement.classList.remove('var-dark');
         }
       }
-    });
+    };
+    colorSchemeQuery.addEventListener('change', colorSchemeListener);
   } else if (mode === 'dark') {
     htmlElement.classList.add('var-dark');
   } else {
@@ -69,7 +121,85 @@ function updateColorMode(mode: string) {
   window.dispatchEvent(new CustomEvent('colorModeChanged', { detail: mode }));
 }
 
+// 检测是否为移动端
+const isMobile = () => {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) 
+    || window.innerWidth < 768;
+};
+
+// 检测是否为 Android Tauri 环境
+const isAndroidTauri = () => {
+  return /android/i.test(navigator.userAgent) && typeof (window as any).__TAURI__ !== 'undefined';
+};
+
+// 检测是否为桌面端
+const isDesktop = () => {
+  return !(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
+};
+
+// 显示 Android 路径选择 ActionSheet
+async function showAndroidPathPicker(): Promise<string | null> {
+  const actions = [
+    { name: '内部存储', path: '/storage/emulated/0' },
+    { name: '下载', path: '/storage/emulated/0/Download' },
+    { name: '图片', path: '/storage/emulated/0/Pictures' },
+    { name: '文档', path: '/storage/emulated/0/Documents' },
+    { name: '自定义路径', path: 'custom' }
+  ];
+  
+  return new Promise((resolve) => {
+    ActionSheet({
+      title: '选择存储目录',
+      actions: actions.map(a => ({ name: a.name })),
+      onSelect: (action: any) => {
+        const selected = actions.find(a => a.name === action.name);
+        if (selected?.path === 'custom') {
+          const customPath = window.prompt('请输入路径（如 /storage/emulated/0/MyMemes）：');
+          resolve(customPath);
+        } else {
+          resolve(selected?.path || null);
+        }
+      },
+      onClose: () => {
+        resolve(null);
+      }
+    });
+  });
+}
+
 async function selectMemeDir() {
+  // Android Tauri 环境使用 ActionSheet 选择路径
+  if (isAndroidTauri()) {
+    try {
+      const selectedPath = await showAndroidPathPicker();
+      
+      if (selectedPath) {
+        // 验证路径是否可访问
+        try {
+          const fs = await import('@tauri-apps/plugin-fs');
+          await fs.readDir(selectedPath);
+          
+          config.value.meme_dir = selectedPath;
+          await autoSaveConfig();
+          Snackbar.success(`已选择目录: ${selectedPath}`);
+        } catch (e) {
+          console.error('Cannot access path:', e);
+          Snackbar.error('无法访问该目录，请检查权限或路径是否正确');
+        }
+      }
+    } catch (error) {
+      console.error('Failed to select directory:', error);
+    }
+    return;
+  }
+  
+  // 其他移动端使用内嵌文件夹浏览器
+  if (!isDesktop()) {
+    showFolderPicker.value = true;
+    return;
+  }
+  
+  // 桌面端使用系统文件选择器
   try {
     const selected = await open({
       directory: true,
@@ -87,29 +217,43 @@ async function selectMemeDir() {
   }
 }
 
+function onFolderSelected(path: string) {
+  config.value.meme_dir = path;
+  autoSaveConfig();
+  Snackbar.success(`已选择目录: ${path}`);
+}
+
 async function autoSaveConfig() {
   try {
     isSaving.value = true;
-    await invoke('update_config', { config: config.value });
-    updateColorMode(config.value.color_mode);
+    
+    // 确保所有字段类型正确，防止 Varlet UI 组件返回非预期类型
+    const safeConfig: Config = {
+      meme_dir: String(config.value.meme_dir || ''),
+      color_mode: typeof config.value.color_mode === 'string' 
+        ? config.value.color_mode 
+        : 'system',
+      theme_style: typeof config.value.theme_style === 'string' 
+        ? config.value.theme_style 
+        : 'modern',
+      last_mode: Number(config.value.last_mode) || 1,
+      last_group: Number(config.value.last_group) || 1,
+      share_app: typeof config.value.share_app === 'string' 
+        ? config.value.share_app 
+        : '',
+      grid_size: Number(config.value.grid_size) || 4,
+      pinyin_search: Boolean(config.value.pinyin_search),
+      acronym_search: Boolean(config.value.acronym_search),
+    };
+    
+    await invoke('update_config', { config: safeConfig });
+    updateColorMode(safeConfig.color_mode);
   } catch (error) {
     console.error('Failed to save config:', error);
     Snackbar.error('配置保存失败');
   } finally {
     isSaving.value = false;
   }
-}
-
-function goToModeManagement() {
-  window.dispatchEvent(new CustomEvent('navigateToMenu', { detail: 'mode' }));
-}
-
-function goToGroupManagement() {
-  window.dispatchEvent(new CustomEvent('navigateToMenu', { detail: 'group' }));
-}
-
-function goToKeywordManagement() {
-  window.dispatchEvent(new CustomEvent('navigateToMenu', { detail: 'keyword' }));
 }
 
 function resetToDefaults() {
@@ -137,6 +281,23 @@ function resetToDefaults() {
   });
 }
 
+// 处理路径输入框失去焦点事件
+async function onPathInputBlur() {
+  // 只在 Android Tauri 环境下处理手动输入
+  if (!isAndroidTauri() || !config.value.meme_dir) return;
+  
+  // 验证路径是否可访问
+  try {
+    const fs = await import('@tauri-apps/plugin-fs');
+    await fs.readDir(config.value.meme_dir);
+    await autoSaveConfig();
+    Snackbar.success(`已保存目录: ${config.value.meme_dir}`);
+  } catch (e) {
+    console.error('Cannot access path:', e);
+    Snackbar.error('无法访问该目录，请检查权限或路径是否正确');
+  }
+}
+
 async function generateKeywordsFile() {
   try {
     await invoke('generate_keywords_file', { 
@@ -145,6 +306,9 @@ async function generateKeywordsFile() {
       generateAcronym: true
     });
     Snackbar.success('关键词文件生成成功');
+    
+    // 触发刷新索引事件，让主页刷新数据
+    window.dispatchEvent(new CustomEvent('refreshIndexAfterKeywordsGenerated'));
   } catch (error) {
     console.error('Failed to generate keywords file:', error);
     Snackbar.error('生成关键词文件失败');
@@ -154,7 +318,6 @@ async function generateKeywordsFile() {
 
 <template>
   <div class="settings">
-    <!-- 圆角卡片式app bar -->
     <var-app-bar class="floating-app-bar" title="设置">
       <template #left>
         <button class="btn-icon" @click="goBack">
@@ -172,18 +335,18 @@ async function generateKeywordsFile() {
         
         <var-cell class="setting-item">
           <div class="setting-label">
-            <label>表情包存储目录</label>
-            <p class="setting-desc">选择本地表情包的存储位置</p>
+            <label>本地存储目录</label>
+            <p class="setting-desc">本地表情包路径</p>
           </div>
           <div class="setting-control">
             <var-input
               v-model="config.meme_dir"
-              readonly
-              placeholder="未选择目录"
+              :readonly="!isAndroidTauri()"
               class="dir-input"
+              @blur="onPathInputBlur"
             />
             <var-button type="primary" @click="selectMemeDir">
-              <Icon name="folder-3" :size="18" /> 浏览
+              <Icon name="folder-3" :size="18" /> {{ isAndroidTauri() ? '选择' : '浏览' }}
             </var-button>
           </div>
         </var-cell>
@@ -191,146 +354,48 @@ async function generateKeywordsFile() {
         <var-cell class="setting-item">
           <div class="setting-label">
             <label>颜色模式</label>
-            <p class="setting-desc">选择应用的主题颜色</p>
           </div>
           <div class="setting-control">
             <var-select v-model="config.color_mode" @change="autoSaveConfig">
-              <var-option value="system" label="跟随系统" />
-              <var-option value="light" label="浅色模式" />
-              <var-option value="dark" label="深色模式" />
+              <var-option value="system" label="系统" />
+              <var-option value="light" label="浅色" />
+              <var-option value="dark" label="深色" />
             </var-select>
           </div>
         </var-cell>
         
         <var-cell class="setting-item">
           <div class="setting-label">
-            <label>主题风格</label>
-            <p class="setting-desc">选择应用的界面风格</p>
+            <label>主题</label>
+            <p class="setting-desc">界面风格</p>
           </div>
           <div class="setting-control">
             <var-select v-model="config.theme_style" @change="autoSaveConfig">
-              <var-option value="modern" label="现代风格" />
-              <var-option value="minimal" label="极简风格" />
-              <var-option value="default" label="默认风格" />
+              <var-option value="default" label="默认" />
+              <var-option value="modern" label="现代" />
+              <var-option value="minimal" label="极简" />
             </var-select>
           </div>
         </var-cell>
         
-        <var-cell class="setting-item">
-          <div class="setting-label">
-            <label>默认分享应用</label>
-            <p class="setting-desc">移动端分享时的默认目标应用</p>
-          </div>
-          <div class="setting-control">
-            <var-select v-model="config.share_app" @change="autoSaveConfig">
-              <var-option value="wechat" label="微信" />
-              <var-option value="qq" label="QQ" />
-              <var-option value="" label="每次询问" />
-            </var-select>
-          </div>
-        </var-cell>
-        
-        <var-cell class="setting-item">
-          <div class="setting-label">
-            <label>网格大小</label>
-            <p class="setting-desc">主页表情包网格的列数（2-8）</p>
-          </div>
-          <div class="setting-control">
-            <div class="slider-container">
-              <var-slider
-                v-model="config.grid_size"
-                :min="2"
-                :max="8"
-                :step="1"
-                @change="autoSaveConfig"
-                class="grid-slider"
-              />
-              <span class="slider-value">{{ config.grid_size }} 列</span>
-            </div>
-          </div>
-        </var-cell>
       </div>
       
       <div class="settings-section">
         <h2>
           <Icon name="price-tag-3" :size="24" />
-          关键词文件管理
+          关键词
         </h2>
         
         <div class="card">
           <div class="card-item">
             <div class="card-item-label">
               <label>生成关键词文件</label>
-              <p class="card-item-desc">自动生成 keywords.toml 文件</p>
+              <p class="card-item-desc">自动生成 keywords.toml </p>
             </div>
             <div class="card-item-control">
               <var-button type="primary" @click="generateKeywordsFile">
-                <Icon name="file-text" :size="18" /> 生成文件
+                <Icon name="file-text" :size="18" /> 生成
               </var-button>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <div class="settings-section">
-        <h2>
-          <Icon name="tools" :size="24" />
-          高级设置
-        </h2>
-        
-        <div class="card">
-          <div class="card-item">
-            <div class="card-item-label">
-              <label>重置设置</label>
-              <p class="card-item-desc">将所有设置恢复为默认值</p>
-            </div>
-            <div class="card-item-control">
-              <var-button type="danger" @click="resetToDefaults">
-                <Icon name="refresh" :size="18" /> 重置
-              </var-button>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <div class="settings-section">
-        <h2>
-          <Icon name="database-2" :size="24" />
-          数据管理
-        </h2>
-        
-        <div class="card">
-          <div class="card-item" @click="goToModeManagement">
-            <div class="card-item-label">
-              <label>模式管理</label>
-              <p class="card-item-desc">管理表情包模式</p>
-            </div>
-            <div class="card-item-control">
-              <Icon name="arrow-right-s" :size="24" color="var(--color-text-tertiary)" />
-            </div>
-          </div>
-          
-          <div class="card-divider"></div>
-          
-          <div class="card-item" @click="goToGroupManagement">
-            <div class="card-item-label">
-              <label>分组管理</label>
-              <p class="card-item-desc">管理表情包分组</p>
-            </div>
-            <div class="card-item-control">
-              <Icon name="arrow-right-s" :size="24" color="var(--color-text-tertiary)" />
-            </div>
-          </div>
-          
-          <div class="card-divider"></div>
-          
-          <div class="card-item" @click="goToKeywordManagement">
-            <div class="card-item-label">
-              <label>关键词管理</label>
-              <p class="card-item-desc">管理搜索关键词</p>
-            </div>
-            <div class="card-item-control">
-              <Icon name="arrow-right-s" :size="24" color="var(--color-text-tertiary)" />
             </div>
           </div>
         </div>
@@ -348,13 +413,6 @@ async function generateKeywordsFile() {
             <p class="version">v{{ appVersion }}</p>
             <p class="description">本地表情包分享和管理工具</p>
             
-            <div class="features">
-              <var-chip type="primary" size="small">模式管理</var-chip>
-              <var-chip type="primary" size="small">分组管理</var-chip>
-              <var-chip type="primary" size="small">智能搜索</var-chip>
-              <var-chip type="primary" size="small">关键词管理</var-chip>
-            </div>
-            
             <div class="platform-info">
               <p>支持平台：Linux (x86_64) / Android (aarch64)</p>
             </div>
@@ -363,6 +421,12 @@ async function generateKeywordsFile() {
       </div>
     </div>
   </div>
+  
+  <FolderPicker 
+    v-model="showFolderPicker" 
+    @select="onFolderSelected"
+    :default-path="config.meme_dir || undefined"
+  />
 </template>
 
 <style scoped>
@@ -450,7 +514,6 @@ async function generateKeywordsFile() {
   font-size: 14px;
 }
 
-/* 卡片样式 */
 .card {
   background: var(--color-surface);
   border-radius: var(--radius-lg);
@@ -501,7 +564,6 @@ async function generateKeywordsFile() {
   margin: 0 20px;
 }
 
-/* 关于卡片 */
 .about-card {
   padding: 32px 24px;
   text-align: center;
@@ -556,14 +618,13 @@ async function generateKeywordsFile() {
   color: var(--color-text-tertiary);
 }
 
-/* 悬浮 AppBar */
 .floating-app-bar {
   margin: 16px;
+  margin-top: max(16px, env(safe-area-inset-top));
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
 }
 
-/* 基本设置项样式更新 */
 .setting-item {
   background: var(--color-surface);
   border-radius: var(--radius-md);
@@ -583,7 +644,6 @@ async function generateKeywordsFile() {
   color: var(--color-primary);
 }
 
-/* 章节标题 */
 .settings-section h2 {
   color: var(--color-text);
   font-weight: 600;
