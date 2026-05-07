@@ -6,10 +6,10 @@
   --safe-area-left: env(safe-area-inset-left);
   --safe-area-right: env(safe-area-inset-right);
   
-  /* 主色调 - Indigo */
-  --theme-primary: #6366f1;
-  --theme-primary-light: rgba(99, 102, 241, 0.12);
-  --theme-primary-dark: #4f46e5;
+  /* 主色调 - 清新粉蓝色 */
+  --theme-primary: #7dd3fc;
+  --theme-primary-light: rgba(125, 211, 252, 0.15);
+  --theme-primary-dark: #38bdf8;
   
   /* 中性色 */
   --theme-text: #1f2937;
@@ -24,7 +24,7 @@
   --theme-success: #10b981;
   --theme-warning: #f59e0b;
   --theme-danger: #ef4444;
-  --theme-info: #6366f1;
+  --theme-info: #7dd3fc;
   
   /* 圆角 - 更大更现代 */
   --theme-radius-sm: 8px;
@@ -71,9 +71,9 @@ html, body {
 
 /* 深色模式 */
 .dark-mode {
-  --theme-primary: #818cf8;
-  --theme-primary-light: rgba(129, 140, 248, 0.15);
-  --theme-primary-dark: #6366f1;
+  --theme-primary: #67e8f9;
+  --theme-primary-light: rgba(103, 232, 249, 0.18);
+  --theme-primary-dark: #22d3ee;
   --theme-text: #f1f5f9;
   --theme-text-secondary: #94a3b8;
   --theme-text-tertiary: #64748b;

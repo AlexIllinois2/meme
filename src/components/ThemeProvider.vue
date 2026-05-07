@@ -23,10 +23,10 @@ const styleVars = computed(() => {
 
 // 现代风格 - 浅色
 const modernLightVars = {
-  // 主色调
-  '--color-primary': '#6366f1',
-  '--color-primary-light': 'rgba(99, 102, 241, 0.12)',
-  '--color-primary-dark': '#4f46e5',
+  // 主色调 - 清新粉蓝色
+  '--color-primary': '#7dd3fc',
+  '--color-primary-light': 'rgba(125, 211, 252, 0.15)',
+  '--color-primary-dark': '#38bdf8',
   
   // 背景
   '--color-body': '#f8fafc',
@@ -42,7 +42,7 @@ const modernLightVars = {
   
   // 边框
   '--color-border': '#e2e8f0',
-  '--color-outline': 'rgba(99, 102, 241, 0.2)',
+  '--color-outline': 'rgba(125, 211, 252, 0.2)',
   
   // 圆角
   '--radius-sm': '8px',
@@ -67,14 +67,14 @@ const modernLightVars = {
   // 按钮
   '--button-default-color': '#f1f5f9',
   '--button-default-text-color': '#374151',
-  '--button-primary-color': '#6366f1',
+  '--button-primary-color': '#7dd3fc',
 };
 
 // 现代风格 - 深色
 const modernDarkVars = {
-  '--color-primary': '#818cf8',
-  '--color-primary-light': 'rgba(129, 140, 248, 0.15)',
-  '--color-primary-dark': '#6366f1',
+  '--color-primary': '#67e8f9',
+  '--color-primary-light': 'rgba(103, 232, 249, 0.18)',
+  '--color-primary-dark': '#22d3ee',
   
   '--color-body': '#0f172a',
   '--color-surface': '#1e293b',
@@ -87,7 +87,7 @@ const modernDarkVars = {
   '--color-text-tertiary': '#64748b',
   
   '--color-border': '#334155',
-  '--color-outline': 'rgba(129, 140, 248, 0.2)',
+  '--color-outline': 'rgba(103, 232, 249, 0.25)',
   
   '--radius-sm': '8px',
   '--radius-md': '12px',
@@ -107,7 +107,7 @@ const modernDarkVars = {
   
   '--button-default-color': '#334155',
   '--button-default-text-color': '#f1f5f9',
-  '--button-primary-color': '#6366f1',
+  '--button-primary-color': '#67e8f9',
 };
 
 // 极简风格 - 浅色

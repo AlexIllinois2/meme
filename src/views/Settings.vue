@@ -411,7 +411,7 @@ async function generateKeywordsFile() {
           <div class="about-content">
             <div class="app-logo">meme</div>
             <p class="version">v{{ appVersion }}</p>
-            <p class="description">本地表情包分享和管理工具</p>
+            <p class="description">本地表情包管理和分享工具</p>
             
             <div class="platform-info">
               <p>支持平台：Linux (x86_64) / Android (aarch64)</p>

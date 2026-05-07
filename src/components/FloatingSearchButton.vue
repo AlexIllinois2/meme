@@ -165,7 +165,7 @@ onUnmounted(() => {
   width: 42px;
   height: 42px;
   border-radius: 50%;
-  background: rgba(99, 101, 241, 0.507);
+  background: rgba(125, 211, 252, 0.507);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   display: flex;
@@ -173,7 +173,7 @@ onUnmounted(() => {
   justify-content: center;
   cursor: pointer;
   box-shadow: 
-    0 4px 12px rgba(99, 102, 241, 0.4),
+    0 4px 12px rgba(125, 211, 252, 0.4),
     0 2px 4px rgba(0, 0, 0, 0.1);
   z-index: 1000;
   user-select: none;
@@ -185,16 +185,35 @@ onUnmounted(() => {
 }
 
 .floating-search-btn:hover {
-  background: rgba(99, 101, 241, 0.692);
+  background: rgba(125, 211, 252, 0.692);
   transform: scale(1.05);
   box-shadow: 
-    0 6px 20px rgba(99, 102, 241, 0.5),
+    0 6px 20px rgba(125, 211, 252, 0.5),
     0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .floating-search-btn:active {
   transform: scale(0.95);
-  background: rgba(99, 101, 241, 0.692);
+  background: rgba(125, 211, 252, 0.692);
+}
+
+/* 深色模式适配 */
+:global(.dark-mode) .floating-search-btn {
+  background: rgba(103, 232, 249, 0.507);
+  box-shadow: 
+    0 4px 12px rgba(103, 232, 249, 0.4),
+    0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+:global(.dark-mode) .floating-search-btn:hover {
+  background: rgba(103, 232, 249, 0.692);
+  box-shadow: 
+    0 6px 20px rgba(103, 232, 249, 0.5),
+    0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+:global(.dark-mode) .floating-search-btn:active {
+  background: rgba(103, 232, 249, 0.692);
 }
 
 /* 过渡动画 */

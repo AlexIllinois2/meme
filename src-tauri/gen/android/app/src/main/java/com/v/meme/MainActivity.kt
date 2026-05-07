@@ -120,7 +120,6 @@ class MainActivity : TauriActivity() {
       webView.addJavascriptInterface(this, "AndroidNative")
       jsInterfaceInjected = true
       Log.i(TAG, "JavaScript interface injected successfully")
-      Toast.makeText(this@MainActivity, "Native interface ready", Toast.LENGTH_SHORT).show()
     } catch (e: Exception) {
       Log.e(TAG, "Failed to inject JavaScript interface", e)
       Handler(Looper.getMainLooper()).postDelayed({
