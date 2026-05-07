@@ -2,7 +2,7 @@
 import { ref, onMounted, computed } from "vue";
 import * as tauri from "@tauri-apps/api/core";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { Snackbar, Dialog, ActionSheet } from '@varlet/ui';
+import { Snackbar, Dialog } from '@varlet/ui';
 import SideMenu from "./components/SideMenu.vue";
 import ModeManagement from "./views/ModeManagement.vue";
 import GroupManagement from "./views/GroupManagement.vue";

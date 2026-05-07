@@ -44,33 +44,6 @@ function getDefaultPath(): string {
   return '/storage/emulated/0';
 }
 
-// Android 端使用系统文件选择器
-async function openAndroidFolderPicker() {
-  try {
-    const { open } = await import('@tauri-apps/plugin-dialog');
-    const selected = await open({
-      directory: true,
-      multiple: false,
-      title: '选择图片文件夹'
-    });
-    
-    if (selected) {
-      // 用户选择了文件夹，直接使用该路径
-      const folderPath = Array.isArray(selected) ? selected[0] : selected;
-      emit('select', folderPath);
-      emit('update:modelValue', false);
-      Dialog.close();
-    } else {
-      // 用户取消
-      cancel();
-    }
-  } catch (e: any) {
-    console.error('Failed to open folder picker:', e);
-    Snackbar.error('打开文件夹选择器失败: ' + (e?.message || String(e)));
-    cancel();
-  }
-}
-
 // 加载目录内容
 async function loadDirectory(path: string) {
   isLoading.value = true;

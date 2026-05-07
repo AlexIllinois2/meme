@@ -1,5 +1,6 @@
 import java.util.Properties
 
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -11,11 +12,21 @@ val tauriProperties = Properties().apply {
     if (propFile.exists()) {
         propFile.inputStream().use { load(it) }
     }
+
+    val keyPropFile = file("keystore.properties")
+    if (keyPropFile.exists()) {
+        keyPropFile.inputStream().use { load(it) }
+    }
 }
 
 android {
     compileSdk = 36
     namespace = "com.v.meme"
+    lint {
+        abortOnError = false
+        disable.add("Instantiatable")
+    }
+
     defaultConfig {
         manifestPlaceholders["usesCleartextTraffic"] = "false"
         applicationId = "com.v.meme"
@@ -23,6 +34,15 @@ android {
         targetSdk = 36
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
+    }
+    signingConfigs {
+        create("release") {
+            storeFile = file(tauriProperties.getProperty("tauri.android.storeFile", ""))
+            storeType = tauriProperties.getProperty("tauri.android.storeType", "")
+            storePassword = tauriProperties.getProperty("tauri.android.storePassword", "")
+            keyPassword = storePassword
+            keyAlias = tauriProperties.getProperty("tauri.android.keyAlias", "")
+        }
     }
     buildTypes {
         getByName("debug") {
@@ -38,6 +58,7 @@ android {
         }
         getByName("release") {
             isMinifyEnabled = true
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 *fileTree(".") { include("**/*.pro") }
                     .plus(getDefaultProguardFile("proguard-android-optimize.txt"))

@@ -28,3 +28,6 @@ dist-ssr
 .trae
 
 src-tauri/target
+
+keystore.properties
+release-key.p12

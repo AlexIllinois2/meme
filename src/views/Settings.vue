@@ -2,7 +2,7 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
-import { Snackbar, Dialog, ActionSheet } from '@varlet/ui';
+import { Snackbar, ActionSheet } from '@varlet/ui';
 import Icon from "../components/Icon.vue";
 import FolderPicker from "../components/FolderPicker.vue";
 import type { Config } from "../types";
@@ -121,11 +121,11 @@ function updateColorMode(mode: string) {
   window.dispatchEvent(new CustomEvent('colorModeChanged', { detail: mode }));
 }
 
-// 检测是否为移动端
-const isMobile = () => {
-  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) 
-    || window.innerWidth < 768;
-};
+// 检测是否为移动端 - 预留功能
+// const isMobile = () => {
+//   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) 
+//     || window.innerWidth < 768;
+// };
 
 // 检测是否为 Android Tauri 环境
 const isAndroidTauri = () => {
@@ -184,7 +184,7 @@ async function selectMemeDir() {
           Snackbar.success(`已选择目录: ${selectedPath}`);
         } catch (e) {
           console.error('Cannot access path:', e);
-          Snackbar.error('无法访问该目录，请检查权限或路径是否正确');
+          Snackbar.error('文件夹不存在或没有权限');
         }
       }
     } catch (error) {
@@ -256,30 +256,31 @@ async function autoSaveConfig() {
   }
 }
 
-function resetToDefaults() {
-  Dialog({
-    title: '确认重置',
-    message: '确定要重置为默认设置吗？',
-    confirmButton: true,
-    cancelButton: true,
-    confirmButtonText: '确定',
-    cancelButtonText: '取消'
-  }).then(() => {
-    config.value = {
-      meme_dir: '',
-      color_mode: 'system',
-      theme_style: 'modern',
-      last_mode: 1,
-      last_group: 1,
-      share_app: 'wechat',
-      grid_size: 4,
-      pinyin_search: false,
-      acronym_search: false
-    };
-    autoSaveConfig();
-    Snackbar.success('已重置为默认设置');
-  });
-}
+// 重置为默认设置 - 预留功能
+// function resetToDefaults() {
+//   Dialog({
+//     title: '确认重置',
+//     message: '确定要重置为默认设置吗？',
+//     confirmButton: true,
+//     cancelButton: true,
+//     confirmButtonText: '确定',
+//     cancelButtonText: '取消'
+//   }).then(() => {
+//     config.value = {
+//       meme_dir: '',
+//       color_mode: 'system',
+//       theme_style: 'modern',
+//       last_mode: 1,
+//       last_group: 1,
+//       share_app: 'wechat',
+//       grid_size: 4,
+//       pinyin_search: false,
+//       acronym_search: false
+//     };
+//     autoSaveConfig();
+//     Snackbar.success('已重置为默认设置');
+//   });
+// }
 
 // 处理路径输入框失去焦点事件
 async function onPathInputBlur() {
@@ -294,7 +295,7 @@ async function onPathInputBlur() {
     Snackbar.success(`已保存目录: ${config.value.meme_dir}`);
   } catch (e) {
     console.error('Cannot access path:', e);
-    Snackbar.error('无法访问该目录，请检查权限或路径是否正确');
+    Snackbar.error('文件夹不存在或没有权限');
   }
 }
 
