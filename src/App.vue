@@ -1593,15 +1593,32 @@ async function shareImageToApp(img: Image) {
     const imagePath = img.image_path;
     const app = shareApp.value;
     console.log(`[Android] 分享图片到 ${app}:`, imagePath);
-    console.log(`[Android] AndroidNative available:`, typeof (window as any).AndroidNative);
-
+    
     // 如果选择的是"所有应用"或未指定特定应用，传递空字符串以显示系统分享菜单
     const targetApp = (app === 'all' || !app) ? '' : app;
 
     if (isAndroidTauri()) {
-      if (typeof (window as any).AndroidNative !== 'undefined' && (window as any).AndroidNative.shareImageToApp) {
+      // 检查 AndroidNative 接口是否可用，带重试机制
+      let androidNative = (window as any).AndroidNative;
+      
+      if (!androidNative || !androidNative.shareImageToApp) {
+        console.warn('[Android] AndroidNative interface not immediately available, waiting...');
+        
+        // 等待最多 2 秒，每 100ms 检查一次
+        for (let i = 0; i < 20; i++) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          androidNative = (window as any).AndroidNative;
+          
+          if (androidNative && androidNative.shareImageToApp) {
+            console.log(`[Android] AndroidNative interface became available after ${i + 1} attempts`);
+            break;
+          }
+        }
+      }
+      
+      if (androidNative && androidNative.shareImageToApp) {
         console.log(`[Android] 调用原生分享接口:`, imagePath, targetApp);
-        (window as any).AndroidNative.shareImageToApp(imagePath, targetApp);
+        androidNative.shareImageToApp(imagePath, targetApp);
         await invoke("share_image", { imageId: img.id });
         
         if (!targetApp) {
@@ -1610,11 +1627,33 @@ async function shareImageToApp(img: Image) {
           Snackbar.success(`正在分享到 ${app}`);
         }
       } else {
-        console.error('[Android] AndroidNative interface not available');
-        console.log('[Android] Window keys:', Object.keys(window));
-        Snackbar.error('Android原生接口不可用，请重启应用');
+        console.error('[Android] AndroidNative interface still not available after retries');
+        console.log('[Android] Window keys:', Object.keys(window).filter(k => k.includes('Android') || k.includes('android')));
+        
+        // 尝试使用 Tauri Share 插件作为备选方案
+        try {
+          console.log('[Android] Falling back to tauri-plugin-share');
+          const { shareFile } = await import('tauri-plugin-share');
+          const ext = imagePath.split('.').pop()?.toLowerCase() || 'png';
+          const mimeMap: Record<string, string> = {
+            png: 'image/png',
+            jpg: 'image/jpeg',
+            jpeg: 'image/jpeg',
+            gif: 'image/gif',
+            webp: 'image/webp',
+            bmp: 'image/bmp',
+          };
+          const mime = mimeMap[ext] || 'image/png';
+          await shareFile(imagePath, mime);
+          await invoke("share_image", { imageId: img.id });
+          Snackbar.success('已打开分享菜单');
+        } catch (fallbackError) {
+          console.error('[Android] Fallback also failed:', fallbackError);
+          Snackbar.error('Android原生接口不可用，请重启应用');
+        }
       }
     } else {
+      // 桌面端使用 Tauri Share 插件
       const { shareFile } = await import('tauri-plugin-share');
       const ext = imagePath.split('.').pop()?.toLowerCase() || 'png';
       const mimeMap: Record<string, string> = {

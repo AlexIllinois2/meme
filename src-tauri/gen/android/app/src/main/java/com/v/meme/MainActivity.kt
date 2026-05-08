@@ -109,21 +109,52 @@ class MainActivity : TauriActivity() {
     val webView = findWebView()
     
     if (webView == null) {
-      Log.w(TAG, "WebView not found, retrying in 500ms")
+      Log.w(TAG, "WebView not found, retrying in 300ms")
       Handler(Looper.getMainLooper()).postDelayed({
         injectJavaScriptInterface()
-      }, 500)
+      }, 300)
       return
     }
     
     try {
+      // 先移除旧的接口（如果存在），避免重复注入
+      try {
+        webView.removeJavascriptInterface("AndroidNative")
+        Log.d(TAG, "Removed existing AndroidNative interface")
+      } catch (e: Exception) {
+        // 忽略异常，可能接口不存在
+      }
+      
+      // 启用 JavaScript
+      webView.settings.javaScriptEnabled = true
+      
+      // 注入新的接口
       webView.addJavascriptInterface(this, "AndroidNative")
       jsInterfaceInjected = true
       Log.i(TAG, "JavaScript interface injected successfully")
+      
+      // 验证注入是否成功 - 执行一段测试代码
+      webView.evaluateJavascript("""
+        (function() {
+          if (typeof window.AndroidNative !== 'undefined') {
+            console.log('[Android] AndroidNative interface verified');
+            return true;
+          } else {
+            console.error('[Android] AndroidNative interface NOT available after injection');
+            return false;
+          }
+        })()
+      """.trimIndent(), null)
+      
     } catch (e: Exception) {
       Log.e(TAG, "Failed to inject JavaScript interface", e)
+      jsInterfaceInjected = false
+      // 增加重试次数限制，避免无限循环
       Handler(Looper.getMainLooper()).postDelayed({
-        injectJavaScriptInterface()
+        if (!jsInterfaceInjected) {
+          Log.w(TAG, "Retrying JavaScript interface injection")
+          injectJavaScriptInterface()
+        }
       }, 500)
     }
   }
