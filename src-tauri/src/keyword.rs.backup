@@ -224,76 +224,64 @@ fn load_keywords_from_file(meme_dir: String) -> Result<KeywordsToml, String> {
     Ok(keywords_toml)
 }
 
-/// 生成关键词配置文件 - 只扫描文件系统，不依赖数据库
-/// 根据模式/分组文件夹名自动生成关键词
+/// 生成关键词配置文件 - 按需修改，不重写整个文件
+/// 使用 toml_edit 保留原有格式，只修改变更的行
 #[tauri::command]
 pub fn generate_keywords_file(meme_dir: String, _generate_pinyin: bool, _generate_acronym: bool) -> Result<(), String> {
-    use std::fs;
+    let conn = init_db().map_err(|e| e.to_string())?;
     
-    let meme_path = PathBuf::from(&meme_dir);
+    // ========== 1. 构建目标数据 ==========
     
-    if !meme_path.exists() {
-        return Err(format!("表情包目录不存在: {}", meme_dir));
-    }
+    // 获取所有分组及其关键词
+    let mut stmt = conn.prepare(
+        "SELECT id, name FROM groups ORDER BY name"
+    ).map_err(|e| e.to_string())?;
     
-    // ========== 1. 扫描文件系统构建目标数据 ==========
+    let groups: Vec<(i32, String)> = stmt.query_map([], |row| {
+        Ok((row.get(0)?, row.get(1)?))
+    }).map_err(|e| e.to_string())?
+        .filter_map(|r| r.ok())
+        .collect();
     
+    // 构建目标 groups_keywords
     let mut target_groups_keywords: HashMap<String, Vec<String>> = HashMap::new();
     
-    // 遍历所有模式目录
-    let entries = fs::read_dir(&meme_path)
-        .map_err(|e| format!("无法读取目录: {}", e))?;
-    
-    for entry in entries {
-        let entry = entry.map_err(|e| format!("读取目录项失败: {}", e))?;
-        let path = entry.path();
+    for (group_id, group_name) in &groups {
+        // 获取该分组的所有关键词
+        let mut keywords = Vec::new();
         
-        // 只处理目录（模式）
-        if !path.is_dir() {
-            continue;
+        // 从分组名解析关键词
+        let name_keywords: Vec<String> = group_name.split(&[',', '，', '、', ' '][..])
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        keywords.extend(name_keywords.clone());
+        
+        // 获取关联的关键词
+        let mut kw_stmt = conn.prepare(
+            "SELECT k.keyword FROM keywords k
+             JOIN keyword_group_links kgl ON k.id = kgl.keyword_id
+             WHERE kgl.group_id = ?"
+        ).map_err(|e| e.to_string())?;
+        
+        let existing: Vec<String> = kw_stmt.query_map(params![group_id], |row| {
+            Ok(row.get::<_, String>(0)?)
+        }).map_err(|e| e.to_string())?
+            .filter_map(|r| r.ok())
+            .collect();
+        
+        for kw in existing {
+            if !keywords.contains(&kw) {
+                keywords.push(kw);
+            }
         }
         
-        let mode_name = path.file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("")
-            .to_string();
-        
-        // 遍历模式下的分组目录
-        let group_entries = fs::read_dir(&path)
-            .map_err(|e| format!("无法读取模式目录 {}: {}", mode_name, e))?;
-        
-        for group_entry in group_entries {
-            let group_entry = group_entry.map_err(|e| format!("读取分组目录失败: {}", e))?;
-            let group_path = group_entry.path();
-            
-            // 只处理目录（分组）
-            if !group_path.is_dir() {
-                continue;
-            }
-            
-            let group_name = group_path.file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("")
-                .to_string();
-            
-            if group_name.is_empty() {
-                continue;
-            }
-            
-            // 从分组名解析关键词（支持逗号、顿号、空格分隔）
-            let keywords: Vec<String> = group_name.split(&[',', '，', '、', ' '][..])
-                .map(|s| s.trim().to_string())
-                .filter(|s| !s.is_empty())
-                .collect();
-            
-            if !keywords.is_empty() {
-                target_groups_keywords.insert(group_name.clone(), keywords);
-            }
+        if !keywords.is_empty() {
+            target_groups_keywords.insert(group_name.clone(), keywords);
         }
     }
     
-    // ========== 2. 构建拼音数据 ==========
-    
+    // 构建目标 keywords_pinyin
     let mut target_keywords_pinyin: HashMap<String, KeywordPinyin> = HashMap::new();
     
     for keywords in target_groups_keywords.values() {
@@ -304,8 +292,15 @@ pub fn generate_keywords_file(meme_dir: String, _generate_pinyin: bool, _generat
                 continue;
             }
             
-            let pinyin = convert_to_pinyin(keyword);
-            let abbr = convert_to_acronym(keyword);
+            // 查询数据库中的拼音
+            let (stored_pinyin, stored_acronym): (Option<String>, Option<String>) = conn.query_row(
+                "SELECT pinyin, acronym FROM keywords WHERE keyword = ?",
+                params![keyword],
+                |row| Ok((row.get(0)?, row.get(1)?))
+            ).unwrap_or((None, None));
+            
+            let pinyin = stored_pinyin.unwrap_or_else(|| convert_to_pinyin(keyword));
+            let abbr = stored_acronym.unwrap_or_else(|| convert_to_acronym(keyword));
             
             if !pinyin.is_empty() || !abbr.is_empty() {
                 target_keywords_pinyin.insert(keyword.clone(), KeywordPinyin { pinyin, abbr });
@@ -313,7 +308,7 @@ pub fn generate_keywords_file(meme_dir: String, _generate_pinyin: bool, _generat
         }
     }
     
-    // ========== 3. 读取现有 TOML 数据 ==========
+    // ========== 2. 读取现有 TOML 数据 ==========
     
     let keywords_file = PathBuf::from(&meme_dir).join("keywords.toml");
     
@@ -328,7 +323,7 @@ pub fn generate_keywords_file(meme_dir: String, _generate_pinyin: bool, _generat
             (HashMap::new(), HashMap::new())
         };
     
-    // ========== 4. 构建变更容器 ==========
+    // ========== 3. 构建变更容器 ==========
     
     // groups_keywords 变更容器
     let mut groups_to_add: Vec<(String, Vec<String>)> = Vec::new();
@@ -391,7 +386,7 @@ pub fn generate_keywords_file(meme_dir: String, _generate_pinyin: bool, _generat
         }
     }
     
-    // ========== 5. 判断是否需要更新 ==========
+    // ========== 4. 判断是否需要更新 ==========
     
     let needs_update = !groups_to_add.is_empty() 
         || !groups_to_update.is_empty() 
@@ -401,11 +396,10 @@ pub fn generate_keywords_file(meme_dir: String, _generate_pinyin: bool, _generat
         || !pinyin_to_remove.is_empty();
     
     if !needs_update {
-        log::info!("关键词文件无需更新");
         return Ok(());
     }
     
-    // ========== 6. 应用变更到 TOML 文档 ==========
+    // ========== 5. 应用变更到 TOML 文档 ==========
     
     let mut doc = if keywords_file.exists() {
         let content = std::fs::read_to_string(&keywords_file)
@@ -474,7 +468,7 @@ pub fn generate_keywords_file(meme_dir: String, _generate_pinyin: bool, _generat
         pinyin_table[&keyword] = toml_edit::Item::Value(inline_table.into());
     }
     
-    // ========== 7. 写入文件 ==========
+    // ========== 6. 写入文件 ==========
     
     let content = if keywords_file.exists() {
         // 编辑现有文件，直接输出文档内容（toml_edit 会保留原有注释）
@@ -711,50 +705,5 @@ pub fn add_keyword_to_group_name(keyword: String, group_name: String) -> Result<
     // 同步更新 keywords.toml
     sync_keywords_to_file()?;
     
-    Ok(())
-}
-
-/// 内部函数：直接写入 keywords.toml（全量覆盖，不做 diff-merge）
-pub(crate) fn write_keywords_toml_snapshot(
-    meme_dir: &str,
-    groups_keywords: &HashMap<String, Vec<String>>,
-    keywords_pinyin: &HashMap<String, KeywordPinyin>,
-) -> Result<(), String> {
-    let keywords_file = PathBuf::from(meme_dir).join("keywords.toml");
-
-    let mut doc = toml_edit::DocumentMut::new();
-    doc.insert("groups_keywords", toml_edit::table());
-    doc.insert("keywords_pinyin", toml_edit::table());
-
-    if let Some(groups_table) = doc["groups_keywords"].as_table_mut() {
-        let mut sorted_groups: Vec<_> = groups_keywords.iter().collect();
-        sorted_groups.sort_by_key(|(k, _)| *k);
-        for (group_name, keywords) in sorted_groups {
-            let mut sorted_kw = keywords.clone();
-            sorted_kw.sort();
-            groups_table[group_name] =
-                toml_edit::Item::Value(toml_edit::Array::from_iter(sorted_kw).into());
-        }
-    }
-
-    if let Some(pinyin_table) = doc["keywords_pinyin"].as_table_mut() {
-        let mut sorted_pinyin: Vec<_> = keywords_pinyin.iter().collect();
-        sorted_pinyin.sort_by_key(|(k, _)| *k);
-        for (keyword, info) in sorted_pinyin {
-            let mut t = toml_edit::InlineTable::new();
-            t.insert("pinyin", info.pinyin.clone().into());
-            t.insert("abbr", info.abbr.clone().into());
-            pinyin_table[keyword] = toml_edit::Item::Value(t.into());
-        }
-    }
-
-    let content = format!(
-        "# Keywords Configuration\n# Auto-generated file\n# Format:\n# [groups_keywords] - 分组关键词映射\n# [keywords_pinyin] - 关键词拼音信息（仅中文需要）\n\n{}",
-        doc.to_string()
-    );
-
-    std::fs::write(&keywords_file, content)
-        .map_err(|e| format!("Failed to write keywords file: {}", e))?;
-
     Ok(())
 }

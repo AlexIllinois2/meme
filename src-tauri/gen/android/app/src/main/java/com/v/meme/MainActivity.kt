@@ -129,7 +129,48 @@ class MainActivity : TauriActivity() {
   }
   
   private fun requestStoragePermissions() {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      // Android 13+ (API 33+): 请求新的媒体权限 + MANAGE_EXTERNAL_STORAGE
+      val permissionsToRequest = mutableListOf<String>()
+      
+      // 请求图片、视频、音频权限
+      if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES) 
+          != PackageManager.PERMISSION_GRANTED) {
+        permissionsToRequest.add(Manifest.permission.READ_MEDIA_IMAGES)
+      }
+      
+      if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_VIDEO) 
+          != PackageManager.PERMISSION_GRANTED) {
+        permissionsToRequest.add(Manifest.permission.READ_MEDIA_VIDEO)
+      }
+      
+      if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_AUDIO) 
+          != PackageManager.PERMISSION_GRANTED) {
+        permissionsToRequest.add(Manifest.permission.READ_MEDIA_AUDIO)
+      }
+      
+      // 如果有未授权的媒体权限，先请求它们
+      if (permissionsToRequest.isNotEmpty()) {
+        storagePermissionLauncher.launch(permissionsToRequest.toTypedArray())
+      }
+      
+      // 同时请求完整存储管理权限（用于访问任意目录）
+      if (!Environment.isExternalStorageManager()) {
+        try {
+          val intent = android.content.Intent(
+            android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+            android.net.Uri.parse("package:$packageName")
+          )
+          manageStorageLauncher.launch(intent)
+        } catch (e: Exception) {
+          val intent = android.content.Intent(
+            android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION
+          )
+          manageStorageLauncher.launch(intent)
+        }
+      }
+    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+      // Android 11-12 (API 30-32): 只请求 MANAGE_EXTERNAL_STORAGE
       if (!Environment.isExternalStorageManager()) {
         try {
           val intent = android.content.Intent(
@@ -145,6 +186,7 @@ class MainActivity : TauriActivity() {
         }
       }
     } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+      // Android 6.0 - 10 (API 23-29): 请求传统存储权限
       val permissionsToRequest = mutableListOf<String>()
       
       if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) 
@@ -214,6 +256,14 @@ class MainActivity : TauriActivity() {
     backCallback?.isEnabled = enabled
   }
   
+  @JavascriptInterface
+  fun requestStoragePermission() {
+    Log.d(TAG, "requestStoragePermission called from JS")
+    runOnUiThread {
+      requestStoragePermissions()
+    }
+  }
+
   @JavascriptInterface
   fun shareImageToApp(imagePath: String, targetApp: String) {
     Log.d(TAG, "shareImageToApp called: imagePath=$imagePath, targetApp=$targetApp")

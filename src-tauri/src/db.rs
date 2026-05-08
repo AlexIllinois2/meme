@@ -1,4 +1,4 @@
-use rusqlite::{Connection, Result};
+use rusqlite::{Connection, Result, params};
 use std::path::PathBuf;
 
 
@@ -93,9 +93,19 @@ pub fn init_db() -> Result<Connection> {
     }
     
     // 插入默认配置（如果不存在）
+    let default_meme_dir = {
+        #[cfg(target_os = "android")]
+        { "/storage/emulated/0/meme".to_string() }
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        { format!("{}/meme", std::env::var("HOME").unwrap_or_else(|_| "/tmp".into())) }
+        #[cfg(target_os = "windows")]
+        { format!("{}\\meme", std::env::var("USERPROFILE").unwrap_or_else(|_| "C:".into())) }
+        #[cfg(not(any(target_os = "android", target_os = "linux", target_os = "macos", target_os = "windows")))]
+        { String::new() }
+    };
     conn.execute(
-        "INSERT OR IGNORE INTO config (id) VALUES (1)",
-        [],
+        "INSERT OR IGNORE INTO config (id, meme_dir) VALUES (1, ?1)",
+        params![default_meme_dir],
     )?;
     
     // 创建模式表
@@ -272,6 +282,56 @@ pub fn init_db() -> Result<Connection> {
         CREATE INDEX IF NOT EXISTS idx_keywords_pinyin ON keywords(pinyin);
         CREATE INDEX IF NOT EXISTS idx_keywords_acronym ON keywords(acronym);
     ")?;
+
+    // 数据库迁移
+    migrate_db(&conn)?;
     
     Ok(conn)
+}
+
+/// 数据库迁移管理
+fn migrate_db(conn: &Connection) -> Result<()> {
+    let version: i32 = conn.pragma_query_value(None, "user_version", |row| row.get(0))
+        .unwrap_or(0);
+
+    if version < 2 {
+        migrate_to_v2(conn)?;
+    }
+
+    Ok(())
+}
+
+/// v1 → v2: image_path 从绝对路径迁移为相对路径
+fn migrate_to_v2(conn: &Connection) -> Result<()> {
+    eprintln!("Running DB migration: v1 -> v2 (relative image paths)");
+
+    let meme_dir: String = conn.query_row(
+        "SELECT meme_dir FROM config WHERE id = 1",
+        [],
+        |row| row.get(0),
+    ).unwrap_or_default();
+
+    if !meme_dir.is_empty() {
+        let prefix = if meme_dir.ends_with('/') {
+            meme_dir.clone()
+        } else {
+            format!("{}/", meme_dir)
+        };
+
+        // 迁移 images.image_path
+        let mut stmt = conn.prepare("SELECT id, image_path FROM images")?;
+        let rows: Vec<(i32, String)> = stmt
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+            .collect::<Result<Vec<_>>>()?;
+
+        let mut update = conn.prepare("UPDATE images SET image_path = ? WHERE id = ?")?;
+        for (id, path) in rows {
+            let relative = path.strip_prefix(&prefix).unwrap_or(&path).to_string();
+            update.execute(rusqlite::params![relative, id])?;
+        }
+    }
+
+    conn.pragma_update(None, "user_version", 2)?;
+    eprintln!("DB migration v1 -> v2 completed");
+    Ok(())
 }

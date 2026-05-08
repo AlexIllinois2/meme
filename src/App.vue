@@ -411,6 +411,21 @@ const menuPopupStyle = computed(() => {
 });
 
 onMounted(async () => {
+  // 检查是否有待恢复的状态（目录变更后重启）
+  const savedState = localStorage.getItem('meme_restore_state');
+  if (savedState) {
+    try {
+      const state = JSON.parse(savedState);
+      localStorage.removeItem('meme_restore_state');
+      if (state.page) activeMenu.value = state.page;
+      if (state.modeId) selectedModeId.value = state.modeId;
+      if (state.groupId) selectedGroupId.value = state.groupId;
+      console.log('[Restore] State restored:', state);
+    } catch (e) {
+      console.error('[Restore] Failed to parse saved state:', e);
+    }
+  }
+
   // 先加载配置，但不设置响应式监听
   await loadConfig();
   
@@ -490,50 +505,6 @@ onMounted(async () => {
     }
   });
 
-  // 监听生成关键词文件后刷新索引
-  window.addEventListener('refreshIndexAfterKeywordsGenerated', async () => {
-    await refreshIndex();
-  });
-
-  // 监听存储目录变化
-  window.addEventListener('memeDirChanged', async (event: any) => {
-    const { newDir } = event.detail;
-    if (!newDir) return;
-    
-    try {
-      // 检查新目录下是否存在 keywords.toml
-      const fs = await import('@tauri-apps/plugin-fs');
-      const keywordsFileExists = await fs.exists(`${newDir}/keywords.toml`);
-      
-      if (!keywordsFileExists) {
-        // 没有关键词文件，询问用户是否生成分组名关键词
-        const result = await Dialog({
-          title: '生成关键词文件',
-          message: '新目录下没有关键词文件，是否根据分组文件夹名自动生成关键词？',
-          confirmButton: true,
-          cancelButton: true,
-          confirmButtonText: '生成',
-          cancelButtonText: '跳过'
-        });
-        
-        if (result === 'confirm') {
-          await invoke('generate_keywords_file', { 
-            memeDir: newDir,
-            generatePinyin: true,
-            generateAcronym: true
-          });
-          Snackbar.success('关键词文件生成成功');
-        }
-      }
-      
-      // 刷新索引
-      await refreshIndex();
-    } catch (error) {
-      console.error('Failed to handle dir change:', error);
-      Snackbar.error('处理目录变化失败');
-    }
-  });
-
   // Android 返回键处理
   if (isAndroidTauri()) {
     window.addEventListener('tauri-android-back', (event: Event) => {
@@ -610,9 +581,7 @@ async function loadConfig() {
       pinyinSearchEnabled.value = config.value.pinyin_search || false;
       acronymSearchEnabled.value = config.value.acronym_search || false;
       applyTheme();
-      
-      // 检查并加载 keywords.toml
-      await checkAndLoadKeywords();
+      applyTheme();
     } else {
       // 首次启动，需要选择目录
       await setupInitialConfig();
@@ -640,13 +609,14 @@ async function setupInitialConfig() {
     config.value = newConfig;
     await safeUpdateConfig(config.value);
     applyTheme();
-    
-    // 首次初始化后，检查是否需要生成 keywords.toml
-    await checkAndLoadKeywords();
+    applyTheme();
   } else {
     // 使用默认目录
+    const defaultMemeDir = isAndroidTauri()
+      ? '/storage/emulated/0/meme'
+      : '/home/' + (navigator.userAgent.includes('Linux') ? 'user' : '') + '/meme';
     const defaultConfig: Config = {
-      meme_dir: "/tmp/memes",
+      meme_dir: defaultMemeDir,
       color_mode: "system",
       theme_style: "modern",
       last_mode: 1,
@@ -659,22 +629,6 @@ async function setupInitialConfig() {
     config.value = defaultConfig;
     await safeUpdateConfig(config.value);
     applyTheme();
-  }
-}
-
-async function checkAndLoadKeywords() {
-  if (!config.value?.meme_dir) return;
-  
-  try {
-    // 直接生成关键词文件（覆盖现有文件）
-    await invoke("generate_keywords_file", { 
-      memeDir: config.value.meme_dir,
-      generatePinyin: true,
-      generateAcronym: true
-    });
-    console.log("Keywords file generated");
-  } catch (error) {
-    console.error("Failed to generate keywords file:", error);
   }
 }
 
@@ -1247,26 +1201,42 @@ async function handlePasteImage() {
   }
 }
 
-async function refreshIndex() {
+async function fullRefresh() {
   try {
-    Snackbar.info('正在刷新索引...');
-    
-    // 重建所有分组的关键词关联
-    const count = await invoke("rebuild_all_group_keywords");
-    console.log(`Rebuilt keywords for ${count} groups`);
-    
-    await invoke("refresh_index", { memeDir: config.value?.meme_dir });
-    await loadModes();
-    if (selectedModeId.value) {
-      await loadGroups(selectedModeId.value);
+    const memeDir = config.value?.meme_dir;
+    if (!memeDir) {
+      Snackbar.warning('请先在设置中配置表情包目录');
+      return;
     }
-    if (selectedGroupId.value) {
-      await loadImages(selectedGroupId.value);
+
+    const accessible = await invoke<boolean>('check_storage_accessible', { memeDir });
+    if (!accessible) {
+      if (typeof (window as any).AndroidNative?.requestStoragePermission === 'function') {
+        (window as any).AndroidNative.requestStoragePermission();
+      }
+      Snackbar.warning('请授予存储权限后重试');
+      return;
     }
-    Snackbar.success(`索引刷新完成，已重建 ${count} 个分组的搜索关联`);
+
+    Snackbar.info('正在刷新数据...');
+    const result = await invoke<string>("full_refresh", { memeDir });
+    console.log('Full refresh result:', result);
+    await reloadPageState();
+    Snackbar.success('数据刷新完成');
   } catch (error) {
-    console.error("Failed to refresh index:", error);
-    Snackbar.error('索引刷新失败');
+    console.error("Failed to refresh:", error);
+    try { await reloadPageState(); } catch (e) { /* ignore */ }
+    Snackbar.error('数据刷新失败: ' + error);
+  }
+}
+
+async function reloadPageState() {
+  await loadModes();
+  if (selectedModeId.value) {
+    await loadGroups(selectedModeId.value);
+  }
+  if (selectedGroupId.value) {
+    await loadImages(selectedGroupId.value);
   }
 }
 
@@ -1296,7 +1266,11 @@ function handleMenuAction(action: string) {
       addNewGroup();
       break;
     case 'refresh':
-      refreshIndex();
+      fullRefresh();
+      break;
+    case 'reload':
+      reloadPageState();
+      Snackbar.success('页面已刷新');
       break;
     case 'settings':
       activeMenu.value = 'settings';
@@ -1751,12 +1725,6 @@ async function handleImageMenuSelect(img: Image, action: string) {
             </button>
           </div>
           </div>
-          <div v-if="isMobile" class="share-app-selector">
-            <var-radio-group v-model="shareApp" direction="horizontal" size="small" @change="handleShareAppChange">
-              <var-radio checked-value="wechat">微信</var-radio>
-              <var-radio checked-value="qq">QQ</var-radio>
-            </var-radio-group>
-          </div>
         </div>
 
         <teleport to="body">
@@ -1778,8 +1746,13 @@ async function handleImageMenuSelect(img: Image, action: string) {
                 <div class="menu-divider"></div>
                 <div class="menu-item" @click="handleMenuAction('refresh')">
                   <var-icon name="refresh" size="18" />
-                  <span>刷新索引</span>
+                  <span>刷新数据</span>
                 </div>
+                <div class="menu-item" @click="handleMenuAction('reload')">
+                  <var-icon name="replay" size="18" />
+                  <span>刷新页面</span>
+                </div>
+                <div class="menu-divider"></div>
                 <div class="menu-item" @click="handleMenuAction('settings')">
                   <var-icon name="cog" size="18" />
                   <span>设置</span>
@@ -1866,6 +1839,22 @@ async function handleImageMenuSelect(img: Image, action: string) {
                   </div>
                 </ContextMenu>
               </div>
+            </div>
+          </div>
+          <div v-if="isMobile && !isGlobalEditMode" class="share-app-icons">
+            <div
+              class="share-app-icon" :class="{ active: shareApp === 'qq' }"
+              @click="shareApp = 'qq'; handleShareAppChange('qq')">
+              <Icon name="qq" :size="shareApp === 'qq' ? 28 : 22" :fill="true"
+                :color="shareApp === 'qq' ? 'var(--color-primary)' : 'var(--color-text-2)'" />
+              <span class="indicator" v-if="shareApp === 'qq'" />
+            </div>
+            <div
+              class="share-app-icon" :class="{ active: shareApp === 'wechat' }"
+              @click="shareApp = 'wechat'; handleShareAppChange('wechat')">
+              <Icon name="wechat" :size="shareApp === 'wechat' ? 28 : 22" :fill="true"
+                :color="shareApp === 'wechat' ? 'var(--color-primary)' : 'var(--color-text-2)'" />
+              <span class="indicator" v-if="shareApp === 'wechat'" />
             </div>
           </div>
         </div>
@@ -2230,15 +2219,12 @@ async function handleImageMenuSelect(img: Image, action: string) {
   gap: 8px;
 }
 
-.share-app-selector {
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--color-border);
-}
-
 /* 现代化 Tabs */
 .modern-tabs-container {
   position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   border-bottom: 1px solid var(--color-border);
   background-color: var(--color-surface);
   padding: 8px 12px;
@@ -2249,6 +2235,8 @@ async function handleImageMenuSelect(img: Image, action: string) {
 }
 
 .modern-tabs-scroll {
+  flex: 1;
+  min-width: 0;
   overflow-x: auto;
   white-space: nowrap;
   scrollbar-width: none;
@@ -2363,6 +2351,47 @@ async function handleImageMenuSelect(img: Image, action: string) {
 
 .select-checkbox.is-checked {
   background-color: var(--color-primary-light);
+}
+
+/* 分享目标 app 图标 */
+.share-app-icons {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  padding-left: 4px;
+  border-left: 1px solid var(--color-border);
+}
+
+.share-app-icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.2s;
+}
+
+.share-app-icon:hover {
+  background: var(--color-surface-variant);
+}
+
+.share-app-icon.active {
+  transform: scale(1.15);
+}
+
+.share-app-icon .indicator {
+  position: absolute;
+  bottom: -1px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 12px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--color-primary);
 }
 
 /* 当前模式/分组显示 */

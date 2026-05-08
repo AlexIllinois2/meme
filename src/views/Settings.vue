@@ -2,7 +2,7 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
-import { Snackbar, ActionSheet } from '@varlet/ui';
+import { Snackbar } from '@varlet/ui';
 import Icon from "../components/Icon.vue";
 import FolderPicker from "../components/FolderPicker.vue";
 import type { Config } from "../types";
@@ -67,19 +67,6 @@ async function loadConfig() {
 }
 
 async function goBack() {
-  // 检查目录是否发生变化
-  const currentDir = config.value.meme_dir || '';
-  if (currentDir && currentDir !== originalMemeDir.value) {
-    // 目录发生变化，需要检查新目录是否有效并决定是否刷新
-    try {
-      // 触发目录变化事件，让主页处理刷新逻辑
-      window.dispatchEvent(new CustomEvent('memeDirChanged', { 
-        detail: { newDir: currentDir, oldDir: originalMemeDir.value } 
-      }));
-    } catch (e) {
-      console.error('Failed to handle dir change:', e);
-    }
-  }
   window.dispatchEvent(new CustomEvent('navigateHome'));
 }
 
@@ -129,7 +116,7 @@ function updateColorMode(mode: string) {
 
 // 检测是否为 Android Tauri 环境
 const isAndroidTauri = () => {
-  return /android/i.test(navigator.userAgent) && typeof (window as any).__TAURI__ !== 'undefined';
+  return /Android/i.test(navigator.userAgent);
 };
 
 // 检测是否为桌面端
@@ -137,43 +124,20 @@ const isDesktop = () => {
   return !(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
 };
 
-// 显示 Android 路径选择 ActionSheet
-async function showAndroidPathPicker(): Promise<string | null> {
-  const actions = [
-    { name: '内部存储', path: '/storage/emulated/0' },
-    { name: '下载', path: '/storage/emulated/0/Download' },
-    { name: '图片', path: '/storage/emulated/0/Pictures' },
-    { name: '文档', path: '/storage/emulated/0/Documents' },
-    { name: '自定义路径', path: 'custom' }
-  ];
-  
-  return new Promise((resolve) => {
-    ActionSheet({
-      title: '选择存储目录',
-      actions: actions.map(a => ({ name: a.name })),
-      onSelect: (action: any) => {
-        const selected = actions.find(a => a.name === action.name);
-        if (selected?.path === 'custom') {
-          const customPath = window.prompt('请输入路径（如 /storage/emulated/0/MyMemes）：');
-          resolve(customPath);
-        } else {
-          resolve(selected?.path || null);
-        }
-      },
-      onClose: () => {
-        resolve(null);
-      }
-    });
-  });
-}
-
 async function selectMemeDir() {
-  // Android Tauri 环境使用 ActionSheet 选择路径
+  // Android Tauri 环境使用 tauri-plugin-android-fs 插件的目录选择器
   if (isAndroidTauri()) {
     try {
-      const selectedPath = await showAndroidPathPicker();
+      // 调用 Rust 后端的 Android 目录选择器
+      const selectedPath = await invoke<string>('select_directory_android');
       
       if (selectedPath) {
+        // 与当前目录相同，无需更改
+        if (selectedPath === config.value.meme_dir) {
+          Snackbar.info('未更改');
+          return;
+        }
+
         // 验证路径是否可访问
         try {
           const fs = await import('@tauri-apps/plugin-fs');
@@ -181,14 +145,25 @@ async function selectMemeDir() {
           
           config.value.meme_dir = selectedPath;
           await autoSaveConfig();
-          Snackbar.success(`已选择目录: ${selectedPath}`);
+          Snackbar.success('已选择目录，应用将重启...');
+          // 保存当前状态用于重启后恢复
+          const savedPage = localStorage.getItem('meme_active_page') || 'home';
+          localStorage.setItem('meme_restore_state', JSON.stringify({
+            page: savedPage,
+          }));
+          // 延迟重启，让 snackbar 显示一下
+          setTimeout(() => location.reload(), 800);
         } catch (e) {
           console.error('Cannot access path:', e);
-          Snackbar.error('文件夹不存在或没有权限');
+          if (typeof (window as any).AndroidNative?.requestStoragePermission === 'function') {
+            (window as any).AndroidNative.requestStoragePermission();
+          }
+          Snackbar.warning('无法访问目录，请授予存储权限后重试');
         }
       }
     } catch (error) {
       console.error('Failed to select directory:', error);
+      Snackbar.error('选择目录失败: ' + error);
     }
     return;
   }
@@ -208,8 +183,16 @@ async function selectMemeDir() {
     });
     
     if (selected) {
-      config.value.meme_dir = selected as string;
+      const dirPath = selected as string;
+      if (dirPath === config.value.meme_dir) {
+        Snackbar.info('未更改');
+        return;
+      }
+      config.value.meme_dir = dirPath;
       await autoSaveConfig();
+      Snackbar.success('已选择目录，应用将重启...');
+      localStorage.setItem('meme_restore_state', JSON.stringify({ page: 'settings' }));
+      setTimeout(() => location.reload(), 800);
     }
   } catch (error) {
     console.error('Failed to select directory:', error);
@@ -262,59 +245,8 @@ async function autoSaveConfig() {
 //     title: '确认重置',
 //     message: '确定要重置为默认设置吗？',
 //     confirmButton: true,
-//     cancelButton: true,
-//     confirmButtonText: '确定',
-//     cancelButtonText: '取消'
-//   }).then(() => {
-//     config.value = {
-//       meme_dir: '',
-//       color_mode: 'system',
-//       theme_style: 'modern',
-//       last_mode: 1,
-//       last_group: 1,
-//       share_app: 'wechat',
-//       grid_size: 4,
-//       pinyin_search: false,
-//       acronym_search: false
-//     };
-//     autoSaveConfig();
-//     Snackbar.success('已重置为默认设置');
-//   });
-// }
 
-// 处理路径输入框失去焦点事件
-async function onPathInputBlur() {
-  // 只在 Android Tauri 环境下处理手动输入
-  if (!isAndroidTauri() || !config.value.meme_dir) return;
-  
-  // 验证路径是否可访问
-  try {
-    const fs = await import('@tauri-apps/plugin-fs');
-    await fs.readDir(config.value.meme_dir);
-    await autoSaveConfig();
-    Snackbar.success(`已保存目录: ${config.value.meme_dir}`);
-  } catch (e) {
-    console.error('Cannot access path:', e);
-    Snackbar.error('文件夹不存在或没有权限');
-  }
-}
 
-async function generateKeywordsFile() {
-  try {
-    await invoke('generate_keywords_file', { 
-      memeDir: config.value.meme_dir,
-      generatePinyin: true,
-      generateAcronym: true
-    });
-    Snackbar.success('关键词文件生成成功');
-    
-    // 触发刷新索引事件，让主页刷新数据
-    window.dispatchEvent(new CustomEvent('refreshIndexAfterKeywordsGenerated'));
-  } catch (error) {
-    console.error('Failed to generate keywords file:', error);
-    Snackbar.error('生成关键词文件失败');
-  }
-}
 </script>
 
 <template>
@@ -334,21 +266,13 @@ async function generateKeywordsFile() {
           基本设置
         </h2>
         
-        <var-cell class="setting-item">
+        <var-cell class="setting-item" @click="selectMemeDir">
+          <template #icon>
+            <Icon name="folder-3" :size="22" />
+          </template>
           <div class="setting-label">
             <label>本地存储目录</label>
-            <p class="setting-desc">本地表情包路径</p>
-          </div>
-          <div class="setting-control">
-            <var-input
-              v-model="config.meme_dir"
-              :readonly="!isAndroidTauri()"
-              class="dir-input"
-              @blur="onPathInputBlur"
-            />
-            <var-button type="primary" @click="selectMemeDir">
-              <Icon name="folder-3" :size="18" /> {{ isAndroidTauri() ? '选择' : '浏览' }}
-            </var-button>
+            <p class="setting-path">{{ config.meme_dir || '点击选择目录' }}</p>
           </div>
         </var-cell>
         
@@ -379,27 +303,6 @@ async function generateKeywordsFile() {
           </div>
         </var-cell>
         
-      </div>
-      
-      <div class="settings-section">
-        <h2>
-          <Icon name="price-tag-3" :size="24" />
-          关键词
-        </h2>
-        
-        <div class="card">
-          <div class="card-item">
-            <div class="card-item-label">
-              <label>生成关键词文件</label>
-              <p class="card-item-desc">自动生成 keywords.toml </p>
-            </div>
-            <div class="card-item-control">
-              <var-button type="primary" @click="generateKeywordsFile">
-                <Icon name="file-text" :size="18" /> 生成
-              </var-button>
-            </div>
-          </div>
-        </div>
       </div>
       
       <div class="settings-section">

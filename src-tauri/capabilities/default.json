@@ -12,43 +12,42 @@
     {
       "identifier": "fs:allow-read-dir",
       "allow": [
-        {
-          "path": "/sdcard"
-        },
-        {
-          "path": "/sdcard/**"
-        },
-        {
-          "path": "/storage"
-        },
-        {
-          "path": "/storage/**"
-        },
-        {
-          "path": "/storage/emulated/0"
-        },
-        {
-          "path": "/storage/emulated/0/**"
-        }
+        { "path": "/sdcard" },
+        { "path": "/sdcard/**" },
+        { "path": "/storage" },
+        { "path": "/storage/**" },
+        { "path": "/storage/emulated/0" },
+        { "path": "/storage/emulated/0/**" }
       ]
     },
     "fs:allow-read-file",
     {
       "identifier": "fs:allow-read-file",
       "allow": [
-        {
-          "path": "/sdcard/**"
-        },
-        {
-          "path": "/storage/**"
-        },
-        {
-          "path": "/storage/emulated/0/**"
-        }
+        { "path": "/sdcard/**" },
+        { "path": "/storage/**" },
+        { "path": "/storage/emulated/0/**" }
       ]
     },
-    "clipboard-manager:allow-read-image",
-    "share:default"
+    "fs:allow-write-file",
+    {
+      "identifier": "fs:allow-write-file",
+      "allow": [
+        { "path": "/sdcard/**" },
+        { "path": "/storage/**" },
+        { "path": "/storage/emulated/0/**" }
+      ]
+    },
+    "fs:allow-exists",
+    {
+      "identifier": "fs:allow-exists",
+      "allow": [
+        { "path": "/sdcard/**" },
+        { "path": "/storage/**" },
+        { "path": "/storage/emulated/0/**" }
+      ]
+    },
+    "clipboard-manager:allow-read-image"
   ],
-  "platforms": ["linux", "android", "macOS", "windows", "iOS"]
+  "platforms": ["linux", "android", "macOS", "windows"]
 }
