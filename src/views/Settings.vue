@@ -313,7 +313,7 @@ async function autoSaveConfig() {
         
         <div class="card about-card">
           <div class="about-content">
-            <div class="app-logo">meme</div>
+            <div class="app-logo">咪萌≧▽≦</div>
             <p class="version">v{{ appVersion }}</p>
             <p class="description">本地表情包管理和分享工具</p>
             

@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "meme",
+  "productName": "咪萌",
   "version": "0.1.0",
   "identifier": "com.v.meme",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "meme",
+        "title": "咪萌",
         "width": 800,
         "height": 600
       }
