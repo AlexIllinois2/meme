@@ -266,7 +266,7 @@ class MainActivity : TauriActivity() {
 
   @JavascriptInterface
   fun shareImageToApp(imagePath: String, targetApp: String) {
-    Log.d(TAG, "shareImageToApp called: imagePath=$imagePath, targetApp=$targetApp")
+    Log.d(TAG, "shareImageToApp called: imagePath=$imagePath, targetApp='$targetApp'")
     runOnUiThread {
       try {
         val file = java.io.File(imagePath)
@@ -274,16 +274,6 @@ class MainActivity : TauriActivity() {
           Log.e(TAG, "Image file not found: $imagePath")
           Toast.makeText(this@MainActivity, "图片文件不存在", Toast.LENGTH_SHORT).show()
           return@runOnUiThread
-        }
-        
-        val targetPackageName = when (targetApp) {
-          "wechat" -> "com.tencent.mm"
-          "qq" -> "com.tencent.mobileqq"
-          else -> {
-            Log.e(TAG, "Unknown target app: $targetApp")
-            Toast.makeText(this@MainActivity, "未知的目标应用: $targetApp", Toast.LENGTH_SHORT).show()
-            return@runOnUiThread
-          }
         }
         
         val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -296,18 +286,43 @@ class MainActivity : TauriActivity() {
           android.net.Uri.fromFile(file)
         }
         
-        val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-          type = "image/*"
-          putExtra(android.content.Intent.EXTRA_STREAM, uri)
-          setPackage(targetPackageName)
-          addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-          addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-          addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        // 如果 targetApp 为空或未指定，显示系统分享菜单
+        val intent = if (targetApp.isEmpty()) {
+          Log.d(TAG, "Showing system share menu")
+          android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+            type = "image/*"
+            putExtra(android.content.Intent.EXTRA_STREAM, uri)
+            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+          }
+        } else {
+          // 分享到特定应用
+          val targetPackageName = when (targetApp) {
+            "wechat" -> "com.tencent.mm"
+            "qq" -> "com.tencent.mobileqq"
+            else -> {
+              Log.e(TAG, "Unknown target app: $targetApp")
+              Toast.makeText(this@MainActivity, "未知的目标应用: $targetApp", Toast.LENGTH_SHORT).show()
+              return@runOnUiThread
+            }
+          }
+          
+          android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+            type = "image/*"
+            putExtra(android.content.Intent.EXTRA_STREAM, uri)
+            setPackage(targetPackageName)
+            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP)
+          }
         }
         
         startActivity(intent)
         Log.i(TAG, "Share intent started successfully")
-        Toast.makeText(this@MainActivity, "正在分享...", Toast.LENGTH_SHORT).show()
+        if (targetApp.isEmpty()) {
+          Toast.makeText(this@MainActivity, "请选择分享目标", Toast.LENGTH_SHORT).show()
+        } else {
+          Toast.makeText(this@MainActivity, "正在分享...", Toast.LENGTH_SHORT).show()
+        }
       } catch (e: android.content.ActivityNotFoundException) {
         val appName = if (targetApp == "wechat") "微信" else "QQ"
         Log.e(TAG, "$appName not found", e)

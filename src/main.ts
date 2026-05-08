@@ -25,12 +25,9 @@ async function initVConsole() {
   }
 }
 
-// 判断开发环境：
-// 1. Vite dev 模式 (import.meta.env.DEV)
-// 2. 本地调试 (localhost)
-// 3. Android Tauri WebView (有 __TAURI__ 且不是生产构建)
-const isTauriAndroid = typeof (window as any).__TAURI__ !== 'undefined' && /android/i.test(navigator.userAgent);
-const isDev = import.meta.env.DEV || window.location.hostname === 'localhost' || isTauriAndroid;
+// 判断开发环境：仅在 Vite dev 模式或 localhost 下启用 vConsole
+// release 版本（生产构建）不显示 vConsole
+const isDev = import.meta.env.DEV || window.location.hostname === 'localhost';
 
 if (isDev) {
   initVConsole();

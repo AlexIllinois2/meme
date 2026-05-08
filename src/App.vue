@@ -332,7 +332,7 @@ async function handleEditModeUpload() {
 }
 
 const currentColorMode = ref<'system' | 'light' | 'dark'>('system');
-const shareApp = ref<'wechat' | 'qq' | ''>('qq');
+const shareApp = ref<'wechat' | 'qq' | 'all' | ''>('all');
 const gridColumns = ref<number>(5);
 const activeMenu = ref('home');
 const isSideMenuOpen = ref(false);
@@ -567,9 +567,9 @@ async function loadConfig() {
       // null/undefined 视为首次启动，空字符串也视为首次启动
       const savedShareApp = config.value.share_app;
       if (!savedShareApp) {
-        // 首次启动，默认QQ并保存
-        shareApp.value = 'qq';
-        config.value.share_app = 'qq';
+        // 首次启动，默认为"所有应用"(显示系统分享菜单)并保存
+        shareApp.value = 'all';
+        config.value.share_app = '';  // 保存到配置时为空字符串
         await safeUpdateConfig(config.value);
       } else {
         // 使用用户之前的选择
@@ -1107,9 +1107,12 @@ async function addNewGroup() {
 }
 
 function handleShareAppChange(app: string) {
+  shareApp.value = app as 'wechat' | 'qq' | 'all' | '';
   if (config.value) {
-    config.value.share_app = app as 'wechat' | 'qq' | '';
-    safeUpdateConfig(config.value);
+    // 保存到配置时,'all' 转换为空字符串
+    const shareAppValue = app === 'all' ? '' : (app as 'wechat' | 'qq');
+    config.value.share_app = shareAppValue;
+    invoke("update_config", { config: config.value });
   }
 }
 
@@ -1397,8 +1400,7 @@ function toggleAcronymSearch() {
 
 // 模式菜单配置
 const modeMenuItems = [
-  { label: '重命名', value: 'rename', icon: 'pencil' },
-  { label: '修改序号', value: 'sort', icon: 'sort-numeric-ascending' },
+  { label: '编辑', value: 'rename', icon: 'pencil' },
   { label: '删除', value: 'delete', icon: 'delete', danger: true },
 ];
 
@@ -1582,16 +1584,24 @@ async function copySingleImage(img: Image) {
 async function shareImageToApp(img: Image) {
   try {
     const imagePath = img.image_path;
-    console.log(`[Android] 分享图片:`, imagePath);
-    console.log(`[Android] shareApp:`, shareApp.value);
+    const app = shareApp.value;
+    console.log(`[Android] 分享图片到 ${app}:`, imagePath);
     console.log(`[Android] AndroidNative available:`, typeof (window as any).AndroidNative);
-    
-    if (isAndroidTauri() && shareApp.value) {
+
+    // 如果选择的是"所有应用"或未指定特定应用，传递空字符串以显示系统分享菜单
+    const targetApp = (app === 'all' || !app) ? '' : app;
+
+    if (isAndroidTauri()) {
       if (typeof (window as any).AndroidNative !== 'undefined' && (window as any).AndroidNative.shareImageToApp) {
-        console.log(`[Android] 调用原生分享接口:`, imagePath, shareApp.value);
-        (window as any).AndroidNative.shareImageToApp(imagePath, shareApp.value);
+        console.log(`[Android] 调用原生分享接口:`, imagePath, targetApp);
+        (window as any).AndroidNative.shareImageToApp(imagePath, targetApp);
         await invoke("share_image", { imageId: img.id });
-        Snackbar.success('正在分享...');
+        
+        if (!targetApp) {
+          Snackbar.success('已打开系统分享菜单');
+        } else {
+          Snackbar.success(`正在分享到 ${app}`);
+        }
       } else {
         console.error('[Android] AndroidNative interface not available');
         console.log('[Android] Window keys:', Object.keys(window));
@@ -1855,6 +1865,14 @@ async function handleImageMenuSelect(img: Image, action: string) {
               <Icon name="wechat" :size="shareApp === 'wechat' ? 28 : 22" :fill="true"
                 :color="shareApp === 'wechat' ? 'var(--color-primary)' : 'var(--color-text-2)'" />
               <span class="indicator" v-if="shareApp === 'wechat'" />
+            </div>
+            <!-- 所有应用选项 -->
+            <div
+              class="share-app-icon" :class="{ active: shareApp === 'all' }"
+              @click="shareApp = 'all'; handleShareAppChange('all')">
+              <Icon name="apps-2" :size="shareApp === 'all' ? 28 : 22" :fill="false"
+                :color="shareApp === 'all' ? 'var(--color-primary)' : 'var(--color-text-2)'" />
+              <span class="indicator" v-if="shareApp === 'all'" />
             </div>
           </div>
         </div>
