@@ -521,8 +521,15 @@ onMounted(async () => {
         // 阻止默认退出行为
         event.preventDefault?.();
       } else {
-        // 在主页时，可以显示确认对话框或直接退出
-        // 当前直接退出（不阻止事件）
+        // 在主页时，最小化应用到后台（而不是退出）
+        if (typeof (window as any).AndroidNative !== 'undefined' && (window as any).AndroidNative.minimizeApp) {
+          console.log('[Android] Minimizing app to background');
+          (window as any).AndroidNative.minimizeApp();
+        } else {
+          console.warn('[Android] minimizeApp not available, will exit app');
+        }
+        // 阻止默认退出行为
+        event.preventDefault?.();
       }
     });
 

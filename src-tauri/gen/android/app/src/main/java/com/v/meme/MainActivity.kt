@@ -244,16 +244,19 @@ class MainActivity : TauriActivity() {
           })()
         """.trimIndent(), null)
         
-        webView?.postDelayed({
-        }, 300)
+        // 不在这里延迟，让前端决定是否最小化
       }
     }
     
     onBackPressedDispatcher.addCallback(this, backCallback!!)
   }
   
-  fun setBackPressEnabled(enabled: Boolean) {
-    backCallback?.isEnabled = enabled
+  @JavascriptInterface
+  fun minimizeApp() {
+    Log.d(TAG, "minimizeApp called - moving task to background")
+    runOnUiThread {
+      moveTaskToBack(true)
+    }
   }
   
   @JavascriptInterface
