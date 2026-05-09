@@ -622,10 +622,16 @@ async function loadConfig() {
     } else {
       // 首次启动，需要选择目录
       await setupInitialConfig();
+      // 注意：setupInitialConfig 已经完成了自动刷新和数据加载
+      // 所以这里直接返回，不再执行后续的 loadModes 等
+      return;
     }
   } catch (error) {
     console.error("Failed to load config:", error);
     await setupInitialConfig();
+    // 注意：setupInitialConfig 已经完成了自动刷新和数据加载
+    // 所以这里直接返回，不再执行后续的 loadModes 等
+    return;
   }
 }
 
@@ -638,7 +644,7 @@ async function setupInitialConfig() {
       theme_style: "modern",
       last_mode: 1,
       last_group: 1,
-      share_app: "qq",
+      share_app: "",
       grid_size: 4,
       pinyin_search: false,
       acronym_search: false
@@ -646,9 +652,11 @@ async function setupInitialConfig() {
     config.value = newConfig;
     await safeUpdateConfig(config.value);
     applyTheme();
-    applyTheme();
+    
+    // 首次启动，自动刷新数据到数据库并加载
+    await autoRefreshAfterDirChange(selectedDir);
   } else {
-    // 使用默认目录
+    // 用户取消了选择，使用默认目录
     const defaultMemeDir = isAndroidTauri()
       ? '/storage/emulated/0/meme'
       : '/home/' + (navigator.userAgent.includes('Linux') ? 'user' : '') + '/meme';
@@ -658,7 +666,7 @@ async function setupInitialConfig() {
       theme_style: "modern",
       last_mode: 1,
       last_group: 1,
-      share_app: "qq",
+      share_app: "",
       grid_size: 4,
       pinyin_search: false,
       acronym_search: false
@@ -666,6 +674,9 @@ async function setupInitialConfig() {
     config.value = defaultConfig;
     await safeUpdateConfig(config.value);
     applyTheme();
+    
+    // 使用默认目录时，也尝试刷新数据并加载
+    await autoRefreshAfterDirChange(defaultMemeDir);
   }
 }
 
@@ -1277,6 +1288,40 @@ async function reloadPageState() {
   }
   if (selectedGroupId.value) {
     await loadImages(selectedGroupId.value);
+  }
+}
+
+/**
+ * 目录变更后自动刷新数据到数据库
+ * @param newDir 新的表情包目录路径
+ */
+async function autoRefreshAfterDirChange(newDir: string) {
+  try {
+    console.log('[Auto Refresh] Checking directory:', newDir);
+    
+    // 检查存储是否可访问
+    const accessible = await invoke<boolean>('check_storage_accessible', { memeDir: newDir });
+    if (!accessible) {
+      console.log('[Auto Refresh] Storage not accessible, skipping');
+      return;
+    }
+    
+    // 执行全量刷新，将文件系统数据同步到数据库
+    Snackbar.info('正在初始化数据...');
+    const result = await invoke<string>("full_refresh", { memeDir: newDir });
+    console.log('[Auto Refresh] Result:', result);
+    
+    // 刷新完成后重新加载页面状态
+    await reloadPageState();
+    Snackbar.success('数据初始化完成');
+  } catch (error) {
+    console.error('[Auto Refresh] Failed:', error);
+    // 即使刷新失败，也尝试加载已有数据
+    try {
+      await reloadPageState();
+    } catch (e) {
+      console.error('[Auto Refresh] Reload also failed:', e);
+    }
   }
 }
 

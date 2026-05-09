@@ -153,14 +153,31 @@ async function selectMemeDir() {
           
           config.value.meme_dir = selectedPath;
           await autoSaveConfig();
-          Snackbar.success('已选择目录，应用将重启...');
-          // 保存当前状态用于重启后恢复
-          const savedPage = localStorage.getItem('meme_active_page') || 'home';
-          localStorage.setItem('meme_restore_state', JSON.stringify({
-            page: savedPage,
-          }));
-          // 延迟重启，让 snackbar 显示一下
-          setTimeout(() => location.reload(), 800);
+          Snackbar.info('正在初始化数据...');
+          
+          // 执行全量刷新
+          try {
+            const result = await invoke<string>("full_refresh", { memeDir: selectedPath });
+            console.log('[Settings] Auto refresh result:', result);
+            
+            // 保存当前状态用于重启后恢复
+            const savedPage = localStorage.getItem('meme_active_page') || 'home';
+            localStorage.setItem('meme_restore_state', JSON.stringify({
+              page: savedPage,
+            }));
+            
+            Snackbar.success('数据初始化完成，应用将重启...');
+            // 延迟重启，让 snackbar 显示一下
+            setTimeout(() => location.reload(), 800);
+          } catch (refreshError) {
+            console.error('[Settings] Auto refresh failed:', refreshError);
+            // 即使刷新失败也重启，让用户看到新目录
+            localStorage.setItem('meme_restore_state', JSON.stringify({
+              page: 'settings'
+            }));
+            Snackbar.warning('数据初始化失败，请手动刷新');
+            setTimeout(() => location.reload(), 1500);
+          }
         } catch (e) {
           console.error('Cannot access path:', e);
           if (typeof (window as any).AndroidNative?.requestStoragePermission === 'function') {
@@ -198,9 +215,22 @@ async function selectMemeDir() {
       }
       config.value.meme_dir = dirPath;
       await autoSaveConfig();
-      Snackbar.success('已选择目录，应用将重启...');
-      localStorage.setItem('meme_restore_state', JSON.stringify({ page: 'settings' }));
-      setTimeout(() => location.reload(), 800);
+      Snackbar.info('正在初始化数据...');
+      
+      // 执行全量刷新
+      try {
+        const result = await invoke<string>("full_refresh", { memeDir: dirPath });
+        console.log('[Settings] Auto refresh result:', result);
+        
+        localStorage.setItem('meme_restore_state', JSON.stringify({ page: 'settings' }));
+        Snackbar.success('数据初始化完成，应用将重启...');
+        setTimeout(() => location.reload(), 800);
+      } catch (refreshError) {
+        console.error('[Settings] Auto refresh failed:', refreshError);
+        localStorage.setItem('meme_restore_state', JSON.stringify({ page: 'settings' }));
+        Snackbar.warning('数据初始化失败，请手动刷新');
+        setTimeout(() => location.reload(), 1500);
+      }
     }
   } catch (error) {
     console.error('Failed to select directory:', error);
