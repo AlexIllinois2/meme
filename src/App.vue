@@ -1825,7 +1825,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
             </var-input>
           <div class="search-actions">
             <button class="btn-icon" @click="uploadImages" title="上传图片">
-              <Icon name="camera" :size="24" />
+              <Icon name="image" :size="24" />
             </button>
             <!-- 全局编辑模式按钮 -->
             <button 
@@ -3697,11 +3697,6 @@ async function handleImageMenuSelect(img: Image, action: string) {
 .btn-icon:focus-visible {
   outline: none;
   -webkit-tap-highlight-color: transparent;
-}
-
-/* 添加图片item文字颜色修复 */
-.add-image-content span {
-  color: var(--color-text);
 }
 
 .image-item.add-image-item:hover .add-image-content span {
