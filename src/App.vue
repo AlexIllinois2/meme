@@ -461,6 +461,10 @@ onMounted(async () => {
   window.addEventListener('wheel', handleWheel, { passive: false });
   window.addEventListener('touchstart', handleTouchStart, { passive: false });
   window.addEventListener('touchmove', handleTouchMove, { passive: false });
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', async () => {
+    console.log('[Theme] 系统深色模式切换');
+    await syncSystemTheme(); // 直接调用抽出来的函数
+  });
   
   // 只在用户明确改变窗口大小时才调整列数
   let resizeTimeout: number;
@@ -521,27 +525,28 @@ onMounted(async () => {
     if (document.visibilityState === 'visible') {
       // 应用恢复到前台
       console.log('[Theme] App resumed to foreground');
-      
-      // 如果当前是跟随系统模式，检查系统主题是否变化
-      if (currentColorMode.value === 'system' && config.value) {
-        const isSystemDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-        const isCurrentlyDark = document.documentElement.classList.contains('var-dark');
-        
-        // 如果系统主题与当前显示不一致，重新应用主题
-        if (isSystemDark !== isCurrentlyDark) {
-          console.log('[Theme] System theme changed, reapplying theme');
-          
-          // 应用主题到 DOM（更新 class）
-          applyTheme();
-          
-          // 强制 ThemeProvider 重新渲染以更新 CSS 变量
-          themeKey.value++;
-          
-          console.log('[Theme] Theme sync completed');
-        }
-      }
+      await syncSystemTheme(); 
     }
   });
+
+  async function syncSystemTheme() {
+    // 只有当前是【跟随系统模式】才执行同步
+    if (currentColorMode.value !== 'system' || !config.value) return;
+
+    // 判断系统当前是否深色
+    const isSystemDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
+    // 判断当前页面是否深色
+    const isCurrentlyDark = document.documentElement.classList.contains('var-dark');
+
+    // 不一致 → 重新同步
+    if (isSystemDark !== isCurrentlyDark) {
+      console.log('[Theme] 系统主题变化，正在同步...');
+      
+      applyTheme();          // 应用主题到 DOM
+      themeKey.value++;      // 强制 ThemeProvider 更新
+      console.log('[Theme] 主题同步完成');
+    }
+  }
 
   // Android 返回键处理
   if (isAndroidTauri()) {
