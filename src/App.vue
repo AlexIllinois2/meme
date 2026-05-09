@@ -361,6 +361,9 @@ const editingModeSortOrder = ref(0);
 const editingGroupName = ref('');
 const showKeywordManager = ref(false);
 
+// 用于强制 ThemeProvider 重新渲染的 key
+const themeKey = ref(0);
+
 const isMobile = computed(() => window.innerWidth < 768);
 const isSidebarMode = computed(() => !isMobile.value);
 
@@ -502,6 +505,33 @@ onMounted(async () => {
     if (mode) {
       currentColorMode.value = mode;
       applyTheme();
+    }
+  });
+
+  // 监听应用恢复前台事件，自动同步系统颜色模式
+  document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState === 'visible') {
+      // 应用恢复到前台
+      console.log('[Theme] App resumed to foreground');
+      
+      // 如果当前是跟随系统模式，检查系统主题是否变化
+      if (currentColorMode.value === 'system' && config.value) {
+        const isSystemDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const isCurrentlyDark = document.documentElement.classList.contains('var-dark');
+        
+        // 如果系统主题与当前显示不一致，重新应用主题
+        if (isSystemDark !== isCurrentlyDark) {
+          console.log('[Theme] System theme changed, reapplying theme');
+          
+          // 应用主题到 DOM（更新 class）
+          applyTheme();
+          
+          // 强制 ThemeProvider 重新渲染以更新 CSS 变量
+          themeKey.value++;
+          
+          console.log('[Theme] Theme sync completed');
+        }
+      }
     }
   });
 
@@ -1720,7 +1750,8 @@ async function handleImageMenuSelect(img: Image, action: string) {
 
 <template>
   <ThemeProvider 
-  :theme-style="config?.theme_style || 'modern'"
+    :key="themeKey"
+    :theme-style="config?.theme_style || 'modern'"
     :color-mode="currentColorMode"
   >
     <div class="app-container" :class="{ 'sidebar-open': isSidebarMode && isSideMenuOpen }">

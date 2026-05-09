@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, watch } from 'vue';
+import { computed, watch, onMounted, onUnmounted } from 'vue';
 // StyleProvider 是组件形式使用，不需要导入
 // import { StyleProvider } from '@varlet/ui';
 
@@ -277,6 +277,36 @@ watch(() => [props.themeStyle, props.colorMode], () => {
     document.documentElement.style.setProperty(key, value);
   });
 }, { immediate: true });
+
+// 监听系统主题变化（当 colorMode 为 system 时）
+let mediaQuery: MediaQueryList | null = null;
+let handleSystemThemeChange: ((e: MediaQueryListEvent) => void) | null = null;
+
+onMounted(() => {
+  mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+  
+  handleSystemThemeChange = (e: MediaQueryListEvent) => {
+    // 只有在跟随系统模式下才响应系统主题变化
+    if (props.colorMode === 'system') {
+      console.log('[ThemeProvider] System theme changed to:', e.matches ? 'dark' : 'light');
+      const vars = styleVars.value;
+      Object.entries(vars).forEach(([key, value]) => {
+        document.documentElement.style.setProperty(key, value);
+      });
+    }
+  };
+  
+  // 添加监听器
+  mediaQuery.addEventListener('change', handleSystemThemeChange);
+});
+
+// 清理监听器
+onUnmounted(() => {
+  if (mediaQuery && handleSystemThemeChange) {
+    mediaQuery.removeEventListener('change', handleSystemThemeChange);
+  }
+});
+
 </script>
 
 <template>
