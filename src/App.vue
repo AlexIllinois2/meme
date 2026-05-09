@@ -234,6 +234,10 @@ const showAddImagePopup = ref(false);
 
 // 显示新增分组弹窗
 function showAddGroupDialog() {
+  if (!selectedModeId.value) {
+    Snackbar.warning('请先选择一个模式');
+    return;
+  }
   newGroupName.value = '';
   showAddGroupPopup.value = true;
 }
@@ -282,6 +286,10 @@ async function submitAddGroup() {
 
 // 显示新增图片弹窗
 async function showAddImageDialog() {
+  if (!config.value || !selectedGroupId.value || !selectedModeId.value) {
+    Snackbar.warning('请先选择分组');
+    return;
+  }
   // Android 端直接调用系统图片选择器
   if (isAndroidTauri()) {
     await uploadImagesAndroid();
