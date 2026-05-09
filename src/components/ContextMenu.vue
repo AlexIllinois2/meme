@@ -23,15 +23,39 @@ const position = ref({ x: 0, y: 0 });
 const longPressTimer = ref<number | null>(null);
 const isLongPress = ref(false);
 const menuRef = ref<HTMLElement | null>(null);
+const touchStartPos = ref({ x: 0, y: 0 });
+const hasMoved = ref(false);
 
 // 处理长按开始
 function handleTouchStart(event: TouchEvent) {
   isLongPress.value = false;
+  hasMoved.value = false;
+  const touch = event.touches[0];
+  touchStartPos.value = { x: touch.clientX, y: touch.clientY };
+  
   longPressTimer.value = window.setTimeout(() => {
-    isLongPress.value = true;
-    const touch = event.touches[0];
-    openMenu(touch.clientX, touch.clientY);
+    // 只有在没有明显移动时才触发长按
+    if (!hasMoved.value) {
+      isLongPress.value = true;
+      openMenu(touch.clientX, touch.clientY);
+    }
   }, 500); // 500ms 长按触发
+}
+
+// 处理触摸移动 - 检测是否滑动
+function handleTouchMove(event: TouchEvent) {
+  if (longPressTimer.value && !isLongPress.value) {
+    const touch = event.touches[0];
+    const dx = Math.abs(touch.clientX - touchStartPos.value.x);
+    const dy = Math.abs(touch.clientY - touchStartPos.value.y);
+    
+    // 如果移动距离超过 10px,认为是滑动而非长按
+    if (dx > 10 || dy > 10) {
+      hasMoved.value = true;
+      clearTimeout(longPressTimer.value!);
+      longPressTimer.value = null;
+    }
+  }
 }
 
 // 处理长按结束
@@ -102,6 +126,7 @@ defineExpose({
   <div
     class="context-menu-trigger"
     @touchstart.passive="handleTouchStart"
+    @touchmove.passive="handleTouchMove"
     @touchend="handleTouchEnd"
     @touchcancel="handleTouchEnd"
     @contextmenu.prevent="handleContextMenu"
@@ -138,6 +163,9 @@ defineExpose({
 <style scoped>
 .context-menu-trigger {
   display: contents;
+  /* 禁用默认的长按行为 */
+  -webkit-touch-callout: none;
+  user-select: none;
 }
 
 .context-menu-overlay {

@@ -2292,6 +2292,9 @@ async function handleImageMenuSelect(img: Image, action: string) {
   border-bottom: 1px solid var(--color-border);
   background-color: var(--color-surface);
   padding: 8px 12px;
+  /* 禁用长按菜单和文本选择 */
+  -webkit-touch-callout: none;
+  user-select: none;
 }
 
 .modern-tabs-container.secondary {
@@ -2306,6 +2309,8 @@ async function handleImageMenuSelect(img: Image, action: string) {
   scrollbar-width: none;
   -ms-overflow-style: none;
   -webkit-overflow-scrolling: touch;
+  /* 优化滚动体验 */
+  touch-action: pan-x;
 }
 
 .modern-tabs-scroll::-webkit-scrollbar {
@@ -2556,6 +2561,11 @@ async function handleImageMenuSelect(img: Image, action: string) {
   display: grid;
   gap: 12px;
   align-content: start;
+  /* 禁用长按菜单和文本选择 */
+  -webkit-touch-callout: none;
+  user-select: none;
+  /* 优化滚动体验 */
+  touch-action: pan-y;
 }
 
 .image-item {
@@ -2567,6 +2577,8 @@ async function handleImageMenuSelect(img: Image, action: string) {
   cursor: pointer;
   transition: all 0.2s ease;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  /* 禁用默认的长按行为 */
+  -webkit-touch-callout: none;
 }
 
 .image-content {
