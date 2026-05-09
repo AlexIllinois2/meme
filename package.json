@@ -8,7 +8,6 @@
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "android1": "tauri android dev --no-open",
     "android:build": "tauri android build"
   },
   "dependencies": {

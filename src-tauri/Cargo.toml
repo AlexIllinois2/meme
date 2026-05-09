@@ -8,6 +8,13 @@ exclude = ["**/*.toml"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[profile.release]
+opt-level = "z"    # 激进优化体积（也可用 "s"）
+lto = true         # 开启链接时优化，消除冗余代码
+codegen-units = 1  # 优化整个程序，而非按“零件”编译
+strip = true       # 移除调试符号，直接减小 so 文件
+panic = "abort"    # 简化错误处理逻辑，减小体积
+
 [lib]
 # The `_lib` suffix may seem redundant but it is necessary
 # to make the lib name unique and wouldn't conflict with the bin name.

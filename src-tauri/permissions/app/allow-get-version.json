@@ -1,0 +1,4 @@
+{
+  "permissions":  ["app:allow-get-version"],
+  "identifier": "app:allow-get-version"
+}

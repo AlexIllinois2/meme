@@ -44,7 +44,7 @@ All operations must sync three sources:
 - `bun run tauri dev` - Full development (frontend + backend)
 - `bun run build` - Typecheck + build frontend
 - `bun run tauri build` - Production build
-- Android: `bun run android1` (dev), `bun run android:build` (production)
+- Android: `bun tauri android dev` (dev), `bun run android:build` (production)
 
 ## Tauri Backend Structure
 Rust modules in `src-tauri/src/`:

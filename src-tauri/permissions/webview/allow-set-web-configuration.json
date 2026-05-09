@@ -1,0 +1,4 @@
+{
+  "permissions": ["webview:allow-set-web-configuration"],
+  "identifier": "webview:allow-set-web-configuration"
+}
