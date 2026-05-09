@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
+import { getVersion } from '@tauri-apps/api/app';
 import { open } from '@tauri-apps/plugin-dialog';
 import { Snackbar } from '@varlet/ui';
 import Icon from "../components/Icon.vue";
@@ -20,7 +21,7 @@ const config = ref<Config>({
 });
 
 const isSaving = ref(false);
-const appVersion = '1.0.0';
+const appVersion = ref('0.0.0'); // ✅ 改为响应式变量
 const showFolderPicker = ref(false);
 
 // 用于存储 matchMedia 监听器引用，以便在组件卸载时移除
@@ -34,6 +35,13 @@ onMounted(async () => {
   await loadConfig();
   // 保存原始目录
   originalMemeDir.value = config.value.meme_dir || '';
+  
+  // ✅ 异步获取版本号
+  try {
+    appVersion.value = await getVersion();
+  } catch (error) {
+    console.error('Failed to get version:', error);
+  }
 });
 
 onUnmounted(() => {
