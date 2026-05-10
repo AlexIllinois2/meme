@@ -463,15 +463,56 @@ onMounted(async () => {
   // 初始化完成后，滚动到选中的模式和分组
   await nextTick();
   
-  const modeTab = document.querySelector('.modern-tabs-container:not(.secondary) .modern-tab.active');
-  if (modeTab) {
-    modeTab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-  }
-  
-  const groupTab = document.querySelector('.modern-tabs-container.secondary .modern-tab.active');
-  if (groupTab) {
-    groupTab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-  }
+  // 使用 setTimeout 确保DOM完全渲染后再执行滚动
+  setTimeout(() => {
+    // 滚动到选中的模式
+    const modeContainer = document.querySelector('.modern-tabs-container:not(.secondary) .modern-tabs-scroll') as HTMLElement;
+    const modeTabs = document.querySelectorAll('.modern-tabs-container:not(.secondary) .modern-tab');
+    
+    if (modeContainer && modeTabs.length > 0) {
+      let activeIndex = -1;
+      modeTabs.forEach((tab, index) => {
+        if (tab.classList.contains('active')) {
+          activeIndex = index;
+        }
+      });
+      
+      if (activeIndex >= 0) {
+        const activeTab = modeTabs[activeIndex] as HTMLElement;
+        const tabLeft = activeTab.offsetLeft;
+        const tabWidth = activeTab.offsetWidth;
+        const containerWidth = modeContainer.offsetWidth;
+        
+        // 计算滚动位置，使选中的tab居中
+        const targetScroll = tabLeft - (containerWidth - tabWidth) / 2;
+        modeContainer.scrollLeft = Math.max(0, targetScroll);
+      }
+    }
+    
+    // 滚动到选中的分组
+    const groupContainer = document.querySelector('.modern-tabs-container.secondary .modern-tabs-scroll') as HTMLElement;
+    const groupTabs = document.querySelectorAll('.modern-tabs-container.secondary .modern-tab');
+    
+    if (groupContainer && groupTabs.length > 0) {
+      let activeIndex = -1;
+      groupTabs.forEach((tab, index) => {
+        if (tab.classList.contains('active')) {
+          activeIndex = index;
+        }
+      });
+      
+      if (activeIndex >= 0) {
+        const activeTab = groupTabs[activeIndex] as HTMLElement;
+        const tabLeft = activeTab.offsetLeft;
+        const tabWidth = activeTab.offsetWidth;
+        const containerWidth = groupContainer.offsetWidth;
+        
+        // 计算滚动位置，使选中的tab居中
+        const targetScroll = tabLeft - (containerWidth - tabWidth) / 2;
+        groupContainer.scrollLeft = Math.max(0, targetScroll);
+      }
+    }
+  }, 300);
   
   // 添加事件监听
   window.addEventListener('resize', handleResize);
@@ -1480,8 +1521,7 @@ function handleMenuAction(action: string) {
       fullRefresh();
       break;
     case 'reload':
-      reloadPageState();
-      Snackbar.success('页面已刷新');
+      location.reload();
       break;
     case 'settings':
       activeMenu.value = 'settings';

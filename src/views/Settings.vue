@@ -50,11 +50,6 @@ const themeStyleOptions: { value: 'default' | 'modern' | 'minimal'; label: strin
   { value: 'minimal', label: '极简' }
 ];
 
-const themeStyleLabel = computed(() => {
-  const option = themeStyleOptions.find(o => o.value === config.value.theme_style);
-  return option ? option.label : '默认';
-});
-
 function selectThemeStyle(value: 'default' | 'modern' | 'minimal') {
   config.value.theme_style = value;
   autoSaveConfig();
