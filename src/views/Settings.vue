@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { getVersion } from '@tauri-apps/api/app';
 import { open } from '@tauri-apps/plugin-dialog';
@@ -23,6 +23,43 @@ const config = ref<Config>({
 const isSaving = ref(false);
 const appVersion = ref('0.0.0'); // ✅ 改为响应式变量
 const showFolderPicker = ref(false);
+const showColorModePopup = ref(false);
+const showThemePopup = ref(false);
+
+const colorModeOptions: { value: 'system' | 'light' | 'dark'; label: string }[] = [
+  { value: 'system', label: '跟随系统' },
+  { value: 'light', label: '浅色主题' },
+  { value: 'dark', label: '深色主题' }
+];
+
+const colorModeLabel = computed(() => {
+  const option = colorModeOptions.find(o => o.value === config.value.color_mode);
+  return option ? option.label : '跟随系统';
+});
+
+function selectColorMode(value: 'system' | 'light' | 'dark') {
+  config.value.color_mode = value;
+  updateColorMode(value);
+  autoSaveConfig();
+  showColorModePopup.value = false;
+}
+
+const themeStyleOptions: { value: 'default' | 'modern' | 'minimal'; label: string }[] = [
+  { value: 'default', label: '默认' },
+  { value: 'modern', label: '现代' },
+  { value: 'minimal', label: '极简' }
+];
+
+const themeStyleLabel = computed(() => {
+  const option = themeStyleOptions.find(o => o.value === config.value.theme_style);
+  return option ? option.label : '默认';
+});
+
+function selectThemeStyle(value: 'default' | 'modern' | 'minimal') {
+  config.value.theme_style = value;
+  autoSaveConfig();
+  showThemePopup.value = false;
+}
 
 // 用于存储 matchMedia 监听器引用，以便在组件卸载时移除
 let colorSchemeListener: ((e: MediaQueryListEvent) => void) | null = null;
@@ -304,42 +341,35 @@ async function autoSaveConfig() {
           基本设置
         </h2>
         
-        <var-cell class="setting-item" @click="selectMemeDir">
-          <template #icon>
-            <Icon name="folder-3" :size="22" />
-          </template>
+        <div class="setting-row" @click="selectMemeDir">
+          <Icon name="folder-3" :size="22" class="setting-icon" />
           <div class="setting-label">
             <label>本地存储目录</label>
             <p class="setting-path">{{ config.meme_dir || '点击选择目录' }}</p>
           </div>
-        </var-cell>
+          <Icon name="chevron-right" :size="20" class="arrow-icon" />
+        </div>
         
-        <var-cell class="setting-item">
+        <div class="setting-row" @click="showColorModePopup = true">
           <div class="setting-label">
             <label>颜色模式</label>
           </div>
           <div class="setting-control">
-            <var-select v-model="config.color_mode" @change="autoSaveConfig">
-              <var-option value="system" label="系统" />
-              <var-option value="light" label="浅色" />
-              <var-option value="dark" label="深色" />
-            </var-select>
+            <span class="selected-value">{{ colorModeLabel }}</span>
+            <Icon name="chevron-right" :size="20" class="arrow-icon" />
           </div>
-        </var-cell>
+        </div>
         
-        <var-cell class="setting-item">
+        <!-- <div class="setting-row" @click="showThemePopup = true">
           <div class="setting-label">
             <label>主题</label>
             <p class="setting-desc">界面风格</p>
           </div>
           <div class="setting-control">
-            <var-select v-model="config.theme_style" @change="autoSaveConfig">
-              <var-option value="default" label="默认" />
-              <var-option value="modern" label="现代" />
-              <var-option value="minimal" label="极简" />
-            </var-select>
+            <span class="selected-value">{{ themeStyleLabel }}</span>
+            <Icon name="chevron-right" :size="20" class="arrow-icon" />
           </div>
-        </var-cell>
+        </div> -->
         
       </div>
       
@@ -351,7 +381,7 @@ async function autoSaveConfig() {
         
         <div class="card about-card">
           <div class="about-content">
-            <div class="app-logo">咪萌≧▽≦</div>
+            <div class="app-logo">≧▽≦</div>
             <p class="version">v{{ appVersion }}</p>
             <p class="description">本地表情包管理和分享工具</p>
             
@@ -369,6 +399,62 @@ async function autoSaveConfig() {
     @select="onFolderSelected"
     :default-path="config.meme_dir || undefined"
   />
+  
+  <var-popup :show="showColorModePopup" @click-overlay="showColorModePopup = false">
+    <div class="settings-popup-content">
+      <div class="settings-popup-header">
+        <h3>主题</h3>
+        <var-button text round @click="showColorModePopup = false">
+          <Icon name="x" :size="20" />
+        </var-button>
+      </div>
+      <div class="settings-popup-body">
+        <div 
+          v-for="option in colorModeOptions" 
+          :key="option.value" 
+          class="popup-option"
+          :class="{ active: config.color_mode === option.value }"
+          @click="selectColorMode(option.value)"
+        >
+          <div class="radio-wrapper">
+            <div class="radio" :class="{ checked: config.color_mode === option.value }"></div>
+          </div>
+          <span class="option-label">{{ option.label }}</span>
+        </div>
+      </div>
+      <div class="settings-popup-footer">
+        <var-button type="default" block @click="showColorModePopup = false">取消</var-button>
+      </div>
+    </div>
+  </var-popup>
+  
+  <var-popup :show="showThemePopup" @click-overlay="showThemePopup = false">
+    <div class="settings-popup-content">
+      <div class="settings-popup-header">
+        <h3>主题</h3>
+        <var-button text round @click="showThemePopup = false">
+          <Icon name="x" :size="20" />
+        </var-button>
+      </div>
+      <div class="settings-popup-body">
+        <div 
+          v-for="option in themeStyleOptions" 
+          :key="option.value" 
+          class="popup-option"
+          :class="{ active: config.theme_style === option.value }"
+          @click="selectThemeStyle(option.value)"
+        >
+          <div class="radio-wrapper">
+            <div class="radio" :class="{ checked: config.theme_style === option.value }"></div>
+          </div>
+          <span class="option-label">{{ option.label }}</span>
+        </div>
+      </div>
+      <div class="settings-popup-footer">
+        <var-button type="default" block @click="showThemePopup = false">取消</var-button>
+      </div>
+    </div>
+  </var-popup>
 </template>
 
 <style scoped>
@@ -397,13 +483,27 @@ async function autoSaveConfig() {
   color: var(--text-color);
 }
 
-.setting-item {
+.setting-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 16px;
   margin-bottom: 8px;
-  border-radius: 8px;
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.setting-row:hover {
+  background: var(--color-surface-variant);
+  box-shadow: var(--shadow-md);
+}
+
+.setting-icon {
+  margin-right: 12px;
+  color: var(--color-text-secondary);
 }
 
 .setting-label {
@@ -431,6 +531,16 @@ async function autoSaveConfig() {
   gap: 12px;
   align-items: center;
   max-width: 400px;
+  justify-content: flex-end;
+}
+
+.selected-value {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.arrow-icon {
+  color: var(--text-secondary);
 }
 
 .dir-input {
@@ -589,5 +699,101 @@ async function autoSaveConfig() {
 .settings-section h2 {
   color: var(--color-text);
   font-weight: 600;
+}
+
+.settings-popup-content {
+  width: 320px;
+  max-width: 90vw;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.settings-popup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.settings-popup-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.settings-popup-body {
+  padding: 12px 24px;
+}
+
+.settings-popup-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--color-border);
+}
+
+.popup-option {
+  display: flex;
+  align-items: center;
+  padding: 16px 0;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  border-radius: 12px;
+  margin: 4px 0;
+}
+
+.popup-option:hover {
+  background-color: var(--color-surface-variant);
+}
+
+.popup-option.active {
+  background-color: var(--color-surface-variant);
+}
+
+.radio-wrapper {
+  margin-right: 16px;
+}
+
+.radio {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--color-border);
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.radio.checked {
+  border-color: var(--color-primary);
+}
+
+.radio.checked::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: var(--color-primary);
+}
+
+.option-label {
+  font-size: 16px;
+  color: var(--color-text);
+  flex: 1;
+}
+
+.selected-value {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+}
+
+.setting-path {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-text-secondary);
 }
 </style>

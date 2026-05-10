@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from "vue";
+import { ref, onMounted, computed, nextTick } from "vue";
 import * as tauri from "@tauri-apps/api/core";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { Snackbar, Dialog } from '@varlet/ui';
@@ -356,6 +356,11 @@ const acronymSearchEnabled = ref(false);
 const initialPinchScale = ref(1);
 const lastPinchDistance = ref(0);
 
+const swipeStartX = ref(0);
+const swipeStartY = ref(0);
+const swipeOffset = ref(0);
+const isSwiping = ref(false);
+
 // 长按/右键菜单相关状态
 const selectedModeForMenu = ref<Mode | null>(null);
 const selectedGroupForMenu = ref<Group | null>(null);
@@ -453,6 +458,19 @@ onMounted(async () => {
     await loadImages(groups.value[0].id);
   } else if (selectedGroupId.value) {
     await loadImages(selectedGroupId.value);
+  }
+  
+  // 初始化完成后，滚动到选中的模式和分组
+  await nextTick();
+  
+  const modeTab = document.querySelector('.modern-tabs-container:not(.secondary) .modern-tab.active');
+  if (modeTab) {
+    modeTab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }
+  
+  const groupTab = document.querySelector('.modern-tabs-container.secondary .modern-tab.active');
+  if (groupTab) {
+    groupTab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
   }
   
   // 添加事件监听
@@ -865,6 +883,19 @@ async function switchMode(active: string | number) {
     config.value.last_mode = modeId;
     await safeUpdateConfig(config.value);
   }
+  
+  await nextTick();
+  
+  const activeTab = document.querySelector('.modern-tabs-container:not(.secondary) .modern-tab.active');
+  const scrollContainer = document.querySelector('.modern-tabs-container:not(.secondary) .modern-tabs-scroll');
+  
+  if (activeTab && scrollContainer) {
+    activeTab.scrollIntoView({ 
+      behavior: 'smooth', 
+      block: 'nearest',
+      inline: 'center'
+    });
+  }
 }
 
 async function switchGroup(active: string | number) {
@@ -874,6 +905,19 @@ async function switchGroup(active: string | number) {
   if (config.value) {
     config.value.last_group = groupId;
     await safeUpdateConfig(config.value);
+  }
+  
+  await nextTick();
+  
+  const activeTab = document.querySelector('.modern-tabs-container.secondary .modern-tab.active');
+  const scrollContainer = document.querySelector('.modern-tabs-container.secondary .modern-tabs-scroll');
+  
+  if (activeTab && scrollContainer) {
+    activeTab.scrollIntoView({ 
+      behavior: 'smooth', 
+      block: 'nearest',
+      inline: 'center'
+    });
   }
 }
 
@@ -1221,6 +1265,75 @@ function handleTouchMove(event: TouchEvent) {
     }
   }
 }
+
+function handleSwipeStart(event: TouchEvent) {
+  if (isGlobalEditMode.value || event.touches.length !== 1) return;
+  swipeStartX.value = event.touches[0].clientX;
+  swipeStartY.value = event.touches[0].clientY;
+  swipeOffset.value = 0;
+  isSwiping.value = true;
+}
+
+function handleSwipeMove(event: TouchEvent) {
+  if (!isSwiping.value || isGlobalEditMode.value) return;
+  if (event.touches.length !== 1) {
+    isSwiping.value = false;
+    swipeOffset.value = 0;
+    return;
+  }
+
+  const deltaX = event.touches[0].clientX - swipeStartX.value;
+  const deltaY = event.touches[0].clientY - swipeStartY.value;
+
+  if (Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(deltaY) > 10) {
+    isSwiping.value = false;
+    swipeOffset.value = 0;
+    return;
+  }
+
+  if (Math.abs(deltaX) > 10) {
+    event.preventDefault();
+    swipeOffset.value = deltaX;
+  }
+}
+
+function handleSwipeEnd() {
+  if (!isSwiping.value) return;
+
+  const threshold = 80;
+  if (Math.abs(swipeOffset.value) < threshold) {
+    isSwiping.value = false;
+    swipeOffset.value = 0;
+    return;
+  }
+
+  const currentIndex = groups.value.findIndex(g => g.id === selectedGroupId.value);
+  if (currentIndex === -1) {
+    isSwiping.value = false;
+    swipeOffset.value = 0;
+    return;
+  }
+
+  if (swipeOffset.value < -threshold && currentIndex < groups.value.length - 1) {
+    const nextGroup = groups.value[currentIndex + 1];
+    performSwipeTransition('left', () => switchGroup(nextGroup.id));
+  } else if (swipeOffset.value > threshold && currentIndex > 0) {
+    const prevGroup = groups.value[currentIndex - 1];
+    performSwipeTransition('right', () => switchGroup(prevGroup.id));
+  } else {
+    isSwiping.value = false;
+    swipeOffset.value = 0;
+  }
+}
+
+async function performSwipeTransition(_direction: 'left' | 'right', onComplete: () => Promise<void> | void) {
+  await onComplete();
+  swipeOffset.value = 0;
+  await nextTick();
+  await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+  isSwiping.value = false;
+}
+
 
 function handleKeyDown(event: KeyboardEvent) {
   if (event.ctrlKey && event.key === 'v') {
@@ -2066,8 +2179,15 @@ async function handleImageMenuSelect(img: Image, action: string) {
 
         <div
           class="image-grid"
-          :style="{ gridTemplateColumns: `repeat(${gridColumns}, 1fr)` }"
+          :style="{ 
+            gridTemplateColumns: `repeat(${gridColumns}, 1fr)`,
+            transform: `translateX(${swipeOffset}px)`,
+            transition: isSwiping ? 'none' : 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+          }"
           :class="{ 'edit-mode': isGlobalEditMode }"
+          @touchstart.passive="handleSwipeStart"
+          @touchmove="handleSwipeMove"
+          @touchend="handleSwipeEnd"
         >
           <!-- 添加图片按钮（编辑模式下或没有图片时显示） -->
           <div
@@ -2637,24 +2757,14 @@ async function handleImageMenuSelect(img: Image, action: string) {
   display: grid;
   gap: 12px;
   align-content: start;
-}
-.image-grid {
-  flex: 1;
-  min-height: 300px;
-  padding: 12px;
-  overflow-y: auto;
-  width: 100%;
-  height: calc(100vh - 250px);
-  box-sizing: border-box;
-  background-color: var(--color-body);
-  display: grid;
-  gap: 12px;
-  align-content: start;
-  /* 禁用长按菜单和文本选择 */
   -webkit-touch-callout: none;
   user-select: none;
-  /* 优化滚动体验 */
-  touch-action: pan-y;
+  touch-action: pan-y pan-x;
+  will-change: transform;
+}
+
+.image-grid.is-swiping {
+  touch-action: none;
 }
 
 .image-item {
