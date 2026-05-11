@@ -415,56 +415,29 @@ class MainActivity : TauriActivity() {
   
   private fun bringToFrontAndFocusSearchInternal() {
     Log.d(TAG, "Bringing app to front and focusing search")
-    // 延迟执行，确保应用已经完全到前台
-    Handler(Looper.getMainLooper()).postDelayed({
-      triggerSearchFocusInWebViewWithRetry(0)
-    }, 300)
+    // 直接触发搜索，不使用重试
+    triggerSearchFocusInWebView()
   }
   
-  private var focusRetryCount = 0
-  private val MAX_FOCUS_RETRY = 5
-  
-  private fun triggerSearchFocusInWebViewWithRetry(retryCount: Int) {
-    focusRetryCount = retryCount
+  private fun triggerSearchFocusInWebView() {
     val webView = findWebView()
     if (webView != null) {
-      Log.d(TAG, "Triggering search focus in WebView (attempt ${retryCount + 1})")
-      // 通过 JavaScript 触发，并等待回调确认
+      Log.d(TAG, "Triggering search focus in WebView")
+      // 直接执行 JavaScript，不等待回调
       webView.evaluateJavascript("""
           (function() {
-              console.log('[Native] Triggering search focus, attempt ${retryCount + 1}');
               if (window.triggerSearchFocus) {
                   window.triggerSearchFocus();
-                  return 'success';
               } else {
                   // 如果全局方法还没准备好，发送自定义事件
                   var event = new CustomEvent('triggerSearchFocus');
                   window.dispatchEvent(event);
-                  return 'event_sent';
               }
           })();
-      """.trimIndent()) { result ->
-        Log.d(TAG, "JavaScript execution result: $result")
-        // 如果第一次尝试失败，进行重试
-        if (result == "null" && retryCount < MAX_FOCUS_RETRY) {
-          Log.w(TAG, "First attempt failed, retrying... (${retryCount + 1}/$MAX_FOCUS_RETRY)")
-          Handler(Looper.getMainLooper()).postDelayed({
-            triggerSearchFocusInWebViewWithRetry(retryCount + 1)
-          }, 200)
-        }
-      }
+      """.trimIndent(), null)
     } else {
-      Log.w(TAG, "WebView not found, retrying... (${retryCount + 1}/$MAX_FOCUS_RETRY)")
-      if (retryCount < MAX_FOCUS_RETRY) {
-        Handler(Looper.getMainLooper()).postDelayed({
-          triggerSearchFocusInWebViewWithRetry(retryCount + 1)
-        }, 200)
-      }
+      Log.w(TAG, "WebView not found")
     }
-  }
-  
-  private fun triggerSearchFocusInWebView() {
-    triggerSearchFocusInWebViewWithRetry(0)
   }
 
   // ========== 悬浮窗相关方法 ==========

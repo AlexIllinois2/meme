@@ -146,15 +146,11 @@ class FloatingWindowService : Service() {
             buttonSize,
             buttonSize,
             layoutFlag,
-            // WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            WindowManager.LayoutParams.FOCUSABLE_TOUCH_MODE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-    WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or 
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            //or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
             PixelFormat.TRANSLUCENT
-        ).apply {
-    // 软键盘模式：悬浮窗专属，必须设置
-    softInputMode = WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE or
-                     WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
-                     }
+        )
 
         params.gravity = Gravity.TOP or Gravity.START
         params.x = initialPosX
@@ -265,12 +261,9 @@ class FloatingWindowService : Service() {
 
     private fun triggerSearch() {
         // 启动 MainActivity 并触发搜索聚焦
-        // 添加延迟确保应用已经到前台后再聚焦
         val intent = Intent(this, MainActivity::class.java).apply {
             action = "com.v.meme.ACTION_TRIGGER_SEARCH"
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
         }
         startActivity(intent)
         Log.d(TAG, "已发送触发搜索 Intent")
