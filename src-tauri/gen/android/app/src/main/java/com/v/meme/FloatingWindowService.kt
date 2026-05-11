@@ -16,6 +16,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.ImageView
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 
@@ -146,15 +147,14 @@ class FloatingWindowService : Service() {
             buttonSize,
             buttonSize,
             layoutFlag,
-            // WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            WindowManager.LayoutParams.FOCUSABLE_TOUCH_MODE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-    WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+            WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
             PixelFormat.TRANSLUCENT
         ).apply {
-    // 软键盘模式：悬浮窗专属，必须设置
-    softInputMode = WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE or
-                     WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
-                     }
+            // 软键盘模式：悬浮窗专属，必须设置
+            softInputMode = WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE or
+                             WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+        }
 
         params.gravity = Gravity.TOP or Gravity.START
         params.x = initialPosX
