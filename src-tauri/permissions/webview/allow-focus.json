@@ -1,0 +1,4 @@
+{
+  "permissions": ["webview:allow-focus", "webview:allow-auto-focus"],
+  "identifier": "webview:allow-focus"
+}
