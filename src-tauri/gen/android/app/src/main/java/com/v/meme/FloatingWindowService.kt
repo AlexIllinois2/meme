@@ -42,11 +42,8 @@ class FloatingWindowService : Service() {
     private val DEFAULT_POS_X = 100
     private val DEFAULT_POS_Y = 200
     
-    // 允许显示悬浮窗的应用包名列表（包括微信、QQ和自定义应用）
-    private val allowedPackages = mutableSetOf(
-        "com.tencent.mm",      // 微信
-        "com.tencent.mobileqq" // QQ
-    )
+    // 允许显示悬浮窗的应用包名列表（包括微信、QQ、本应用和自定义应用）
+    private val allowedPackages = mutableSetOf<String>()
 
     companion object {
         var isRunning = false
@@ -57,7 +54,16 @@ class FloatingWindowService : Service() {
         super.onCreate()
         isRunning = true
         prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        
+        // 初始化允许列表：微信、QQ、本应用
+        allowedPackages.add("com.tencent.mm")      // 微信
+        allowedPackages.add("com.tencent.mobileqq") // QQ
+        allowedPackages.add(packageName)            // 本应用
+        Log.d(TAG, "Initialized with base packages: $allowedPackages")
+        
+        // 加载自定义保存的应用
         loadAllowedPackages()
+        
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, createNotification().build())
         createFloatingView()
@@ -164,18 +170,28 @@ class FloatingWindowService : Service() {
         // 从 SharedPreferences 加载自定义保存的应用
         val prefs = getSharedPreferences("custom_share_apps_prefs", Context.MODE_PRIVATE)
         val customApps = prefs.getStringSet("apps", emptySet()) ?: emptySet()
+        
+        Log.d(TAG, "=== DEBUG: Loading allowed packages ===")
+        Log.d(TAG, "SharedPreferences name: custom_share_apps_prefs")
+        Log.d(TAG, "Raw data from SharedPreferences: $customApps")
+        Log.d(TAG, "Size: ${customApps.size}")
+        
         allowedPackages.addAll(customApps)
+        
         Log.d(TAG, "Loaded ${customApps.size} custom apps: $customApps")
+        Log.d(TAG, "Final allowed packages: $allowedPackages")
+        Log.d(TAG, "=== END DEBUG ===")
     }
 
     fun updateAllowedPackages(packages: Set<String>) {
         allowedPackages.clear()
         allowedPackages.add("com.tencent.mm")
         allowedPackages.add("com.tencent.mobileqq")
+        allowedPackages.add(packageName)  // 本应用
         allowedPackages.addAll(packages)
         val prefs = getSharedPreferences("custom_share_apps_prefs", Context.MODE_PRIVATE)
         prefs.edit().putStringSet("apps", packages).apply()
-        Log.d(TAG, "Updated allowed packages: $packages")
+        Log.d(TAG, "Updated allowed packages: $allowedPackages")
     }
 
     private fun createNotificationChannel() {

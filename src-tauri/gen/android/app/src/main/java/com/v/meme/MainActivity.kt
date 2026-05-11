@@ -62,9 +62,19 @@ class MainActivity : TauriActivity() {
               savedApps.add(packageName)
               prefs.edit().putStringSet("apps", savedApps).apply()
               Log.d(TAG, "Saved to SharedPreferences: $packageName")
+              
+              // 2. 如果悬浮窗服务正在运行，重启它以重新加载配置
+              if (FloatingWindowService.isRunning) {
+                Log.d(TAG, "Restarting floating window service to reload config")
+                val intent = Intent(context, FloatingWindowService::class.java)
+                context?.stopService(intent)
+                // 等待一下再启动
+                Thread.sleep(200)
+                startFloatingWindowService()
+              }
             }
             
-            // 2. 保存到数据库（供前端显示）
+            // 3. 保存到数据库（供前端显示）
             val webView = findWebView()
             webView?.evaluateJavascript("""
                 (function() {

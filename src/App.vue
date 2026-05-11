@@ -878,6 +878,13 @@ async function loadConfig() {
 async function loadCustomApps() {
   try {
     customShareApps.value = await invoke<any[]>("get_custom_share_apps") || [];
+    
+    // 同步到 SharedPreferences（确保悬浮窗服务能读取到最新数据）
+    if (isAndroidTauri() && typeof (window as any).AndroidNative?.syncCustomAppsToPrefs === 'function') {
+      const packages = customShareApps.value.map(app => app.package_name);
+      (window as any).AndroidNative.syncCustomAppsToPrefs(JSON.stringify(packages));
+      console.log(`Synced ${packages.length} apps to SharedPreferences`);
+    }
   } catch (error) {
     console.error("Failed to load custom apps:", error);
   }
