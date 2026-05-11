@@ -2,7 +2,9 @@ package com.v.meme
 
 import android.Manifest
 import android.content.Intent
+import android.content.Context
 import android.content.pm.PackageManager
+import android.content.pm.ResolveInfo
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -10,6 +12,9 @@ import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
 import android.webkit.WebView
 import android.webkit.JavascriptInterface
 import android.view.ViewGroup
@@ -29,6 +34,43 @@ class MainActivity : TauriActivity() {
   private var jsInterfaceInjected = false
   private val TAG = "MainActivity"
   private val ACTION_TRIGGER_SEARCH = "com.v.meme.ACTION_TRIGGER_SEARCH"
+  private val ACTION_SHARE_RESULT = "com.v.meme.ACTION_SHARE_RESULT"
+  
+  // BroadcastReceiver 用于接收分享结果
+  private val shareResultReceiver = object : BroadcastReceiver() {
+    override fun onReceive(context: Context?, intent: Intent?) {
+      if (intent?.action == ACTION_SHARE_RESULT) {
+        val chosenComponent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+          intent.getParcelableExtra(Intent.EXTRA_CHOSEN_COMPONENT, android.content.ComponentName::class.java)
+        } else {
+          @Suppress("DEPRECATION")
+          intent.getParcelableExtra(android.content.Intent.EXTRA_CHOSEN_COMPONENT)
+        }
+        
+        if (chosenComponent != null) {
+          val packageName = chosenComponent.packageName
+          Log.d(TAG, "User selected app via chooser: $packageName")
+          
+          // 如果不是微信或 QQ，自动保存
+          if (packageName != "com.tencent.mm" && packageName != "com.tencent.mobileqq") {
+            val appName = getApplicationName(packageName)
+            
+            // 保存到数据库
+            val webView = findWebView()
+            webView?.evaluateJavascript("""
+                (function() {
+                    if (window.onCustomAppSelected) {
+                        window.onCustomAppSelected('$packageName', '$appName');
+                    }
+                })()
+            """.trimIndent(), null)
+            
+            Toast.makeText(this@MainActivity, "已自动保存应用: $appName", Toast.LENGTH_SHORT).show()
+          }
+        }
+      }
+    }
+  }
   
   private val storagePermissionLauncher = registerForActivityResult(
     ActivityResultContracts.RequestMultiplePermissions()
@@ -66,12 +108,56 @@ class MainActivity : TauriActivity() {
             }
         }
     }
+
+    // 应用选择器 launcher
+    private val appPickerLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            val data = result.data
+            val componentName = data?.resolveActivity(packageManager)
+            if (componentName != null) {
+                val packageName = componentName.packageName
+                val appName = getApplicationName(packageName)
+                Log.d(TAG, "Selected app: $packageName ($appName)")
+                
+                // 通知前端
+                val webView = findWebView()
+                webView?.evaluateJavascript("""
+                    (function() {
+                        if (window.onCustomAppSelected) {
+                            window.onCustomAppSelected('$packageName', '$appName');
+                        }
+                    })()
+                """.trimIndent(), null)
+            }
+        }
+    }
+
+    private fun getApplicationName(packageName: String): String {
+        return try {
+            val pm = packageManager
+            val ai = pm.getApplicationInfo(packageName, 0)
+            pm.getApplicationLabel(ai).toString()
+        } catch (e: Exception) {
+            packageName
+        }
+    }
   
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
     
     Log.d(TAG, "onCreate called")
+    
+    // 注册 BroadcastReceiver
+    val filter = IntentFilter(ACTION_SHARE_RESULT)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      registerReceiver(shareResultReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+    } else {
+      @Suppress("DEPRECATION")
+      registerReceiver(shareResultReceiver, filter)
+    }
     
     if (BuildConfig.DEBUG) {
       WebView.setWebContentsDebuggingEnabled(true)
@@ -119,6 +205,14 @@ class MainActivity : TauriActivity() {
   override fun onStart() {
     super.onStart()
     Log.d(TAG, "onStart called, jsInterfaceInjected=$jsInterfaceInjected")
+    // 重新注册 BroadcastReceiver
+    val filter = IntentFilter(ACTION_SHARE_RESULT)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      registerReceiver(shareResultReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+    } else {
+      @Suppress("DEPRECATION")
+      registerReceiver(shareResultReceiver, filter)
+    }
     if (!jsInterfaceInjected) {
       injectJavaScriptInterface()
     }
@@ -137,6 +231,16 @@ class MainActivity : TauriActivity() {
     Log.d(TAG, "onWindowFocusChanged: hasFocus=$hasFocus, jsInterfaceInjected=$jsInterfaceInjected")
     if (hasFocus && !jsInterfaceInjected) {
       injectJavaScriptInterface()
+    }
+  }
+  
+  override fun onStop() {
+    super.onStop()
+    // 注销 BroadcastReceiver
+    try {
+      unregisterReceiver(shareResultReceiver)
+    } catch (e: Exception) {
+      Log.e(TAG, "Failed to unregister receiver", e)
     }
   }
   
@@ -357,26 +461,47 @@ class MainActivity : TauriActivity() {
         }
         
         // 如果 targetApp 为空或未指定，显示系统分享菜单
-        val intent = if (targetApp.isEmpty()) {
-          Log.d(TAG, "Showing system share menu")
-          android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+        if (targetApp.isEmpty()) {
+          Log.d(TAG, "Showing system share menu with BroadcastReceiver")
+          val sendIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
             type = "image/*"
             putExtra(android.content.Intent.EXTRA_STREAM, uri)
             addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
           }
+          
+          // 创建 PendingIntent 用于接收用户选择的结果
+          val pendingIntent = PendingIntent.getBroadcast(
+            this@MainActivity,
+            0,
+            Intent(ACTION_SHARE_RESULT),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+          )
+          
+          // 使用 createChooser 并传入 PendingIntent
+          val chooserIntent = Intent.createChooser(sendIntent, "分享图片", pendingIntent.intentSender)
+          chooserIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+          startActivity(chooserIntent)
+          
+          Toast.makeText(this@MainActivity, "请选择分享目标", Toast.LENGTH_SHORT).show()
         } else {
           // 分享到特定应用
           val targetPackageName = when (targetApp) {
             "wechat" -> "com.tencent.mm"
             "qq" -> "com.tencent.mobileqq"
             else -> {
-              Log.e(TAG, "Unknown target app: $targetApp")
-              Toast.makeText(this@MainActivity, "未知的目标应用: $targetApp", Toast.LENGTH_SHORT).show()
-              return@runOnUiThread
+              // 如果 targetApp 看起来像包名（包含点号），直接使用
+              if (targetApp.contains(".")) {
+                Log.d(TAG, "Using custom app package: $targetApp")
+                targetApp
+              } else {
+                Log.e(TAG, "Unknown target app: $targetApp")
+                Toast.makeText(this@MainActivity, "未知的目标应用: $targetApp", Toast.LENGTH_SHORT).show()
+                return@runOnUiThread
+              }
             }
           }
           
-          android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+          val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
             type = "image/*"
             putExtra(android.content.Intent.EXTRA_STREAM, uri)
             setPackage(targetPackageName)
@@ -384,17 +509,17 @@ class MainActivity : TauriActivity() {
             addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
             addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP)
           }
-        }
-        
-        startActivity(intent)
-        Log.i(TAG, "Share intent started successfully")
-        if (targetApp.isEmpty()) {
-          Toast.makeText(this@MainActivity, "请选择分享目标", Toast.LENGTH_SHORT).show()
-        } else {
+          
+          startActivity(intent)
+          Log.i(TAG, "Share intent started successfully to $targetPackageName")
           Toast.makeText(this@MainActivity, "正在分享...", Toast.LENGTH_SHORT).show()
         }
       } catch (e: android.content.ActivityNotFoundException) {
-        val appName = if (targetApp == "wechat") "微信" else "QQ"
+        val appName = when (targetApp) {
+          "wechat" -> "微信"
+          "qq" -> "QQ"
+          else -> getApplicationName(targetApp)
+        }
         Log.e(TAG, "$appName not found", e)
         Toast.makeText(this@MainActivity, "未找到${appName}应用", Toast.LENGTH_LONG).show()
       } catch (e: Exception) {
@@ -484,6 +609,17 @@ class MainActivity : TauriActivity() {
       val intent = Intent(this, FloatingWindowService::class.java)
       stopService(intent)
       Toast.makeText(this@MainActivity, "悬浮窗已关闭", Toast.LENGTH_SHORT).show()
+    }
+  }
+
+  @JavascriptInterface
+  fun pickShareApp() {
+    Log.d(TAG, "pickShareApp called")
+    runOnUiThread {
+      val mainIntent = Intent(Intent.ACTION_MAIN, null)
+      mainIntent.addCategory(Intent.CATEGORY_LAUNCHER)
+      val chooserIntent = Intent.createChooser(mainIntent, "选择分享应用")
+      appPickerLauncher.launch(chooserIntent)
     }
   }
 

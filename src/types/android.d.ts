@@ -7,6 +7,7 @@ declare global {
       isFloatingWindowEnabled: () => boolean;
       startFloatingWindow: () => void;
       stopFloatingWindow: () => void;
+      pickShareApp: () => void;
     };
     triggerSearchFocus: () => void;
   }

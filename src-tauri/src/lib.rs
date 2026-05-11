@@ -10,6 +10,7 @@ mod group;
 mod keyword;
 mod image;
 mod trash;
+mod custom_share;
 mod meme_fs;
 #[cfg(target_os = "android")]
 mod android_picker;
@@ -105,6 +106,10 @@ pub fn run() {
             android_picker::select_directory_android,
             // 存储权限检查
             meme_fs::check_storage_accessible,
+            // 自定义分享应用
+            custom_share::get_custom_share_apps,
+            custom_share::add_custom_share_app,
+            custom_share::remove_custom_share_app,
             // 悬浮窗触发搜索聚焦
             trigger_search_focus,
         ]);
@@ -168,6 +173,10 @@ pub fn run() {
             image::upload_images_android,
             // 存储权限检查
             meme_fs::check_storage_accessible,
+            // 自定义分享应用
+            custom_share::get_custom_share_apps,
+            custom_share::add_custom_share_app,
+            custom_share::remove_custom_share_app,
         ]);
     }
     

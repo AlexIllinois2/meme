@@ -402,9 +402,28 @@ const editingModeName = ref('');
 const editingModeSortOrder = ref(0);
 const editingGroupName = ref('');
 const showKeywordManager = ref(false);
+const showCustomAppsPopup = ref(false);
+const customShareApps = ref<{ id: number; package_name: string; app_name: string | null }[]>([]);
 
 // 用于强制 ThemeProvider 重新渲染的 key
 const themeKey = ref(0);
+
+// 全局分享应用选择回调
+if (typeof window !== 'undefined') {
+  (window as any).onCustomAppSelected = async (packageName: string, appName: string) => {
+    try {
+      await invoke('add_custom_share_app', { packageName, appName });
+      Snackbar.success(`已保存应用: ${appName || packageName}`);
+      await loadCustomApps();
+      // 自动切换到该应用
+      shareApp.value = packageName;
+      handleShareAppChange(packageName);
+    } catch (error) {
+      console.error('Failed to save custom app:', error);
+      Snackbar.error('保存应用失败');
+    }
+  };
+}
 
 const isMobile = computed(() => window.innerWidth < 768);
 const isSidebarMode = computed(() => !isMobile.value);
@@ -835,6 +854,9 @@ async function loadConfig() {
         globalFloatingWindowEnabled.value = config.value.global_floating_window || false;
       }
       
+      // 加载自定义分享应用
+      await loadCustomApps();
+      
       applyTheme();
       applyTheme();
     } else {
@@ -850,6 +872,33 @@ async function loadConfig() {
     // 注意：setupInitialConfig 已经完成了自动刷新和数据加载
     // 所以这里直接返回，不再执行后续的 loadModes 等
     return;
+  }
+}
+
+async function loadCustomApps() {
+  try {
+    customShareApps.value = await invoke<any[]>("get_custom_share_apps") || [];
+  } catch (error) {
+    console.error("Failed to load custom apps:", error);
+  }
+}
+
+async function removeCustomApp(id: number) {
+  try {
+    await invoke("remove_custom_share_app", { id });
+    Snackbar.success("已移除应用");
+    await loadCustomApps();
+  } catch (error) {
+    console.error("Failed to remove custom app:", error);
+    Snackbar.error("移除失败");
+  }
+}
+
+function handlePickShareApp() {
+  if (isAndroidTauri() && typeof (window as any).AndroidNative?.pickShareApp === 'function') {
+    (window as any).AndroidNative.pickShareApp();
+  } else {
+    Snackbar.warning("仅支持 Android 平台");
   }
 }
 
@@ -2311,6 +2360,14 @@ async function handleImageMenuSelect(img: Image, action: string) {
                 :color="shareApp === 'all' ? 'var(--color-primary)' : 'var(--color-text-2)'" />
               <span class="indicator" v-if="shareApp === 'all'" />
             </div>
+            <!-- 更多应用（九个点） -->
+            <div
+              class="share-app-icon" :class="{ active: customShareApps.some(a => a.package_name === shareApp) }"
+              @click="showCustomAppsPopup = true">
+              <Icon name="more" :size="shareApp !== 'wechat' && shareApp !== 'qq' && shareApp !== 'all' ? 28 : 22" :fill="false"
+                :color="shareApp !== 'wechat' && shareApp !== 'qq' && shareApp !== 'all' ? 'var(--color-primary)' : 'var(--color-text-2)'" />
+              <span class="indicator" v-if="customShareApps.some(a => a.package_name === shareApp)" />
+            </div>
           </div>
         </div>
 
@@ -2587,6 +2644,55 @@ async function handleImageMenuSelect(img: Image, action: string) {
           v-model:show="showKeywordManager"
           :group-name="selectedGroupForMenu?.name || ''"
         />
+        
+        <!-- 自定义分享应用管理弹窗 -->
+        <var-popup class="custom-apps-popup" :show="showCustomAppsPopup" @click-overlay="showCustomAppsPopup = false">
+          <div class="keyword-manager">
+            <div class="keyword-manager-header">
+              <h3>管理分享应用</h3>
+              <button class="btn-icon" @click="showCustomAppsPopup = false">
+                <Icon name="close" :size="24" />
+              </button>
+            </div>
+            
+            <div class="keyword-manager-body">
+              <!-- 添加应用按钮 -->
+              <div class="add-app-section">
+                <var-button type="primary" block @click="handlePickShareApp">
+                  <Icon name="add" :size="18" /> 选择新应用
+                </var-button>
+              </div>
+              
+              <!-- 应用列表 -->
+              <div class="keywords-list">
+                <div v-if="customShareApps.length === 0" class="empty-state">
+                  <Icon name="apps-2" :size="32" />
+                  <p>暂无自定义应用</p>
+                </div>
+                
+                <div v-else class="keywords-chips">
+                  <div
+                    v-for="app in customShareApps"
+                    :key="app.id"
+                    class="keyword-chip app-chip"
+                    @click="shareApp = app.package_name; handleShareAppChange(app.package_name); showCustomAppsPopup = false"
+                  >
+                    <span>{{ app.app_name || app.package_name }}</span>
+                    <var-button
+                      text
+                      round
+                      size="mini"
+                      class="remove-btn"
+                      @click.stop="removeCustomApp(app.id)"
+                    >
+                      <Icon name="close" :size="14" />
+                    </var-button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </var-popup>
         
         <var-result
           v-if="images.length === 0" 
@@ -4133,5 +4239,26 @@ async function handleImageMenuSelect(img: Image, action: string) {
 
 .image-item.add-image-item:hover .add-image-content span {
   color: white;
+}
+
+/* 自定义分享应用弹窗样式 */
+.custom-apps-popup :deep(.var-popup) {
+  border-radius: 16px !important;
+  overflow: hidden !important;
+}
+
+.app-chip {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.app-chip:hover {
+  background-color: var(--color-primary);
+  color: white;
+  transform: translateY(-1px);
+}
+
+.add-app-section {
+  margin-bottom: 16px;
 }
 </style>

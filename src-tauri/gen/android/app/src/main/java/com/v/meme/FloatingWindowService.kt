@@ -3,12 +3,16 @@ package com.v.meme
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.app.usage.UsageStats
+import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.graphics.PixelFormat
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.util.Log
 import android.view.Display
 import android.view.Gravity
@@ -37,6 +41,12 @@ class FloatingWindowService : Service() {
     private val KEY_POS_Y = "pos_y"
     private val DEFAULT_POS_X = 100
     private val DEFAULT_POS_Y = 200
+    
+    // 允许显示悬浮窗的应用包名列表（包括微信、QQ和自定义应用）
+    private val allowedPackages = mutableSetOf(
+        "com.tencent.mm",      // 微信
+        "com.tencent.mobileqq" // QQ
+    )
 
     companion object {
         var isRunning = false
@@ -47,9 +57,11 @@ class FloatingWindowService : Service() {
         super.onCreate()
         isRunning = true
         prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        loadAllowedPackages()
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, createNotification().build())
         createFloatingView()
+        startVisibilityChecker()
     }
 
     override fun onBind(intent: Intent?): IBinder? {
@@ -59,9 +71,82 @@ class FloatingWindowService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         isRunning = false
+        stopVisibilityChecker()
         if (::floatingView.isInitialized) {
             windowManager.removeView(floatingView)
         }
+    }
+
+    private var visibilityHandler: Handler? = null
+    private var visibilityRunnable: Runnable? = null
+
+    private fun startVisibilityChecker() {
+        visibilityHandler = Handler(Looper.getMainLooper())
+        visibilityRunnable = object : Runnable {
+            override fun run() {
+                checkAndToggleVisibility()
+                visibilityHandler?.postDelayed(this, 1000) // 每秒检查一次
+            }
+        }
+        visibilityHandler?.post(visibilityRunnable!!)
+    }
+
+    private fun stopVisibilityChecker() {
+        visibilityHandler?.removeCallbacksAndMessages(null)
+        visibilityHandler = null
+        visibilityRunnable = null
+    }
+
+    private fun checkAndToggleVisibility() {
+        val foregroundApp = getForegroundApp()
+        val shouldShow = foregroundApp != null && allowedPackages.contains(foregroundApp)
+        
+        if (shouldShow && floatingView.visibility != View.VISIBLE) {
+            floatingView.visibility = View.VISIBLE
+        } else if (!shouldShow && floatingView.visibility == View.VISIBLE) {
+            floatingView.visibility = View.GONE
+        }
+    }
+
+    private fun getForegroundApp(): String? {
+        val usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+        val endTime = System.currentTimeMillis()
+        val startTime = endTime - 1000 * 60 // 查看过去一分钟的统计
+        
+        val usageStats = usageStatsManager.queryUsageStats(
+            UsageStatsManager.INTERVAL_DAILY,
+            startTime,
+            endTime
+        )
+        
+        if (usageStats.isNullOrEmpty()) return null
+        
+        var recentStats: UsageStats? = null
+        for (stats in usageStats) {
+            if (recentStats == null || stats.lastTimeUsed > recentStats!!.lastTimeUsed) {
+                recentStats = stats
+            }
+        }
+        
+        return recentStats?.packageName
+    }
+
+    private fun loadAllowedPackages() {
+        // 从 SharedPreferences 加载自定义保存的应用
+        val prefs = getSharedPreferences("custom_share_apps_prefs", Context.MODE_PRIVATE)
+        val customApps = prefs.getStringSet("apps", emptySet()) ?: emptySet()
+        allowedPackages.addAll(customApps)
+        Log.d(TAG, "Loaded ${customApps.size} custom apps: $customApps")
+    }
+
+    fun updateAllowedPackages(packages: Set<String>) {
+        allowedPackages.clear()
+        allowedPackages.add("com.tencent.mm")
+        allowedPackages.add("com.tencent.mobileqq")
+        allowedPackages.addAll(packages)
+        val prefs = getSharedPreferences("custom_share_apps_prefs", Context.MODE_PRIVATE)
+        prefs.edit().putStringSet("apps", packages).apply()
+        Log.d(TAG, "Updated allowed packages: $packages")
     }
 
     private fun createNotificationChannel() {

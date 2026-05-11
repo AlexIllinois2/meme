@@ -55,3 +55,10 @@ pub struct Config {
     pub acronym_search: bool,
     pub global_floating_window: bool,
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CustomShareApp {
+    pub id: i32,
+    pub package_name: String,
+    pub app_name: Option<String>,
+}
