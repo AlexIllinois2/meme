@@ -8,6 +8,8 @@ declare global {
       startFloatingWindow: () => void;
       stopFloatingWindow: () => void;
       pickShareApp: () => void;
+      syncCustomAppsToPrefs: (packagesJson: string) => void;
+      requestUsageStatsPermission: () => void;
     };
     triggerSearchFocus: () => void;
   }

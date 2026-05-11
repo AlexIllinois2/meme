@@ -182,6 +182,13 @@ async function toggleGlobalFloatingWindow(enabled: boolean) {
   }
 }
 
+// 请求使用情况访问权限
+function requestUsageStatsPermission() {
+  if (isAndroidTauri() && typeof (window as any).AndroidNative?.requestUsageStatsPermission === 'function') {
+    (window as any).AndroidNative.requestUsageStatsPermission();
+  }
+}
+
 // 检测是否为移动端 - 预留功能
 // const isMobile = () => {
 //   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) 
@@ -401,6 +408,18 @@ async function autoSaveConfig() {
           </div>
         </div>
         
+        <!-- 使用情况访问权限授权 - 仅 Android 显示 -->
+        <div class="setting-row" v-if="isAndroidTauri()" @click="requestUsageStatsPermission">
+          <div class="setting-label">
+            <label>授权使用情况访问</label>
+            <p class="setting-desc">允许悬浮窗根据当前应用自动显示/隐藏</p>
+            <p class="setting-hint">点击后将跳转到系统设置页面，请找到“咪萌”并开启权限</p>
+          </div>
+          <div class="setting-control">
+            <Icon name="chevron-right" :size="20" class="arrow-icon" />
+          </div>
+        </div>
+        
         <!-- <div class="setting-row" @click="showThemePopup = true">
           <div class="setting-label">
             <label>主题</label>
@@ -564,6 +583,13 @@ async function autoSaveConfig() {
   margin: 0;
   font-size: 12px;
   color: var(--text-secondary);
+}
+
+.setting-hint {
+  margin: 4px 0 0 0;
+  font-size: 11px;
+  color: var(--color-primary);
+  font-style: italic;
 }
 
 .setting-control {

@@ -101,14 +101,43 @@ class FloatingWindowService : Service() {
         val foregroundApp = getForegroundApp()
         val shouldShow = foregroundApp != null && allowedPackages.contains(foregroundApp)
         
+        // 添加详细日志
+        if (foregroundApp != null) {
+            Log.d(TAG, "Foreground app: $foregroundApp, shouldShow: $shouldShow, allowedPackages: $allowedPackages")
+        }
+        
         if (shouldShow && floatingView.visibility != View.VISIBLE) {
+            Log.d(TAG, "Showing floating window for app: $foregroundApp")
             floatingView.visibility = View.VISIBLE
         } else if (!shouldShow && floatingView.visibility == View.VISIBLE) {
+            Log.d(TAG, "Hiding floating window, current app: $foregroundApp")
             floatingView.visibility = View.GONE
         }
     }
 
     private fun getForegroundApp(): String? {
+        // 检查是否有 USAGE_STATS 权限
+        val appOps = getSystemService(Context.APP_OPS_SERVICE) as android.app.AppOpsManager
+        val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            appOps.unsafeCheckOpNoThrow(
+                android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
+                android.os.Process.myUid(),
+                packageName
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            appOps.checkOpNoThrow(
+                android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
+                android.os.Process.myUid(),
+                packageName
+            )
+        }
+        
+        if (mode != android.app.AppOpsManager.MODE_ALLOWED) {
+            Log.w(TAG, "No USAGE_STATS permission, cannot detect foreground app")
+            return null
+        }
+        
         val usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val endTime = System.currentTimeMillis()
         val startTime = endTime - 1000 * 60 // 查看过去一分钟的统计

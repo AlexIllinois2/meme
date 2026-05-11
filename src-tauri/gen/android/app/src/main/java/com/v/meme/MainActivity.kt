@@ -55,7 +55,16 @@ class MainActivity : TauriActivity() {
           if (packageName != "com.tencent.mm" && packageName != "com.tencent.mobileqq") {
             val appName = getApplicationName(packageName)
             
-            // 保存到数据库
+            // 1. 保存到 SharedPreferences（供悬浮窗服务使用）
+            val prefs = getSharedPreferences("custom_share_apps_prefs", Context.MODE_PRIVATE)
+            val savedApps = prefs.getStringSet("apps", emptySet())?.toMutableSet() ?: mutableSetOf()
+            if (!savedApps.contains(packageName)) {
+              savedApps.add(packageName)
+              prefs.edit().putStringSet("apps", savedApps).apply()
+              Log.d(TAG, "Saved to SharedPreferences: $packageName")
+            }
+            
+            // 2. 保存到数据库（供前端显示）
             val webView = findWebView()
             webView?.evaluateJavascript("""
                 (function() {
@@ -620,6 +629,49 @@ class MainActivity : TauriActivity() {
       mainIntent.addCategory(Intent.CATEGORY_LAUNCHER)
       val chooserIntent = Intent.createChooser(mainIntent, "选择分享应用")
       appPickerLauncher.launch(chooserIntent)
+    }
+  }
+
+  @JavascriptInterface
+  fun syncCustomAppsToPrefs(packagesJson: String) {
+    Log.d(TAG, "syncCustomAppsToPrefs called with: $packagesJson")
+    try {
+      // 解析 JSON 数组
+      val jsonArray = org.json.JSONArray(packagesJson)
+      val packages = mutableSetOf<String>()
+      for (i in 0 until jsonArray.length()) {
+        packages.add(jsonArray.getString(i))
+      }
+      
+      // 保存到 SharedPreferences
+      val prefs = getSharedPreferences("custom_share_apps_prefs", Context.MODE_PRIVATE)
+      prefs.edit().putStringSet("apps", packages).apply()
+      Log.d(TAG, "Synced ${packages.size} apps to SharedPreferences")
+      
+      // 如果悬浮窗服务正在运行，通知它更新
+      if (FloatingWindowService.isRunning) {
+        // 重启悬浮窗服务以重新加载配置
+        val intent = Intent(this, FloatingWindowService::class.java)
+        stopService(intent)
+        Thread.sleep(100) // 等待服务停止
+        startFloatingWindowService()
+      }
+    } catch (e: Exception) {
+      Log.e(TAG, "Failed to sync custom apps", e)
+    }
+  }
+
+  @JavascriptInterface
+  fun requestUsageStatsPermission() {
+    Log.d(TAG, "requestUsageStatsPermission called")
+    runOnUiThread {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+        val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+        startActivity(intent)
+        Toast.makeText(this, "请授予\"使用情况访问权限\"以启用悬浮窗智能显示", Toast.LENGTH_LONG).show()
+      } else {
+        Toast.makeText(this, "您的 Android 版本不支持此功能", Toast.LENGTH_SHORT).show()
+      }
     }
   }
 

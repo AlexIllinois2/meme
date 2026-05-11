@@ -369,7 +369,7 @@ async function handleEditModeUpload() {
 }
 
 const currentColorMode = ref<'system' | 'light' | 'dark'>('system');
-const shareApp = ref<'wechat' | 'qq' | 'all' | ''>('all');
+const shareApp = ref<string>('all');  // 支持自定义包名
 const gridColumns = ref<number>(5);
 const activeMenu = ref('home');
 const isSideMenuOpen = ref(false);
@@ -812,7 +812,7 @@ async function loadConfig() {
       selectedModeId.value = config.value.last_mode || null;
       selectedGroupId.value = config.value.last_group || null;
       
-      // 分享目标app：只在配置为空字符串（首次启动）时默认QQ，其他情况使用用户的选择
+      // 分享目标app：只在配置为空字符串（首次启动）时默认所有应用，其他情况使用用户的选择
       // null/undefined 视为首次启动，空字符串也视为首次启动
       const savedShareApp = config.value.share_app;
       if (!savedShareApp) {
@@ -821,8 +821,8 @@ async function loadConfig() {
         config.value.share_app = '';  // 保存到配置时为空字符串
         await safeUpdateConfig(config.value);
       } else {
-        // 使用用户之前的选择
-        shareApp.value = savedShareApp as 'wechat' | 'qq';
+        // 使用用户之前的选择（可能是 wechat、qq 或自定义包名）
+        shareApp.value = savedShareApp;
       }
       
       gridColumns.value = config.value.grid_size || 4;
@@ -888,6 +888,12 @@ async function removeCustomApp(id: number) {
     await invoke("remove_custom_share_app", { id });
     Snackbar.success("已移除应用");
     await loadCustomApps();
+    
+    // 同步到 SharedPreferences
+    if (isAndroidTauri() && typeof (window as any).AndroidNative?.syncCustomAppsToPrefs === 'function') {
+      const packages = customShareApps.value.map(app => app.package_name);
+      (window as any).AndroidNative.syncCustomAppsToPrefs(JSON.stringify(packages));
+    }
   } catch (error) {
     console.error("Failed to remove custom app:", error);
     Snackbar.error("移除失败");
@@ -1450,10 +1456,10 @@ async function addNewGroup() {
 }
 
 function handleShareAppChange(app: string) {
-  shareApp.value = app as 'wechat' | 'qq' | 'all' | '';
+  shareApp.value = app;
   if (config.value) {
-    // 保存到配置时,'all' 转换为空字符串
-    const shareAppValue = app === 'all' ? '' : (app as 'wechat' | 'qq');
+    // 保存到配置时，'all' 转换为空字符串，自定义包名直接保存
+    const shareAppValue = app === 'all' ? '' : app;
     config.value.share_app = shareAppValue;
     invoke("update_config", { config: config.value });
   }
