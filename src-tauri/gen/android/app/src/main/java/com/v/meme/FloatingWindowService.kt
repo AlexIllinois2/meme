@@ -147,14 +147,10 @@ class FloatingWindowService : Service() {
             buttonSize,
             buttonSize,
             layoutFlag,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
             WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
             PixelFormat.TRANSLUCENT
-        ).apply {
-            // 软键盘模式：悬浮窗专属，必须设置
-            softInputMode = WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE or
-                             WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
-        }
+        )
 
         params.gravity = Gravity.TOP or Gravity.START
         params.x = initialPosX
@@ -175,6 +171,14 @@ class FloatingWindowService : Service() {
                         // 按下效果 - 稍微缩小并增加透明度
                         v?.animate()?.scaleX(0.9f)?.scaleY(0.9f)?.setDuration(100)?.start()
                         (v as? android.widget.FrameLayout)?.background?.alpha = 200
+
+                        // val webView = findViewById<ViewGroup>(android.R.id.content)
+                        // webView.requestFocus(View.FOCUS_DOWN);
+                        // webView.setFocusable(true);
+                        // webView.setFocusableInTouchMode(true);
+                        // // 关键：调用这个方法来告诉系统它已经“准备好接收触摸”
+                        // webView.onWindowFocusChanged(true);
+
                         return true
                     }
                     MotionEvent.ACTION_MOVE -> {

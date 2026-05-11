@@ -652,13 +652,19 @@ onMounted(async () => {
               
               if (nativeInput) {
                 console.log('[Floating] Found native input element');
+                const clickEvent = new PointerEvent('pointerdown', {
+                    bubbles: true,
+                    cancelable: true,
+                    isPrimary: true
+                });
+                nativeInput.dispatchEvent(clickEvent);
                 
                 // 强制聚焦并触发键盘
                 nativeInput.focus({ preventScroll: false });
+                nativeInput!.click();
                 
                 // 多次触发以确保键盘弹出（Android 需要）
                 setTimeout(() => {
-                  nativeInput!.click();
                   nativeInput!.focus();
                 }, 50);
                 
@@ -679,7 +685,6 @@ onMounted(async () => {
                     console.warn('[Floating] Active element:', document.activeElement?.tagName, document.activeElement);
                     // 再次尝试
                     nativeInput!.focus();
-                    nativeInput!.click();
                   }
                 }, 400);
                 

@@ -22,6 +22,8 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
+import android.view.MotionEvent
+import android.os.SystemClock
 import com.v.meme.BuildConfig
 
 class MainActivity : TauriActivity() {
@@ -186,6 +188,26 @@ class MainActivity : TauriActivity() {
       try {
         webView.removeJavascriptInterface("AndroidNative")
         Log.d(TAG, "Removed existing AndroidNative interface")
+
+        // 获取 WebView 并预激活
+        webView?.postDelayed({
+            webView?.let {
+                it.requestFocus()
+                it.isFocusable = true
+                it.isFocusableInTouchMode = true
+                
+                // 模拟一个触摸事件
+                val downTime = SystemClock.uptimeMillis()
+                val eventTime = SystemClock.uptimeMillis()
+                val motionEvent = MotionEvent.obtain(
+                    downTime, eventTime,
+                    MotionEvent.ACTION_DOWN,
+                    10f, 10f, 0
+                )
+                it.dispatchTouchEvent(motionEvent)
+                motionEvent.recycle()
+            }
+        }, 500)
       } catch (e: Exception) {
         // 忽略异常，可能接口不存在
       }

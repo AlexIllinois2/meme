@@ -43,7 +43,7 @@ pub fn run() {
     {
         builder = builder.plugin(tauri_plugin_share::init());
     }
-    
+
     // Android 平台添加 android-fs 插件和目录选择命令
     #[cfg(target_os = "android")]
     {
