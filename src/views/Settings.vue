@@ -17,7 +17,8 @@ const config = ref<Config>({
   share_app: 'wechat',
   grid_size: 4,
   pinyin_search: false,
-  acronym_search: false
+  acronym_search: false,
+  global_floating_window: false
 });
 
 const isSaving = ref(false);
@@ -99,7 +100,20 @@ async function loadConfig() {
       config.value.grid_size = result.grid_size || 4;
       config.value.pinyin_search = result.pinyin_search || false;
       config.value.acronym_search = result.acronym_search || false;
+      config.value.global_floating_window = result.global_floating_window || false;
       updateColorMode(result.color_mode);
+      
+      // Android 平台：从原生服务同步悬浮窗实际状态
+      if (isAndroidTauri()) {
+        try {
+          const nativeEnabled = (window as any).AndroidNative?.isFloatingWindowEnabled?.();
+          if (nativeEnabled !== undefined) {
+            config.value.global_floating_window = nativeEnabled === true;
+          }
+        } catch (e) {
+          console.warn('Failed to get floating window status:', e);
+        }
+      }
     }
   } catch (error) {
     console.error('Failed to load config:', error);
@@ -146,6 +160,26 @@ function updateColorMode(mode: string) {
   }
   
   window.dispatchEvent(new CustomEvent('colorModeChanged', { detail: mode }));
+}
+
+async function toggleGlobalFloatingWindow(enabled: boolean) {
+  config.value.global_floating_window = enabled;
+  await autoSaveConfig();
+  
+  // 通知其他组件悬浮窗状态变化
+  window.dispatchEvent(new CustomEvent('globalFloatingWindowChanged', { detail: enabled }));
+  
+  if (isAndroidTauri()) {
+    if (enabled) {
+      if (typeof (window as any).AndroidNative?.startFloatingWindow === 'function') {
+        (window as any).AndroidNative.startFloatingWindow();
+      }
+    } else {
+      if (typeof (window as any).AndroidNative?.stopFloatingWindow === 'function') {
+        (window as any).AndroidNative.stopFloatingWindow();
+      }
+    }
+  }
 }
 
 // 检测是否为移动端 - 预留功能
@@ -297,6 +331,7 @@ async function autoSaveConfig() {
       grid_size: Number(config.value.grid_size) || 4,
       pinyin_search: Boolean(config.value.pinyin_search),
       acronym_search: Boolean(config.value.acronym_search),
+      global_floating_window: Boolean(config.value.global_floating_window),
     };
     
     await invoke('update_config', { config: safeConfig });
@@ -352,6 +387,17 @@ async function autoSaveConfig() {
           <div class="setting-control">
             <span class="selected-value">{{ colorModeLabel }}</span>
             <Icon name="chevron-right" :size="20" class="arrow-icon" />
+          </div>
+        </div>
+        
+        <!-- 全局悬浮窗开关 - 仅 Android 显示 -->
+        <div class="setting-row" v-if="isAndroidTauri()">
+          <div class="setting-label">
+            <label>全局悬浮窗</label>
+            <p class="setting-desc">在其他应用中快速打开搜索</p>
+          </div>
+          <div class="setting-control">
+            <var-switch v-model="config.global_floating_window" @change="toggleGlobalFloatingWindow" />
           </div>
         </div>
         

@@ -1,12 +1,15 @@
 package com.v.meme
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import android.webkit.WebView
 import android.webkit.JavascriptInterface
 import android.view.ViewGroup
@@ -25,6 +28,7 @@ class MainActivity : TauriActivity() {
   private var backCallback: OnBackPressedCallback? = null
   private var jsInterfaceInjected = false
   private val TAG = "MainActivity"
+  private val ACTION_TRIGGER_SEARCH = "com.v.meme.ACTION_TRIGGER_SEARCH"
   
   private val storagePermissionLauncher = registerForActivityResult(
     ActivityResultContracts.RequestMultiplePermissions()
@@ -38,16 +42,30 @@ class MainActivity : TauriActivity() {
   }
   
   private val manageStorageLauncher = registerForActivityResult(
-    ActivityResultContracts.StartActivityForResult()
-  ) {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-      if (Environment.isExternalStorageManager()) {
-        Toast.makeText(this@MainActivity, "完整存储权限已授权", Toast.LENGTH_SHORT).show()
-      } else {
-        Toast.makeText(this@MainActivity, "完整存储权限被拒绝，部分功能可能无法使用", Toast.LENGTH_LONG).show()
-      }
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (Environment.isExternalStorageManager()) {
+                Toast.makeText(this@MainActivity, "完整存储权限已授权", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this@MainActivity, "完整存储权限被拒绝，部分功能可能无法使用", Toast.LENGTH_LONG).show()
+            }
+        }
     }
-  }
+
+    // 悬浮窗权限申请 launcher
+    private val floatingWindowPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (Settings.canDrawOverlays(this)) {
+                Toast.makeText(this@MainActivity, "悬浮窗权限已授权", Toast.LENGTH_SHORT).show()
+                startFloatingWindowService()
+            } else {
+                Toast.makeText(this@MainActivity, "悬浮窗权限被拒绝", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
   
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
@@ -64,6 +82,24 @@ class MainActivity : TauriActivity() {
     
     setupBackPressHandler()
     requestStoragePermissions()
+    
+    // 检查启动 Intent
+    handleIntent(intent)
+  }
+  
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    setIntent(intent)
+    Log.d(TAG, "onNewIntent called")
+    handleIntent(intent)
+  }
+  
+  private fun handleIntent(intent: Intent) {
+    if (intent.action == ACTION_TRIGGER_SEARCH) {
+      Log.d(TAG, "Received trigger search intent")
+      // 将 app 带到前台并触发搜索聚焦
+      bringToFrontAndFocusSearchInternal()
+    }
   }
   
   private fun setupWindowInsets() {
@@ -367,5 +403,125 @@ class MainActivity : TauriActivity() {
         e.printStackTrace()
       }
     }
+  }
+  
+  @JavascriptInterface
+  fun bringToFrontAndFocusSearch() {
+    Log.d(TAG, "bringToFrontAndFocusSearch called from JS")
+    runOnUiThread {
+      bringToFrontAndFocusSearchInternal()
+    }
+  }
+  
+  private fun bringToFrontAndFocusSearchInternal() {
+    Log.d(TAG, "Bringing app to front and focusing search")
+    // 延迟执行，确保应用已经完全到前台
+    Handler(Looper.getMainLooper()).postDelayed({
+      triggerSearchFocusInWebViewWithRetry(0)
+    }, 300)
+  }
+  
+  private var focusRetryCount = 0
+  private val MAX_FOCUS_RETRY = 5
+  
+  private fun triggerSearchFocusInWebViewWithRetry(retryCount: Int) {
+    focusRetryCount = retryCount
+    val webView = findWebView()
+    if (webView != null) {
+      Log.d(TAG, "Triggering search focus in WebView (attempt ${retryCount + 1})")
+      // 通过 JavaScript 触发，并等待回调确认
+      webView.evaluateJavascript("""
+          (function() {
+              console.log('[Native] Triggering search focus, attempt ${retryCount + 1}');
+              if (window.triggerSearchFocus) {
+                  window.triggerSearchFocus();
+                  return 'success';
+              } else {
+                  // 如果全局方法还没准备好，发送自定义事件
+                  var event = new CustomEvent('triggerSearchFocus');
+                  window.dispatchEvent(event);
+                  return 'event_sent';
+              }
+          })();
+      """.trimIndent()) { result ->
+        Log.d(TAG, "JavaScript execution result: $result")
+        // 如果第一次尝试失败，进行重试
+        if (result == "null" && retryCount < MAX_FOCUS_RETRY) {
+          Log.w(TAG, "First attempt failed, retrying... (${retryCount + 1}/$MAX_FOCUS_RETRY)")
+          Handler(Looper.getMainLooper()).postDelayed({
+            triggerSearchFocusInWebViewWithRetry(retryCount + 1)
+          }, 200)
+        }
+      }
+    } else {
+      Log.w(TAG, "WebView not found, retrying... (${retryCount + 1}/$MAX_FOCUS_RETRY)")
+      if (retryCount < MAX_FOCUS_RETRY) {
+        Handler(Looper.getMainLooper()).postDelayed({
+          triggerSearchFocusInWebViewWithRetry(retryCount + 1)
+        }, 200)
+      }
+    }
+  }
+  
+  private fun triggerSearchFocusInWebView() {
+    triggerSearchFocusInWebViewWithRetry(0)
+  }
+
+  // ========== 悬浮窗相关方法 ==========
+
+  @JavascriptInterface
+  fun isFloatingWindowEnabled(): Boolean {
+    return FloatingWindowService.isRunning
+  }
+
+  @JavascriptInterface
+  fun requestFloatingWindowPermission() {
+    Log.d(TAG, "Requesting floating window permission")
+    runOnUiThread {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        if (!Settings.canDrawOverlays(this)) {
+          // 跳转到悬浮窗权限设置页面
+          val intent = Intent(
+            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+            Uri.parse("package:$packageName")
+          )
+          floatingWindowPermissionLauncher.launch(intent)
+        } else {
+          startFloatingWindowService()
+        }
+      } else {
+        // Android 6.0 以下，直接启动
+        startFloatingWindowService()
+      }
+    }
+  }
+
+  @JavascriptInterface
+  fun startFloatingWindow() {
+    Log.d(TAG, "startFloatingWindow called")
+    runOnUiThread {
+      requestFloatingWindowPermission()
+    }
+  }
+
+  @JavascriptInterface
+  fun stopFloatingWindow() {
+    Log.d(TAG, "stopFloatingWindow called")
+    runOnUiThread {
+      val intent = Intent(this, FloatingWindowService::class.java)
+      stopService(intent)
+      Toast.makeText(this@MainActivity, "悬浮窗已关闭", Toast.LENGTH_SHORT).show()
+    }
+  }
+
+  private fun startFloatingWindowService() {
+    Log.d(TAG, "Starting floating window service")
+    val intent = Intent(this, FloatingWindowService::class.java)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      startForegroundService(intent)
+    } else {
+      startService(intent)
+    }
+    Toast.makeText(this@MainActivity, "悬浮窗已开启", Toast.LENGTH_SHORT).show()
   }
 }

@@ -68,11 +68,14 @@ const config = ref<Config | null>(null);
 const selectedModeId = ref<number | null>(null);
 const selectedGroupId = ref<number | null>(null);
 const searchKeyword = ref("");
+const searchInputRef = ref<any>(null);  // 搜索框组件引用
 const isEditMode = ref(false);
 const selectedImages = ref<number[]>([]);
 
 // 全局编辑模式状态
 const isGlobalEditMode = ref(false);
+// 全局悬浮窗状态
+const globalFloatingWindowEnabled = ref(false);
 const selectedModeIds = ref<number[]>([]);
 const selectedGroupIds = ref<number[]>([]);
 // selectedImages 已存在，复用它
@@ -395,6 +398,7 @@ function createSafeConfig(cfg: Config): Config {
     grid_size: Number(cfg.grid_size) || 4,
     pinyin_search: Boolean(cfg.pinyin_search),
     acronym_search: Boolean(cfg.acronym_search),
+    global_floating_window: Boolean(cfg.global_floating_window),
   };
 }
 
@@ -588,6 +592,118 @@ onMounted(async () => {
     }
   });
 
+  // 添加悬浮窗触发搜索的全局方法
+  let focusRetryTimer: number | null = null;
+  
+  (window as any).triggerSearchFocus = () => {
+    console.log('[Floating] Triggering search focus');
+    
+    // 清除之前的重试定时器
+    if (focusRetryTimer !== null) {
+      clearTimeout(focusRetryTimer);
+      focusRetryTimer = null;
+    }
+    
+    // 清空搜索词
+    searchKeyword.value = '';
+    
+    // 聚焦搜索框，带重试机制
+    const tryFocus = (attempt: number = 0) => {
+      console.log(`[Floating] Focus attempt ${attempt + 1}/8`);
+      
+      // 方法1: 使用 Vue ref
+      if (searchInputRef.value) {
+        console.log('[Floating] Using Vue ref to focus');
+        
+        // Varlet Input 组件的聚焦方法
+        if (typeof searchInputRef.value.focus === 'function') {
+          searchInputRef.value.focus();
+          console.log('[Floating] Called ref.focus()');
+        }
+        
+        // 尝试获取内部 input 元素
+        nextTick(() => {
+          const component = searchInputRef.value;
+          let nativeInput: HTMLInputElement | null = null;
+          
+          // 尝试多种方式获取原生 input
+          if (component.$el) {
+            nativeInput = component.$el.querySelector('input');
+          }
+          if (!nativeInput && component.el) {
+            nativeInput = component.el.querySelector('input');
+          }
+          if (!nativeInput) {
+            nativeInput = document.querySelector('.search-input input, .search-input [role="textbox"]');
+          }
+          
+          if (nativeInput) {
+            console.log('[Floating] Found native input element');
+            
+            // 强制聚焦
+            nativeInput.focus({ preventScroll: false });
+            
+            // 触发 click 以弹出键盘
+            setTimeout(() => {
+              nativeInput!.click();
+              nativeInput!.focus();
+            }, 50);
+            
+            // 验证聚焦
+            setTimeout(() => {
+              if (document.activeElement === nativeInput) {
+                console.log('[Floating] Focus verified successfully');
+              } else {
+                console.warn('[Floating] Focus verification failed, activeElement:', document.activeElement?.tagName);
+                // 再次尝试
+                nativeInput!.focus();
+                nativeInput!.click();
+              }
+            }, 100);
+            
+            // 清除重试
+            if (focusRetryTimer !== null) {
+              clearTimeout(focusRetryTimer);
+              focusRetryTimer = null;
+            }
+          } else {
+            console.warn('[Floating] Native input not found via ref');
+            retryOrFinish(attempt);
+          }
+        });
+      } else {
+        console.warn('[Floating] searchInputRef is null');
+        retryOrFinish(attempt);
+      }
+    };
+    
+    const retryOrFinish = (attempt: number) => {
+      if (attempt < 8) {
+        console.warn(`[Floating] Retrying... (${attempt + 1}/8)`);
+        focusRetryTimer = window.setTimeout(() => tryFocus(attempt + 1), 150);
+      } else {
+        console.error('[Floating] All focus attempts failed');
+      }
+    };
+    
+    // 使用 nextTick 确保 DOM 已更新
+    nextTick(() => {
+      tryFocus(0);
+    });
+  };
+
+  // 监听原生端触发的搜索聚焦事件
+  window.addEventListener('triggerSearchFocus', () => {
+    console.log('[Floating] Received triggerSearchFocus event');
+    (window as any).triggerSearchFocus();
+  });
+
+  // 监听全局悬浮窗状态变化
+  window.addEventListener('globalFloatingWindowChanged', ((e: CustomEvent) => {
+    globalFloatingWindowEnabled.value = e.detail;
+    console.log('[Floating] Global floating window state changed:', e.detail);
+  }) as EventListener);
+
   async function syncSystemTheme() {
     // 只有当前是【跟随系统模式】才执行同步
     if (currentColorMode.value !== 'system' || !config.value) return;
@@ -689,6 +805,31 @@ async function loadConfig() {
       currentColorMode.value = config.value.color_mode as 'system' | 'light' | 'dark';
       pinyinSearchEnabled.value = config.value.pinyin_search || false;
       acronymSearchEnabled.value = config.value.acronym_search || false;
+      
+      // Android 平台：从原生服务同步悬浮窗实际状态，并在需要时自动启动服务
+      if (/Android/i.test(navigator.userAgent)) {
+        try {
+          const nativeEnabled = (window as any).AndroidNative?.isFloatingWindowEnabled?.();
+          const shouldBeEnabled = config.value.global_floating_window === true;
+          
+          if (shouldBeEnabled && nativeEnabled !== true) {
+            // 配置中开启了但服务未运行，自动启动
+            console.log('[Floating] Config says enabled but service not running, starting...');
+            (window as any).AndroidNative?.startFloatingWindow?.();
+            globalFloatingWindowEnabled.value = true;
+          } else {
+            globalFloatingWindowEnabled.value = nativeEnabled === true;
+          }
+          console.log('[Floating] Synced from native service:', nativeEnabled, 'config:', shouldBeEnabled);
+        } catch (e) {
+          // 如果无法获取原生状态，使用配置中的值
+          globalFloatingWindowEnabled.value = config.value.global_floating_window || false;
+          console.warn('[Floating] Failed to get native status, using config value:', e);
+        }
+      } else {
+        globalFloatingWindowEnabled.value = config.value.global_floating_window || false;
+      }
+      
       applyTheme();
       applyTheme();
     } else {
@@ -719,7 +860,8 @@ async function setupInitialConfig() {
       share_app: "",
       grid_size: 4,
       pinyin_search: false,
-      acronym_search: false
+      acronym_search: false,
+      global_floating_window: false
     };
     config.value = newConfig;
     await safeUpdateConfig(config.value);
@@ -741,7 +883,8 @@ async function setupInitialConfig() {
       share_app: "",
       grid_size: 4,
       pinyin_search: false,
-      acronym_search: false
+      acronym_search: false,
+      global_floating_window: false
     };
     config.value = defaultConfig;
     await safeUpdateConfig(config.value);
@@ -1979,6 +2122,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
         <div class="top-search-bar">
           <div class="search-container">
             <var-input
+              ref="searchInputRef"
               v-model="searchKeyword" 
               placeholder="搜索关键词..." 
               @keydown.enter="searchImages"
@@ -2472,7 +2616,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
       
       <!-- 浮动搜索按钮 -->
       <FloatingSearchButton
-        :visible="activeMenu === 'home' && !isGlobalEditMode"
+        :visible="activeMenu === 'home' && !isGlobalEditMode && !globalFloatingWindowEnabled"
         @click="handleFloatingSearchClick"
       />
     </div>

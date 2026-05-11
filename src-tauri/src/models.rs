@@ -53,4 +53,5 @@ pub struct Config {
     pub grid_size: i32,
     pub pinyin_search: bool,
     pub acronym_search: bool,
+    pub global_floating_window: bool,
 }

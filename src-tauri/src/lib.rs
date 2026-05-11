@@ -18,6 +18,18 @@ mod android_picker;
 pub use db::init_db;
 pub use models::*;
 
+// 导入 Emitter trait 以使用 emit 方法
+use tauri::Emitter;
+
+// 悬浮窗触发搜索聚焦的命令 - Android 平台
+#[cfg(target_os = "android")]
+#[tauri::command]
+fn trigger_search_focus(app_handle: tauri::AppHandle) -> Result<(), String> {
+    // 发送事件到前端
+    app_handle.emit("triggerSearchFocus", ()).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut builder = tauri::Builder::default()
@@ -93,6 +105,8 @@ pub fn run() {
             android_picker::select_directory_android,
             // 存储权限检查
             meme_fs::check_storage_accessible,
+            // 悬浮窗触发搜索聚焦
+            trigger_search_focus,
         ]);
     }
     

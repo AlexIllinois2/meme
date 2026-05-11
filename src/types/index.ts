@@ -46,6 +46,7 @@ export interface Config {
   grid_size: number;
   pinyin_search: boolean;
   acronym_search: boolean;
+  global_floating_window: boolean;
 }
 
 export interface ExportData {
