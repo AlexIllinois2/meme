@@ -264,15 +264,34 @@ class FloatingWindowService : Service() {
     }
 
     private fun triggerSearch() {
-        // 启动 MainActivity 并触发搜索聚焦
-        // 添加延迟确保应用已经到前台后再聚焦
+        Log.d(TAG, "===== Floating window clicked by user =====")
+        Log.d(TAG, "Service running status: $isRunning")
+        
+        // 检查悬浮窗服务是否仍在运行
+        if (!isRunning) {
+            Log.w(TAG, "Floating window service is not running, stopping button")
+            stopSelf()
+            return
+        }
+        
+        // 启动 MainActivity 并传递触发搜索的标记
         val intent = Intent(this, MainActivity::class.java).apply {
             action = "com.v.meme.ACTION_TRIGGER_SEARCH"
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
             addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
         }
-        startActivity(intent)
-        Log.d(TAG, "已发送触发搜索 Intent")
+        
+        Log.d(TAG, "Launching MainActivity with ACTION_TRIGGER_SEARCH")
+        
+        try {
+            startActivity(intent)
+            Log.d(TAG, "✓ App launched successfully")
+            Log.d(TAG, "Focus will be triggered via JS interface when app is ready")
+        } catch (e: Exception) {
+            Log.e(TAG, "✗ Failed to launch app", e)
+            e.printStackTrace()
+            Toast.makeText(this@FloatingWindowService, "启动应用失败: ${e.message}", Toast.LENGTH_LONG).show()
+        }
     }
 }

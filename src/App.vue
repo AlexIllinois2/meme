@@ -583,12 +583,14 @@ onMounted(async () => {
     }
   });
 
-  // 监听应用恢复前台事件，自动同步系统颜色模式
+  // 监听应用恢复前台事件，只同步系统颜色模式，不自动聚焦
   document.addEventListener('visibilitychange', async () => {
     if (document.visibilityState === 'visible') {
       // 应用恢复到前台
       console.log('[Theme] App resumed to foreground');
       await syncSystemTheme(); 
+      // 注意：不在这里自动聚焦，因为会被浏览器安全策略阻止
+      // 聚焦必须由用户操作（如点击悬浮窗）触发
     }
   });
 
@@ -596,7 +598,7 @@ onMounted(async () => {
   let focusRetryTimer: number | null = null;
   
   (window as any).triggerSearchFocus = () => {
-    console.log('[Floating] Triggering search focus');
+    console.log('[Floating] ===== Triggering search focus (user action context) =====');
     
     // 清除之前的重试定时器
     if (focusRetryTimer !== null) {
@@ -607,89 +609,115 @@ onMounted(async () => {
     // 清空搜索词
     searchKeyword.value = '';
     
+    // 确保当前在首页
+    if (activeMenu.value !== 'home') {
+      console.log('[Floating] Not on home page, switching to home first');
+      activeMenu.value = 'home';
+    }
+    
     // 聚焦搜索框，带重试机制
     const tryFocus = (attempt: number = 0) => {
-      console.log(`[Floating] Focus attempt ${attempt + 1}/8`);
+      console.log(`[Floating] Focus attempt ${attempt + 1}/15`);
       
-      // 方法1: 使用 Vue ref
-      if (searchInputRef.value) {
-        console.log('[Floating] Using Vue ref to focus');
-        
-        // Varlet Input 组件的聚焦方法
-        if (typeof searchInputRef.value.focus === 'function') {
-          searchInputRef.value.focus();
-          console.log('[Floating] Called ref.focus()');
-        }
-        
-        // 尝试获取内部 input 元素
-        nextTick(() => {
-          const component = searchInputRef.value;
-          let nativeInput: HTMLInputElement | null = null;
+      nextTick(() => {
+        setTimeout(() => {
+          let success = false;
           
-          // 尝试多种方式获取原生 input
-          if (component.$el) {
-            nativeInput = component.$el.querySelector('input');
-          }
-          if (!nativeInput && component.el) {
-            nativeInput = component.el.querySelector('input');
-          }
-          if (!nativeInput) {
-            nativeInput = document.querySelector('.search-input input, .search-input [role="textbox"]');
-          }
-          
-          if (nativeInput) {
-            console.log('[Floating] Found native input element');
+          // 方法1: 使用 Vue ref
+          if (searchInputRef.value) {
+            console.log('[Floating] Using Vue ref');
             
-            // 强制聚焦
-            nativeInput.focus({ preventScroll: false });
+            // Varlet Input 组件的聚焦方法
+            if (typeof searchInputRef.value.focus === 'function') {
+              searchInputRef.value.focus();
+              console.log('[Floating] Called ref.focus()');
+              success = true;
+            }
             
-            // 触发 click 以弹出键盘
+            // 尝试获取内部 input 元素进行二次确认
             setTimeout(() => {
-              nativeInput!.click();
-              nativeInput!.focus();
-            }, 50);
-            
-            // 验证聚焦
-            setTimeout(() => {
-              if (document.activeElement === nativeInput) {
-                console.log('[Floating] Focus verified successfully');
+              const component = searchInputRef.value;
+              let nativeInput: HTMLInputElement | null = null;
+              
+              // 尝试多种方式获取原生 input
+              if (component && component.$el) {
+                nativeInput = component.$el.querySelector('input');
+              }
+              if (!nativeInput && component && component.el) {
+                nativeInput = component.el.querySelector('input');
+              }
+              if (!nativeInput) {
+                nativeInput = document.querySelector('.search-input input, .search-input [role="textbox"]');
+              }
+              
+              if (nativeInput) {
+                console.log('[Floating] Found native input element');
+                
+                // 强制聚焦并触发键盘
+                nativeInput.focus({ preventScroll: false });
+                
+                // 多次触发以确保键盘弹出（Android 需要）
+                setTimeout(() => {
+                  nativeInput!.click();
+                  nativeInput!.focus();
+                }, 50);
+                
+                setTimeout(() => {
+                  nativeInput!.focus();
+                }, 150);
+                
+                setTimeout(() => {
+                  nativeInput!.focus();
+                }, 300);
+                
+                // 验证聚焦
+                setTimeout(() => {
+                  if (document.activeElement === nativeInput) {
+                    console.log('[Floating] ✓ Focus verified successfully!');
+                  } else {
+                    console.warn('[Floating] ✗ Focus verification failed');
+                    console.warn('[Floating] Active element:', document.activeElement?.tagName, document.activeElement);
+                    // 再次尝试
+                    nativeInput!.focus();
+                    nativeInput!.click();
+                  }
+                }, 400);
+                
+                success = true;
               } else {
-                console.warn('[Floating] Focus verification failed, activeElement:', document.activeElement?.tagName);
-                // 再次尝试
-                nativeInput!.focus();
-                nativeInput!.click();
+                console.warn('[Floating] Native input not found');
               }
             }, 100);
-            
-            // 清除重试
+          } else {
+            console.warn('[Floating] searchInputRef is null');
+          }
+          
+          // 如果成功，停止重试
+          if (success) {
             if (focusRetryTimer !== null) {
               clearTimeout(focusRetryTimer);
               focusRetryTimer = null;
             }
           } else {
-            console.warn('[Floating] Native input not found via ref');
             retryOrFinish(attempt);
           }
-        });
-      } else {
-        console.warn('[Floating] searchInputRef is null');
-        retryOrFinish(attempt);
-      }
+        }, 50);
+      });
     };
     
     const retryOrFinish = (attempt: number) => {
-      if (attempt < 8) {
-        console.warn(`[Floating] Retrying... (${attempt + 1}/8)`);
+      if (attempt < 15) {
+        console.warn(`[Floating] Retrying in 150ms... (${attempt + 1}/15)`);
         focusRetryTimer = window.setTimeout(() => tryFocus(attempt + 1), 150);
       } else {
-        console.error('[Floating] All focus attempts failed');
+        console.error('[Floating] ✗ All 15 focus attempts failed');
+        console.error('[Floating] Current activeMenu:', activeMenu.value);
+        console.error('[Floating] searchInputRef:', searchInputRef.value);
       }
     };
     
-    // 使用 nextTick 确保 DOM 已更新
-    nextTick(() => {
-      tryFocus(0);
-    });
+    // 立即开始尝试
+    tryFocus(0);
   };
 
   // 监听原生端触发的搜索聚焦事件

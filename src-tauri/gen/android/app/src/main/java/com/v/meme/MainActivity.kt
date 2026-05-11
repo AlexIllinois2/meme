@@ -96,10 +96,39 @@ class MainActivity : TauriActivity() {
   
   private fun handleIntent(intent: Intent) {
     if (intent.action == ACTION_TRIGGER_SEARCH) {
-      Log.d(TAG, "Received trigger search intent")
-      // 将 app 带到前台并触发搜索聚焦
-      bringToFrontAndFocusSearchInternal()
+      Log.d(TAG, "Received trigger search intent from floating window")
+      // 延迟执行，确保应用已经完全到前台且 JS 接口已注入
+      Handler(Looper.getMainLooper()).postDelayed({
+        if (jsInterfaceInjected) {
+          triggerSearchFocusInWebViewWithRetry(0)
+        } else {
+          Log.w(TAG, "JS interface not ready, waiting...")
+          waitForJsInterfaceAndFocus()
+        }
+      }, 200)
     }
+  }
+  
+  private fun waitForJsInterfaceAndFocus() {
+    var retryCount = 0
+    val maxRetries = 10
+    
+    val checkInterval = object : Runnable {
+      override fun run() {
+        if (jsInterfaceInjected) {
+          Log.d(TAG, "JS interface ready, triggering focus")
+          triggerSearchFocusInWebViewWithRetry(0)
+        } else if (retryCount < maxRetries) {
+          retryCount++
+          Log.d(TAG, "Waiting for JS interface... ($retryCount/$maxRetries)")
+          Handler(Looper.getMainLooper()).postDelayed(this, 100)
+        } else {
+          Log.e(TAG, "JS interface not available after $maxRetries retries")
+        }
+      }
+    }
+    
+    Handler(Looper.getMainLooper()).postDelayed(checkInterval, 100)
   }
   
   private fun setupWindowInsets() {
@@ -409,16 +438,8 @@ class MainActivity : TauriActivity() {
   fun bringToFrontAndFocusSearch() {
     Log.d(TAG, "bringToFrontAndFocusSearch called from JS")
     runOnUiThread {
-      bringToFrontAndFocusSearchInternal()
-    }
-  }
-  
-  private fun bringToFrontAndFocusSearchInternal() {
-    Log.d(TAG, "Bringing app to front and focusing search")
-    // 延迟执行，确保应用已经完全到前台
-    Handler(Looper.getMainLooper()).postDelayed({
       triggerSearchFocusInWebViewWithRetry(0)
-    }, 300)
+    }
   }
   
   private var focusRetryCount = 0
