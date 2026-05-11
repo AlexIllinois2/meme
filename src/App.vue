@@ -78,6 +78,32 @@ const isGlobalEditMode = ref(false);
 const globalFloatingWindowEnabled = ref(false);
 const selectedModeIds = ref<number[]>([]);
 const selectedGroupIds = ref<number[]>([]);
+
+// 首次使用提示蒙版
+const showFirstUseMask = ref(false);
+const hasUserInteracted = ref(false);
+
+// 监听用户交互
+function handleUserInteraction(e: Event) {
+  if (!hasUserInteracted.value) {
+    e.preventDefault();
+    e.stopPropagation();
+    hasUserInteracted.value = true;
+    showFirstUseMask.value = false;
+    // 自动聚焦输入框
+    setTimeout(() => {
+      (window as any).triggerSearchFocus();
+    }, 100);
+  }
+}
+
+// 显示首次使用提示
+function showFirstUsePrompt() {
+  console.log('[Floating] showFirstUsePrompt');
+  if (!hasUserInteracted.value) {
+    showFirstUseMask.value = true;
+  }
+}
 // selectedImages 已存在，复用它
 
 // 是否有选中项
@@ -589,12 +615,16 @@ onMounted(async () => {
       // 应用恢复到前台
       console.log('[Theme] App resumed to foreground');
       await syncSystemTheme(); 
+      handleAppResume();
     }
   });
 
   // 添加悬浮窗触发搜索的全局方法
   (window as any).triggerSearchFocus = () => {
     console.log('[Floating] Triggering search focus');
+
+    // 显示首次使用提示
+    showFirstUsePrompt();
     
     // 清空搜索词
     searchKeyword.value = '';
@@ -641,13 +671,37 @@ onMounted(async () => {
   window.addEventListener('triggerSearchFocus', () => {
     console.log('[Floating] Received triggerSearchFocus event');
     (window as any).triggerSearchFocus();
+    // 显示首次使用提示
+    showFirstUsePrompt();
   });
+
+  // 监听应用恢复前台事件
+  function handleAppResume() {
+    if (document.visibilityState === 'visible') {
+      console.log('[App] App resumed to foreground');
+      // 桌面端恢复前台后调用triggerSearchFocus
+      if (!isAndroidTauri()) {
+        (window as any).triggerSearchFocus();
+      }
+    }
+  }
+
+  // 监听用户交互
+  document.addEventListener('touchstart', handleUserInteraction, { passive: false });
+  document.addEventListener('click', handleUserInteraction);
 
   // 监听全局悬浮窗状态变化
   window.addEventListener('globalFloatingWindowChanged', ((e: CustomEvent) => {
     globalFloatingWindowEnabled.value = e.detail;
     console.log('[Floating] Global floating window state changed:', e.detail);
   }) as EventListener);
+
+  // 清理事件监听
+  onUnmounted(() => {
+    document.removeEventListener('touchstart', handleUserInteraction);
+    document.removeEventListener('click', handleUserInteraction);
+    document.removeEventListener('visibilitychange', handleAppResume);
+  });
 
   async function syncSystemTheme() {
     // 只有当前是【跟随系统模式】才执行同步
@@ -2571,6 +2625,24 @@ async function handleImageMenuSelect(img: Image, action: string) {
         @click="handleFloatingSearchClick"
       />
     </div>
+
+    <!-- 首次使用提示蒙版 -->
+    <div v-if="showFirstUseMask" class="first-use-mask" @click="handleUserInteraction" @touchstart="handleUserInteraction">
+      <div class="first-use-card">
+        <div class="first-use-icon">
+          <Icon name="keyboard" color="#4A90E2" :size="48" />
+        </div>
+        <h2 class="first-use-title">首次使用提示</h2>
+        <p class="first-use-description">
+          (由于WebView限制)<br/>
+          App启动后首次使用需要<br/>
+          轻触屏幕以解锁自动能力<br/>
+        </p>
+        <div class="first-use-arrow">
+          <Icon name="arrow-down" color="#999" :size="32" />
+        </div>
+      </div>
+    </div>
   </ThemeProvider>
 </template>
 
@@ -3897,6 +3969,108 @@ async function handleImageMenuSelect(img: Image, action: string) {
 }
 
 /* 修复移动端按钮点击后高亮状态不自动取消的问题 */
+
+/* 首次使用提示蒙版 */
+.first-use-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  backdrop-filter: blur(8px);
+  animation: fadeIn 0.3s ease-in-out;
+  pointer-events: auto;
+}
+
+.first-use-card {
+  background-color: #fff;
+  border-radius: 24px;
+  padding: 48px 32px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  text-align: center;
+  max-width: 360px;
+  animation: slideUp 0.5s ease-out;
+}
+
+.first-use-icon {
+  margin-bottom: 24px;
+  padding: 16px;
+  background-color: rgba(74, 144, 226, 0.1);
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.first-use-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 16px;
+}
+
+.first-use-description {
+  font-size: 16px;
+  color: #666;
+  line-height: 1.6;
+  margin-bottom: 32px;
+}
+
+.first-use-arrow {
+  animation: bounce 2s infinite;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(50px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes bounce {
+  0%, 20%, 50%, 80%, 100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-10px);
+  }
+  60% {
+    transform: translateY(-5px);
+  }
+}
+
+/* 深色模式适配 */
+:global(.dark-mode) .first-use-card {
+  background-color: #2c2c2c;
+}
+
+:global(.dark-mode) .first-use-title {
+  color: #fff;
+}
+
+:global(.dark-mode) .first-use-description {
+  color: #aaa;
+}
+
+:global(.dark-mode) .first-use-arrow {
+  color: #666;
+}
 @media (hover: none) {
   /* 搜索栏按钮 */
   .btn-icon {
