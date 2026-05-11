@@ -2670,11 +2670,11 @@ async function handleImageMenuSelect(img: Image, action: string) {
             
             <div class="keyword-manager-body">
               <!-- 添加应用按钮 -->
-              <div class="add-app-section">
+              <!-- <div class="add-app-section">
                 <var-button type="primary" block @click="handlePickShareApp">
                   <Icon name="add" :size="18" /> 选择新应用
                 </var-button>
-              </div>
+              </div> -->
               
               <!-- 应用列表 -->
               <div class="keywords-list">
@@ -2687,7 +2687,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
                   <div
                     v-for="app in customShareApps"
                     :key="app.id"
-                    class="keyword-chip app-chip"
+                    :class="['keyword-chip', 'app-chip', { 'app-chip-selected': shareApp === app.package_name }]"
                     @click="shareApp = app.package_name; handleShareAppChange(app.package_name); showCustomAppsPopup = false"
                   >
                     <span>{{ app.app_name || app.package_name }}</span>
@@ -4043,7 +4043,6 @@ async function handleImageMenuSelect(img: Image, action: string) {
 }
 
 .edit-mode-popup :deep(.var-popup__content) {
-  background-color: transparent !important;
   border-radius: 16px !important;
   box-shadow: none !important;
   overflow: hidden !important;
@@ -4052,20 +4051,24 @@ async function handleImageMenuSelect(img: Image, action: string) {
 .edit-mode-popup :deep(.var-popup) {
   border-radius: 16px !important;
   overflow: hidden !important;
-  background-color: transparent !important;
 }
 
-/* 全局覆盖所有 var-popup 确保没有白色背景 */
-:global(.var-popup) {
-  background-color: transparent !important;
+/* 全局覆盖所有 var-popup 使用主题背景色 */
+:global(body .var-popup) {
+  background-color: var(--color-surface) !important;
 }
 
-:global(.var-popup--center) {
-  background-color: transparent !important;
+:global(body .var-popup--center) {
+  background-color: var(--color-surface) !important;
 }
 
-:global(.var-popup__content) {
-  background-color: transparent !important;
+:global(body .var-popup__content) {
+  background-color: var(--color-surface) !important;
+}
+
+/* 确保 overlay 有正确的蒙版 */
+:global(.var-popup__overlay) {
+  background-color: rgba(0, 0, 0, 0.5) !important;
 }
 
 @media (max-width: 768px) {
@@ -4260,15 +4263,80 @@ async function handleImageMenuSelect(img: Image, action: string) {
   overflow: hidden !important;
 }
 
+/* 强制设置背景色，优先级最高 */
+.custom-apps-popup :deep(.var-popup),
+.custom-apps-popup :deep(.var-popup__content),
+.custom-apps-popup .keyword-manager {
+  background-color: var(--color-surface) !important;
+}
+
+/* 给内层容器也添加背景色 */
+.custom-apps-popup .keyword-manager {
+  background-color: var(--color-surface);
+  min-width: 320px;
+  max-width: 90vw;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.custom-apps-popup .keyword-manager-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: var(--color-surface);
+}
+
+.custom-apps-popup .keyword-manager-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.custom-apps-popup .keyword-manager-body {
+  padding: 20px;
+  overflow-y: auto;
+  background-color: var(--color-surface);
+}
+
 .app-chip {
   cursor: pointer;
   transition: all 0.2s ease;
+  position: relative;
 }
 
 .app-chip:hover {
   background-color: var(--color-primary);
   color: white;
   transform: translateY(-1px);
+}
+
+/* 选中的应用高亮显示 */
+.app-chip-selected {
+  background-color: var(--color-primary) !important;
+  color: white !important;
+  box-shadow: 0 2px 8px rgba(var(--color-primary-rgb), 0.3);
+  border: 2px solid var(--color-primary);
+}
+
+.app-chip-selected::before {
+  content: '✓';
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 18px;
+  height: 18px;
+  background-color: var(--color-success);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: bold;
 }
 
 .add-app-section {
