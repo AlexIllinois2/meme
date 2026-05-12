@@ -42,7 +42,7 @@ export interface Config {
   theme_style: 'default' | 'modern' | 'minimal';
   last_mode: number;
   last_group: number;
-  share_app: 'wechat' | 'qq' | '';
+  share_app: string;
   grid_size: number;
   pinyin_search: boolean;
   acronym_search: boolean;

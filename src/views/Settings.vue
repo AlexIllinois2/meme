@@ -75,6 +75,11 @@ onMounted(async () => {
   } catch (error) {
     console.error('Failed to get version:', error);
   }
+  
+  // Android 返回键监听
+  if (isAndroidTauri()) {
+    window.addEventListener('tauri-android-back', handleAndroidBack);
+  }
 });
 
 onUnmounted(() => {
@@ -83,6 +88,11 @@ onUnmounted(() => {
     colorSchemeQuery.removeEventListener('change', colorSchemeListener);
     colorSchemeQuery = null;
     colorSchemeListener = null;
+  }
+  
+  // 移除 Android 返回键监听
+  if (isAndroidTauri()) {
+    window.removeEventListener('tauri-android-back', handleAndroidBack);
   }
 });
 
@@ -199,6 +209,30 @@ function requestUsageStatsPermission() {
 const isAndroidTauri = () => {
   return /Android/i.test(navigator.userAgent);
 };
+
+// Android 返回键处理
+function handleAndroidBack(event: any) {
+  // 关闭所有弹窗
+  if (showColorModePopup.value) {
+    showColorModePopup.value = false;
+    event.preventDefault?.();
+    return true;
+  }
+  if (showThemePopup.value) {
+    showThemePopup.value = false;
+    event.preventDefault?.();
+    return true;
+  }
+  if (showFolderPicker.value) {
+    showFolderPicker.value = false;
+    event.preventDefault?.();
+    return true;
+  }
+  // 返回首页
+  goBack();
+  event.preventDefault?.();
+  return true;
+}
 
 // 检测是否为桌面端
 const isDesktop = () => {

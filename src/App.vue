@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, nextTick } from "vue";
+import { ref, onMounted, computed, nextTick, onUnmounted } from "vue";
 import * as tauri from "@tauri-apps/api/core";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { Snackbar, Dialog } from '@varlet/ui';
@@ -122,12 +122,119 @@ function toggleGlobalEditMode() {
   selectedImages.value = [];
 }
 
+// 监听应用恢复前台事件
+function handleAppResume() {
+  if (document.visibilityState === 'visible') {
+    console.log('[App] App resumed to foreground');
+    // 桌面端恢复前台后调用triggerSearchFocus
+    if (!isAndroidTauri()) {
+      (window as any).triggerSearchFocus();
+    }
+  }
+}
+
 // 退出全局编辑模式
 function exitGlobalEditMode() {
   isGlobalEditMode.value = false;
   selectedModeIds.value = [];
   selectedGroupIds.value = [];
   selectedImages.value = [];
+}
+
+// Android 返回键处理
+function handleAndroidBack(event: any) {
+  // 1. 关闭所有弹窗（优先级从高到低）
+  if (showCustomAppsPopup.value) {
+    showCustomAppsPopup.value = false;
+    event.preventDefault?.();
+    return true;
+  }
+  if (showKeywordManager.value) {
+    showKeywordManager.value = false;
+    event.preventDefault?.();
+    return true;
+  }
+  if (showGroupEditPopup.value) {
+    showGroupEditPopup.value = false;
+    event.preventDefault?.();
+    return true;
+  }
+  if (showModeEditPopup.value) {
+    showModeEditPopup.value = false;
+    event.preventDefault?.();
+    return true;
+  }
+  if (showAddImagePopup.value) {
+    showAddImagePopup.value = false;
+    event.preventDefault?.();
+    return true;
+  }
+  if (showAddGroupPopup.value) {
+    showAddGroupPopup.value = false;
+    event.preventDefault?.();
+    return true;
+  }
+  if (showAddModePopup.value) {
+    showAddModePopup.value = false;
+    event.preventDefault?.();
+    return true;
+  }
+  
+  // 2. 关闭分组操作菜单
+  if (showGroupActionMenu.value) {
+    showGroupActionMenu.value = false;
+    event.preventDefault?.();
+    return true;
+  }
+  
+  // 3. 关闭菜单弹窗
+  if (isMenuPopupOpen.value) {
+    isMenuPopupOpen.value = false;
+    event.preventDefault?.();
+    return true;
+  }
+  
+  // 4. 关闭侧边栏
+  if (isSideMenuOpen.value) {
+    isSideMenuOpen.value = false;
+    event.preventDefault?.();
+    return true;
+  }
+  
+  // 5. 退出编辑模式
+  if (isGlobalEditMode.value) {
+    exitGlobalEditMode();
+    event.preventDefault?.();
+    return true;
+  }
+  
+  // 6. 取消搜索框聚焦
+  if (searchInputRef.value) {
+    const inputEl = searchInputRef.value.$el?.querySelector?.('input') || searchInputRef.value.$el;
+    if (inputEl && document.activeElement === inputEl) {
+      inputEl.blur();
+      searchKeyword.value = '';
+      event.preventDefault?.();
+      return true;
+    }
+  }
+  
+  // 7. 从设置页面返回首页
+  if (activeMenu.value !== 'home') {
+    activeMenu.value = 'home';
+    event.preventDefault?.();
+    return true;
+  }
+  
+  // 8. 如果在首页且没有其他状态，将应用后台到桌面
+  if (isAndroidTauri() && (window as any).AndroidNative?.minimizeApp) {
+    (window as any).AndroidNative.minimizeApp();
+    event.preventDefault?.();
+    return true;
+  }
+  
+  // 非 Android 平台，不阻止默认行为
+  return false;
 }
 
 // 切换模式选中
@@ -694,123 +801,71 @@ onMounted(async () => {
     showFirstUsePrompt();
   });
 
-  // 监听应用恢复前台事件
-  function handleAppResume() {
-    if (document.visibilityState === 'visible') {
-      console.log('[App] App resumed to foreground');
-      // 桌面端恢复前台后调用triggerSearchFocus
-      if (!isAndroidTauri()) {
-        (window as any).triggerSearchFocus();
-      }
-    }
-  }
-
   // 监听用户交互
   document.addEventListener('touchstart', handleUserInteraction, { passive: false });
   document.addEventListener('click', handleUserInteraction);
-
-  // 监听全局悬浮窗状态变化
-  window.addEventListener('globalFloatingWindowChanged', ((e: CustomEvent) => {
-    globalFloatingWindowEnabled.value = e.detail;
-    console.log('[Floating] Global floating window state changed:', e.detail);
-  }) as EventListener);
-
-  // 清理事件监听
-  onUnmounted(() => {
-    document.removeEventListener('touchstart', handleUserInteraction);
-    document.removeEventListener('click', handleUserInteraction);
-    document.removeEventListener('visibilitychange', handleAppResume);
-  });
-
-  async function syncSystemTheme() {
-    // 只有当前是【跟随系统模式】才执行同步
-    if (currentColorMode.value !== 'system' || !config.value) return;
-
-    // 判断系统当前是否深色
-    const isSystemDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
-    // 判断当前页面是否深色
-    const isCurrentlyDark = document.documentElement.classList.contains('var-dark');
-
-    // 不一致 → 重新同步
-    if (isSystemDark !== isCurrentlyDark) {
-      console.log('[Theme] 系统主题变化，正在同步...');
-      
-      applyTheme();          // 应用主题到 DOM
-      themeKey.value++;      // 强制 ThemeProvider 更新
-      console.log('[Theme] 主题同步完成');
-    }
-  }
-
-  // Android 返回键处理
+  
+  // Android 返回键监听
   if (isAndroidTauri()) {
-    window.addEventListener('tauri-android-back', (event: Event) => {
-      // 优先级 1: 如果有打开的弹窗，关闭弹窗
-      if (showModeEditPopup.value || showGroupEditPopup.value || 
-          showAddModePopup.value || showAddGroupPopup.value || 
-          showAddImagePopup.value || showCustomAppsPopup.value ||
-          showResultDialog.value || showKeywordManager.value) {
-        showModeEditPopup.value = false;
-        showGroupEditPopup.value = false;
-        showAddModePopup.value = false;
-        showAddGroupPopup.value = false;
-        showAddImagePopup.value = false;
-        showCustomAppsPopup.value = false;
-        showResultDialog.value = false;
-        showKeywordManager.value = false;
-        event.preventDefault?.();
-        return;
-      }
-      
-      // 优先级 2: 如果在编辑模式，先退出编辑模式
-      if (isGlobalEditMode.value) {
-        exitGlobalEditMode();
-        event.preventDefault?.();
-        return;
-      }
-      
-      // 优先级 3: 如果在搜索框，先退出搜索框
-      if (searchInputRef.value) {
-        searchInputRef.value.blur();
-        event.preventDefault?.();
-        return;
-      }
-
-      // 优先级 4: 如果在子页面，返回主页
-      if (activeMenu.value !== 'home') {
-        activeMenu.value = 'home';
-        // 阻止默认退出行为
-        event.preventDefault?.();
-      } else {
-        // 优先级 5: 在主页时，最小化应用到后台（而不是退出）
-        if (typeof (window as any).AndroidNative !== 'undefined' && (window as any).AndroidNative.minimizeApp) {
-          console.log('[Android] Minimizing app to background');
-          (window as any).AndroidNative.minimizeApp();
-        } else {
-          console.warn('[Android] minimizeApp not available, will exit app');
-        }
-        // 阻止默认退出行为
-        event.preventDefault?.();
-      }
-    });
-
-    // 检查 AndroidNative 接口是否可用
-    setTimeout(() => {
-      if (typeof (window as any).AndroidNative === 'undefined') {
-        console.warn('[Android] AndroidNative interface not ready, waiting...');
-        // 再等待一下
-        setTimeout(() => {
-          if (typeof (window as any).AndroidNative === 'undefined') {
-            console.error('[Android] AndroidNative interface still not available after waiting');
-          } else {
-            console.log('[Android] AndroidNative interface is now available');
-          }
-        }, 2000);
-      } else {
-        console.log('[Android] AndroidNative interface is available');
-      }
-    }, 1000);
+    window.addEventListener('tauri-android-back', handleAndroidBack);
   }
 });
+
+onUnmounted(() => {
+  // 移除 Android 返回键监听
+  if (isAndroidTauri()) {
+    window.removeEventListener('tauri-android-back', handleAndroidBack);
+  }
+  
+  // 清理事件监听
+  document.removeEventListener('touchstart', handleUserInteraction);
+  document.removeEventListener('click', handleUserInteraction);
+  document.removeEventListener('visibilitychange', handleAppResume);
+});
+
+// 监听全局悬浮窗状态变化
+window.addEventListener('globalFloatingWindowChanged', ((e: CustomEvent) => {
+  globalFloatingWindowEnabled.value = e.detail;
+  console.log('[Floating] Global floating window state changed:', e.detail);
+}) as EventListener);
+
+async function syncSystemTheme() {
+  // 只有当前是【跟随系统模式】才执行同步
+  if (currentColorMode.value !== 'system' || !config.value) return;
+
+  // 判断系统当前是否深色
+  const isSystemDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
+  // 判断当前页面是否深色
+  const isCurrentlyDark = document.documentElement.classList.contains('var-dark');
+
+  // 不一致 → 重新同步
+  if (isSystemDark !== isCurrentlyDark) {
+    console.log('[Theme] 系统主题变化，正在同步...');
+    
+    applyTheme();          // 应用主题到 DOM
+    themeKey.value++;      // 强制 ThemeProvider 更新
+    console.log('[Theme] 主题同步完成');
+  }
+}
+
+// 检查 AndroidNative 接口是否可用
+if (isAndroidTauri()) {
+  setTimeout(() => {
+    if (typeof (window as any).AndroidNative === 'undefined') {
+      console.warn('[Android] AndroidNative interface not ready, waiting...');
+      // 再等待一下
+      setTimeout(() => {
+        if (typeof (window as any).AndroidNative === 'undefined') {
+          console.error('[Android] AndroidNative interface still not available after waiting');
+        } else {
+          console.log('[Android] AndroidNative interface is now available');
+        }
+      }, 2000);
+    } else {
+      console.log('[Android] AndroidNative interface is available');
+    }
+  }, 1000);
+}
 
 function handleResize() {
   if (window.innerWidth < 768) {
@@ -922,14 +977,6 @@ async function removeCustomApp(id: number) {
   } catch (error) {
     console.error("Failed to remove custom app:", error);
     Snackbar.error("移除失败");
-  }
-}
-
-function handlePickShareApp() {
-  if (isAndroidTauri() && typeof (window as any).AndroidNative?.pickShareApp === 'function') {
-    (window as any).AndroidNative.pickShareApp();
-  } else {
-    Snackbar.warning("仅支持 Android 平台");
   }
 }
 

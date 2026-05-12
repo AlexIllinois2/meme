@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue';
+import { ref, watch, onMounted, onUnmounted } from 'vue';
 import * as tauri from "@tauri-apps/api/core";
 import { Snackbar } from '@varlet/ui';
 import Icon from "./Icon.vue";
@@ -91,6 +91,21 @@ function close() {
   emit('update:show', false);
 }
 
+// 检测是否为 Android 环境
+function isAndroidTauri() {
+  return typeof window !== 'undefined' && /Android/i.test(navigator.userAgent);
+}
+
+// Android 返回键处理
+function handleAndroidBack(event: any) {
+  if (props.show) {
+    close();
+    event.preventDefault?.();
+    return true;
+  }
+  return false;
+}
+
 // 监听显示状态
 watch(() => props.show, (newVal) => {
   if (newVal) {
@@ -102,6 +117,18 @@ watch(() => props.show, (newVal) => {
 onMounted(() => {
   if (props.show) {
     loadKeywords();
+  }
+  
+  // Android 返回键监听
+  if (isAndroidTauri()) {
+    window.addEventListener('tauri-android-back', handleAndroidBack);
+  }
+});
+
+onUnmounted(() => {
+  // 移除 Android 返回键监听
+  if (isAndroidTauri()) {
+    window.removeEventListener('tauri-android-back', handleAndroidBack);
   }
 });
 </script>

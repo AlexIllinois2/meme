@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { Snackbar, Dialog } from '@varlet/ui';
 import Icon from "../components/Icon.vue";
@@ -18,6 +18,18 @@ const editGroupName = ref('');
 
 onMounted(() => {
   loadModes();
+  
+  // Android 返回键监听
+  if (isAndroidTauri()) {
+    window.addEventListener('tauri-android-back', handleAndroidBack);
+  }
+});
+
+onUnmounted(() => {
+  // 移除 Android 返回键监听
+  if (isAndroidTauri()) {
+    window.removeEventListener('tauri-android-back', handleAndroidBack);
+  }
 });
 
 async function loadModes() {
@@ -49,6 +61,37 @@ async function loadGroups(modeId: number) {
 
 function goBack() {
   window.dispatchEvent(new CustomEvent('navigateHome'));
+}
+
+// 检测是否为 Android 环境
+function isAndroidTauri() {
+  return typeof window !== 'undefined' && /Android/i.test(navigator.userAgent);
+}
+
+// Android 返回键处理
+function handleAndroidBack(event: any) {
+  // 关闭弹窗
+  if (showAddPopup.value) {
+    closeAddPopup();
+    event.preventDefault?.();
+    return true;
+  }
+  // 取消编辑
+  if (editingGroup.value) {
+    cancelEditGroup();
+    event.preventDefault?.();
+    return true;
+  }
+  // 取消选择
+  if (selectedGroups.value.length > 0) {
+    selectedGroups.value = [];
+    event.preventDefault?.();
+    return true;
+  }
+  // 返回首页
+  goBack();
+  event.preventDefault?.();
+  return true;
 }
 
 async function handleModeChange(modeId: number) {
