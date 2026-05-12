@@ -2783,7 +2783,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
     </div>
 
     <!-- 首次使用提示蒙版 -->
-    <div v-if="showFirstUseMask" class="first-use-mask" @click.stop.prevent="handleUserInteraction" @touchstart.stop.prevent="handleUserInteraction">
+    <div v-if="showFirstUseMask" class="first-use-mask" @click="handleUserInteraction" @touchstart="handleUserInteraction">
       <div class="first-use-card">
         <div class="first-use-icon">
           <Icon name="keyboard" color="#4A90E2" :size="48" />
