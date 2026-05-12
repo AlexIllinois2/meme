@@ -36,10 +36,7 @@ class MainActivity : TauriActivity() {
   private val ACTION_TRIGGER_SEARCH = "com.v.meme.ACTION_TRIGGER_SEARCH"
   private val ACTION_SHARE_RESULT = "com.v.meme.ACTION_SHARE_RESULT"
   
-  // SharedPreferences 相关
-  private val PREFS_NAME = "app_prefs"
-  private val KEY_PERMISSION_DIALOG_SHOWN = "permission_dialog_shown"
-  private var permissionDialogShown = false
+  private var permissionFlowInProgress = false
   
   // BroadcastReceiver 用于接收分享结果
   private val shareResultReceiver = object : BroadcastReceiver() {
@@ -105,6 +102,7 @@ class MainActivity : TauriActivity() {
     } else {
       Toast.makeText(this@MainActivity, "存储权限被拒绝，部分功能可能无法使用", Toast.LENGTH_LONG).show()
     }
+    onRuntimePermissionsDone()
   }
   
   private val manageStorageLauncher = registerForActivityResult(
@@ -117,6 +115,7 @@ class MainActivity : TauriActivity() {
                 Toast.makeText(this@MainActivity, "完整存储权限被拒绝，部分功能可能无法使用", Toast.LENGTH_LONG).show()
             }
         }
+        onManageStorageDone()
     }
 
     // 悬浮窗权限申请 launcher
@@ -131,6 +130,7 @@ class MainActivity : TauriActivity() {
                 Toast.makeText(this@MainActivity, "悬浮窗权限被拒绝", Toast.LENGTH_LONG).show()
             }
         }
+        onFloatingWindowDone()
     }
 
     // 应用选择器 launcher
@@ -173,11 +173,6 @@ class MainActivity : TauriActivity() {
     super.onCreate(savedInstanceState)
     
     Log.d(TAG, "onCreate called")
-    
-    // 初始化 SharedPreferences 标志
-    val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-    permissionDialogShown = prefs.getBoolean(KEY_PERMISSION_DIALOG_SHOWN, false)
-    Log.d(TAG, "permissionDialogShown: $permissionDialogShown")
     
     // 注册 BroadcastReceiver
     val filter = IntentFilter(ACTION_SHARE_RESULT)
@@ -380,16 +375,13 @@ class MainActivity : TauriActivity() {
   
   // 幂等式请求所有需要的权限
   private fun requestAllPermissions() {
-    Log.d(TAG, "requestAllPermissions called")
-    
-    // 1. 先请求运行时权限
+    Log.d(TAG, "requestAllPermissions called - starting sequential flow")
+    if (permissionFlowInProgress) {
+      Log.d(TAG, "Permission flow already in progress, skipping")
+      return
+    }
+    permissionFlowInProgress = true
     requestRuntimePermissions()
-    
-    // 2. 然后请求特殊权限（需要跳转到设置页面的）
-    // 注意：这些特殊权限会依次请求，避免同时打开多个设置页面
-    Handler(Looper.getMainLooper()).postDelayed({
-      requestManageStoragePermission()
-    }, 500)
   }
   
   private fun requestRuntimePermissions() {
@@ -429,6 +421,7 @@ class MainActivity : TauriActivity() {
       storagePermissionLauncher.launch(permissionsToRequest.toTypedArray())
     } else {
       Log.d(TAG, "All runtime permissions already granted")
+      onRuntimePermissionsDone()
     }
   }
   
@@ -449,40 +442,27 @@ class MainActivity : TauriActivity() {
           manageStorageLauncher.launch(intent)
         }
       } else {
-        Log.d(TAG, "MANAGE_EXTERNAL_STORAGE already granted, requesting floating window permission next")
-        // 存储权限已授权，继续请求悬浮窗权限
-        requestFloatingWindowPermissionIfNeeded()
+        Log.d(TAG, "MANAGE_EXTERNAL_STORAGE already granted")
+        onManageStorageDone()
       }
     } else {
-      // Android 11 以下不需要 MANAGE_EXTERNAL_STORAGE，直接请求悬浮窗权限
-      Log.d(TAG, "Android < 11, skipping MANAGE_EXTERNAL_STORAGE, requesting floating window permission")
-      requestFloatingWindowPermissionIfNeeded()
+      Log.d(TAG, "Android < 11, skipping MANAGE_EXTERNAL_STORAGE")
+      onManageStorageDone()
     }
   }
   
   private fun requestFloatingWindowPermissionIfNeeded() {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
       if (!Settings.canDrawOverlays(this)) {
-        // 检查是否已经显示过权限对话框
-        if (!permissionDialogShown) {
-          Log.d(TAG, "Floating window permission not granted, showing dialog")
-          // 弹窗提示用户需要悬浮窗权限
-          showFloatingWindowPermissionDialog()
-          // 标记已经显示过权限对话框
-          markPermissionDialogAsShown()
-        } else {
-          Log.d(TAG, "Floating window permission not granted, but dialog already shown before, skipping")
-          // 即使不弹窗，我们还是继续检查使用情况访问权限
-          requestUsageStatsPermissionIfNeeded()
-        }
+        Log.d(TAG, "Floating window permission not granted, showing dialog")
+        showFloatingWindowPermissionDialog()
       } else {
-        Log.d(TAG, "Floating window permission already granted, checking usage stats permission")
-        requestUsageStatsPermissionIfNeeded()
+        Log.d(TAG, "Floating window permission already granted")
+        onFloatingWindowDone()
       }
     } else {
-      // Android 6.0 以下不需要悬浮窗权限
-      Log.d(TAG, "Android < 6.0, skipping floating window permission, checking usage stats permission")
-      requestUsageStatsPermissionIfNeeded()
+      Log.d(TAG, "Android < 6.0, skipping floating window permission")
+      onFloatingWindowDone()
     }
   }
   
@@ -500,7 +480,7 @@ class MainActivity : TauriActivity() {
         builder.setNegativeButton("取消") { dialog, _ ->
           dialog.dismiss()
           Log.d(TAG, "User cancelled floating window permission request")
-          requestUsageStatsPermissionIfNeeded()
+          onFloatingWindowDone()
         }
         
         val dialog = builder.create()
@@ -508,14 +488,13 @@ class MainActivity : TauriActivity() {
         Log.d(TAG, "Floating window permission dialog shown")
       } catch (e: Exception) {
         Log.e(TAG, "Failed to show floating window permission dialog", e)
-        requestUsageStatsPermissionIfNeeded()
+        onFloatingWindowDone()
       }
     }
   }
   
   private fun requestUsageStatsPermissionIfNeeded() {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-      // 检查是否已授予使用情况访问权限
       val appOps = getSystemService(android.app.AppOpsManager::class.java)
       val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         appOps.unsafeCheckOpNoThrow(
@@ -533,31 +512,36 @@ class MainActivity : TauriActivity() {
       }
       
       if (mode != android.app.AppOpsManager.MODE_ALLOWED) {
-        // 检查是否已经显示过权限对话框
-        if (!permissionDialogShown) {
-          Log.d(TAG, "Usage stats permission not granted, showing dialog")
-          // 弹窗提示用户需要这个权限
-          showUsageStatsPermissionDialog()
-          // 标记已经显示过权限对话框
-          markPermissionDialogAsShown()
-        } else {
-          Log.d(TAG, "Usage stats permission not granted, but dialog already shown before, skipping")
-        }
+        Log.d(TAG, "Usage stats permission not granted, showing dialog")
+        showUsageStatsPermissionDialog()
       } else {
         Log.d(TAG, "Usage stats permission already granted")
+        onAllPermissionsDone()
       }
     } else {
       Log.d(TAG, "Android < 5.0, skipping usage stats permission")
+      onAllPermissionsDone()
     }
   }
   
-  private fun markPermissionDialogAsShown() {
-    if (!permissionDialogShown) {
-      permissionDialogShown = true
-      val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-      prefs.edit().putBoolean(KEY_PERMISSION_DIALOG_SHOWN, true).apply()
-      Log.d(TAG, "Marked permission dialog as shown")
-    }
+  private fun onRuntimePermissionsDone() {
+    Log.d(TAG, "Runtime permissions step done, proceeding to manage storage")
+    requestManageStoragePermission()
+  }
+  
+  private fun onManageStorageDone() {
+    Log.d(TAG, "Manage storage step done, proceeding to floating window")
+    requestFloatingWindowPermissionIfNeeded()
+  }
+  
+  private fun onFloatingWindowDone() {
+    Log.d(TAG, "Floating window step done, proceeding to usage stats")
+    requestUsageStatsPermissionIfNeeded()
+  }
+  
+  private fun onAllPermissionsDone() {
+    Log.d(TAG, "All permissions flow completed")
+    permissionFlowInProgress = false
   }
   
   private fun showUsageStatsPermissionDialog() {
@@ -574,6 +558,7 @@ class MainActivity : TauriActivity() {
         builder.setNegativeButton("取消") { dialog, _ ->
           dialog.dismiss()
           Log.d(TAG, "User cancelled usage stats permission request")
+          onAllPermissionsDone()
         }
         
         val dialog = builder.create()
@@ -581,6 +566,7 @@ class MainActivity : TauriActivity() {
         Log.d(TAG, "Usage stats permission dialog shown")
       } catch (e: Exception) {
         Log.e(TAG, "Failed to show usage stats permission dialog", e)
+        onAllPermissionsDone()
       }
     }
   }
@@ -877,27 +863,21 @@ class MainActivity : TauriActivity() {
       } else {
         Toast.makeText(this, "您的 Android 版本不支持此功能", Toast.LENGTH_SHORT).show()
       }
+      onAllPermissionsDone()
     }
   }
   
   @JavascriptInterface
   fun resetPermissionDialogFlag() {
     Log.d(TAG, "resetPermissionDialogFlag called")
-    permissionDialogShown = false
-    val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-    prefs.edit().putBoolean(KEY_PERMISSION_DIALOG_SHOWN, false).apply()
+    permissionFlowInProgress = false
   }
   
   @JavascriptInterface
   fun requestAllPermissionsFromJS() {
     Log.d(TAG, "requestAllPermissionsFromJS called")
     runOnUiThread {
-      // 重置标志，允许再次显示权限对话框
-      permissionDialogShown = false
-      val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-      prefs.edit().putBoolean(KEY_PERMISSION_DIALOG_SHOWN, false).apply()
-      
-      // 重新请求所有权限
+      permissionFlowInProgress = false
       requestAllPermissions()
     }
   }
