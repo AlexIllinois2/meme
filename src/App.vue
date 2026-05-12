@@ -695,8 +695,19 @@ onMounted(async () => {
   });
 
   // 添加悬浮窗触发搜索的全局方法
-  (window as any).triggerSearchFocus = () => {
-    console.log('[Floating] Triggering search focus');
+  (window as any).triggerSearchFocus = (foregroundApp?: { packageName: string; appName: string } | null) => {
+    console.log('[Floating] Triggering search focus', foregroundApp);
+
+    // 如果从悬浮窗触发且检测到前台应用（非本应用），自动切换分享目标
+    if (foregroundApp && foregroundApp.packageName) {
+      const pkg = foregroundApp.packageName;
+      const mappedApp = pkg === 'com.tencent.mobileqq' ? 'qq'
+                      : pkg === 'com.tencent.mm' ? 'wechat'
+                      : pkg;
+      console.log('[Floating] Auto-switching share target to:', mappedApp, '(pkg:', pkg, ')');
+      shareApp.value = mappedApp;
+      handleShareAppChange(mappedApp);
+    }
 
     // 显示首次使用提示
     showFirstUsePrompt();
@@ -743,12 +754,11 @@ onMounted(async () => {
   };
 
   // 监听原生端触发的搜索聚焦事件
-  window.addEventListener('triggerSearchFocus', () => {
-    console.log('[Floating] Received triggerSearchFocus event');
-    (window as any).triggerSearchFocus();
-    // 显示首次使用提示
+  window.addEventListener('triggerSearchFocus', ((e: CustomEvent) => {
+    console.log('[Floating] Received triggerSearchFocus event', e.detail);
+    (window as any).triggerSearchFocus(e.detail);
     showFirstUsePrompt();
-  });
+  }) as EventListener);
 
   // 监听用户交互
   document.addEventListener('touchstart', handleUserInteraction, { passive: false });

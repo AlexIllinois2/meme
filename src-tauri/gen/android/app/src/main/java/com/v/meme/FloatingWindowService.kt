@@ -390,12 +390,15 @@ class FloatingWindowService : Service() {
     }
 
     private fun triggerSearch() {
-        // 启动 MainActivity 并触发搜索聚焦
+        val foregroundApp = getForegroundApp()
         val intent = Intent(this, MainActivity::class.java).apply {
             action = "com.v.meme.ACTION_TRIGGER_SEARCH"
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (foregroundApp != null && foregroundApp != packageName) {
+                putExtra("foreground_app", foregroundApp)
+            }
         }
         startActivity(intent)
-        Log.d(TAG, "已发送触发搜索 Intent")
+        Log.d(TAG, "已发送触发搜索 Intent, foregroundApp=$foregroundApp")
     }
 }

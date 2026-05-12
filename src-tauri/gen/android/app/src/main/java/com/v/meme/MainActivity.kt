@@ -176,8 +176,8 @@ class MainActivity : TauriActivity() {
   private fun handleIntent(intent: Intent) {
     if (intent.action == ACTION_TRIGGER_SEARCH) {
       Log.d(TAG, "Received trigger search intent")
-      // 将 app 带到前台并触发搜索聚焦
-      bringToFrontAndFocusSearchInternal()
+      val foregroundApp = intent.getStringExtra("foreground_app")
+      bringToFrontAndFocusSearchInternal(foregroundApp)
     }
   }
   
@@ -738,24 +738,28 @@ class MainActivity : TauriActivity() {
     }
   }
   
-  private fun bringToFrontAndFocusSearchInternal() {
-    Log.d(TAG, "Bringing app to front and focusing search")
-    // 直接触发搜索，不使用重试
-    triggerSearchFocusInWebView()
+  private fun bringToFrontAndFocusSearchInternal(foregroundApp: String? = null) {
+    Log.d(TAG, "Bringing app to front and focusing search, foregroundApp=$foregroundApp")
+    triggerSearchFocusInWebView(foregroundApp)
   }
   
-  private fun triggerSearchFocusInWebView() {
+  private fun triggerSearchFocusInWebView(foregroundApp: String? = null) {
     val webView = findWebView()
     if (webView != null) {
       Log.d(TAG, "Triggering search focus in WebView")
-      // 直接执行 JavaScript，不等待回调
+      val appJson = if (foregroundApp != null) {
+        val appName = getApplicationName(foregroundApp)
+        """{"packageName":"$foregroundApp","appName":"$appName"}"""
+      } else {
+        "null"
+      }
       webView.evaluateJavascript("""
           (function() {
+              var app = $appJson;
               if (window.triggerSearchFocus) {
-                  window.triggerSearchFocus();
+                  window.triggerSearchFocus(app);
               } else {
-                  // 如果全局方法还没准备好，发送自定义事件
-                  var event = new CustomEvent('triggerSearchFocus');
+                  var event = new CustomEvent('triggerSearchFocus', { detail: app });
                   window.dispatchEvent(event);
               }
           })();
