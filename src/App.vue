@@ -4300,12 +4300,29 @@ async function handleImageMenuSelect(img: Image, action: string) {
   padding: 20px;
   overflow-y: auto;
   background-color: var(--color-surface);
+  /* 确保滚动流畅 */
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+/* 应用列表容器 - 使用 flexbox 自动换行 */
+.custom-apps-popup .keywords-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-content: flex-start;
 }
 
 .app-chip {
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
+  /* 优化大量应用时的显示 */
+  margin: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .app-chip:hover {
@@ -4320,13 +4337,15 @@ async function handleImageMenuSelect(img: Image, action: string) {
   color: white !important;
   box-shadow: 0 2px 8px rgba(var(--color-primary-rgb), 0.3);
   border: 2px solid var(--color-primary);
+  padding-left: 28px !important; /* 为对勾留出空间 */
 }
 
 .app-chip-selected::before {
   content: '✓';
   position: absolute;
-  top: -4px;
-  right: -4px;
+  left: 6px;
+  top: 50%;
+  transform: translateY(-50%);
   width: 18px;
   height: 18px;
   background-color: var(--color-success);

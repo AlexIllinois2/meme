@@ -196,7 +196,6 @@ onMounted(() => {
 }
 
 .keyword-manager-popup :deep(.var-popup__content) {
-  background-color: transparent !important;
   border-radius: 16px !important;
   box-shadow: none !important;
   overflow: hidden !important;
@@ -205,7 +204,6 @@ onMounted(() => {
 .keyword-manager-popup :deep(.var-popup) {
   border-radius: 16px !important;
   overflow: hidden !important;
-  background-color: transparent !important;
 }
 
 /* 全局覆盖 */
@@ -239,6 +237,10 @@ onMounted(() => {
 
 .keyword-manager-body {
   padding: 16px 20px;
+  overflow-y: auto;
+  max-height: 60vh;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
 }
 
 .group-name-display {
