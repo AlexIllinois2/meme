@@ -84,16 +84,24 @@ const showFirstUseMask = ref(false);
 const hasUserInteracted = ref(false);
 
 // 监听用户交互
-function handleUserInteraction(e: Event) {
+function handleUserInteraction(_e: Event) {
   if (!hasUserInteracted.value) {
-    e.preventDefault();
-    e.stopPropagation();
     hasUserInteracted.value = true;
     showFirstUseMask.value = false;
     // 自动聚焦输入框
-    setTimeout(() => {
-      (window as any).triggerSearchFocus();
-    }, 100);
+    nextTick(() => {
+      setTimeout(() => {
+        // 直接查找并聚焦原生 input
+        const nativeInput = document.querySelector('.search-input input, .search-input [role="textbox"]') as HTMLInputElement;
+        if (nativeInput) {
+          console.log('[Floating] Directly focusing native input');
+          nativeInput.focus({ preventScroll: false });
+        } else {
+          console.warn('[Floating] Native input not found, falling back to triggerSearchFocus');
+          (window as any).triggerSearchFocus();
+        }
+      }, 300);
+    });
   }
 }
 
