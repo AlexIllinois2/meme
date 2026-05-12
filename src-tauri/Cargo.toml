@@ -8,6 +8,11 @@ exclude = ["**/*.toml"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[profile.dev]
+# 适度优化，但仍保留调试信息
+opt-level = 1          # 基础优化，比0好很多
+# 不要开 lto = true，会严重拖慢编译时间
+
 [profile.release]
 opt-level = "z"    # 激进优化体积（也可用 "s"）
 lto = true         # 开启链接时优化，消除冗余代码

@@ -15,7 +15,7 @@ pub fn get_config() -> Result<Config, String> {
         .collect();
     
     if !table_info.contains(&"global_floating_window".to_string()) {
-        conn.execute("ALTER TABLE config ADD COLUMN global_floating_window INTEGER DEFAULT 0", [])
+        conn.execute("ALTER TABLE config ADD COLUMN global_floating_window INTEGER DEFAULT 1", [])
             .map_err(|e| e.to_string())?;
     }
     

@@ -53,19 +53,19 @@ class FloatingWindowService : Service() {
     override fun onCreate() {
         super.onCreate()
         isRunning = true
-        prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        
-        // 初始化允许列表：微信、QQ、本应用
-        allowedPackages.add("com.tencent.mm")      // 微信
-        allowedPackages.add("com.tencent.mobileqq") // QQ
-        allowedPackages.add(packageName)            // 本应用
-        Log.d(TAG, "Initialized with base packages: $allowedPackages")
-        
-        // 加载自定义保存的应用
-        loadAllowedPackages()
         
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, createNotification().build())
+        
+        prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        
+        allowedPackages.add("com.tencent.mm")
+        allowedPackages.add("com.tencent.mobileqq")
+        allowedPackages.add(packageName)
+        Log.d(TAG, "Initialized with base packages: $allowedPackages")
+        
+        loadAllowedPackages()
+        
         createFloatingView()
         startVisibilityChecker()
     }

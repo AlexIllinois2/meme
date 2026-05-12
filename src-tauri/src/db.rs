@@ -54,7 +54,8 @@ pub fn init_db() -> Result<Connection> {
             share_app TEXT DEFAULT '',
             grid_size INTEGER DEFAULT 4,
             pinyin_search INTEGER DEFAULT 0,
-            acronym_search INTEGER DEFAULT 0
+            acronym_search INTEGER DEFAULT 0,
+            global_floating_window INTEGER DEFAULT 1
         )",
         [],
     )?;
@@ -90,6 +91,17 @@ pub fn init_db() -> Result<Connection> {
     
     if !has_theme_style {
         conn.execute("ALTER TABLE config ADD COLUMN theme_style TEXT DEFAULT 'modern'", [])?;
+    }
+    
+    // 检查并添加 global_floating_window 列（兼容旧数据库，默认开启）
+    let has_global_floating: bool = conn.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('config') WHERE name='global_floating_window'",
+        [],
+        |row| row.get::<_, i32>(0)
+    ).unwrap_or(0) > 0;
+    
+    if !has_global_floating {
+        conn.execute("ALTER TABLE config ADD COLUMN global_floating_window INTEGER DEFAULT 1", [])?;
     }
     
     // 插入默认配置（如果不存在）
