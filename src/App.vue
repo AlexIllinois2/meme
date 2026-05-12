@@ -4131,9 +4131,19 @@ async function handleImageMenuSelect(img: Image, action: string) {
   background-color: var(--color-surface) !important;
 }
 
-/* 确保 overlay 有正确的蒙版 */
-:global(body .var-popup__overlay) {
+/* 确保所有弹窗的 overlay 都有正确的蒙版透明度 */
+:global(.var-popup__overlay),
+:global(body .var-popup__overlay),
+:global(.var-overlay),
+:global(body .var-overlay) {
   background-color: rgba(0, 0, 0, 0.5) !important;
+  opacity: 1 !important;
+}
+
+/* 确保深色模式下也有正确的蒙版 */
+:global(.var-dark .var-popup__overlay),
+:global(.var-dark .var-overlay) {
+  background-color: rgba(0, 0, 0, 0.6) !important;
 }
 
 @media (max-width: 768px) {
