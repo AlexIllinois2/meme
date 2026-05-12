@@ -55,7 +55,7 @@ Rust modules in `src-tauri/src/`:
 - `trash.rs` - Soft delete support
 
 ## Varlet UI Components
-Use these Varlet components (not other libraries):
+Use these or more Varlet components:
 - Tabs: `var-tabs`
 - Grid: `var-grid`
 - Images: `var-image fit="cover"`

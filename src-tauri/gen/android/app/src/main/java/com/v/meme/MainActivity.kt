@@ -36,6 +36,11 @@ class MainActivity : TauriActivity() {
   private val ACTION_TRIGGER_SEARCH = "com.v.meme.ACTION_TRIGGER_SEARCH"
   private val ACTION_SHARE_RESULT = "com.v.meme.ACTION_SHARE_RESULT"
   
+  // SharedPreferences 相关
+  private val PREFS_NAME = "app_prefs"
+  private val KEY_PERMISSION_DIALOG_SHOWN = "permission_dialog_shown"
+  private var permissionDialogShown = false
+  
   // BroadcastReceiver 用于接收分享结果
   private val shareResultReceiver = object : BroadcastReceiver() {
     override fun onReceive(context: Context?, intent: Intent?) {
@@ -169,6 +174,11 @@ class MainActivity : TauriActivity() {
     
     Log.d(TAG, "onCreate called")
     
+    // 初始化 SharedPreferences 标志
+    val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    permissionDialogShown = prefs.getBoolean(KEY_PERMISSION_DIALOG_SHOWN, false)
+    Log.d(TAG, "permissionDialogShown: $permissionDialogShown")
+    
     // 注册 BroadcastReceiver
     val filter = IntentFilter(ACTION_SHARE_RESULT)
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -186,7 +196,7 @@ class MainActivity : TauriActivity() {
     setupWindowInsets()
     
     setupBackPressHandler()
-    requestStoragePermissions()
+    requestAllPermissions() // 请求所有需要的权限
     
     // 检查启动 Intent
     handleIntent(intent)
@@ -243,6 +253,56 @@ class MainActivity : TauriActivity() {
     if (!jsInterfaceInjected) {
       injectJavaScriptInterface()
     }
+    
+    // 每次回到前台时，幂等式检查并请求未授权的权限
+    // 注意：我们只检查状态，不自动弹出权限申请对话框，避免骚扰用户
+    logPermissionStatus()
+  }
+  
+  private fun logPermissionStatus() {
+    Log.d(TAG, "=== Permission Status Check ===")
+    
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      Log.d(TAG, "READ_MEDIA_IMAGES: ${hasPermission(Manifest.permission.READ_MEDIA_IMAGES)}")
+      Log.d(TAG, "READ_MEDIA_VIDEO: ${hasPermission(Manifest.permission.READ_MEDIA_VIDEO)}")
+      Log.d(TAG, "READ_MEDIA_AUDIO: ${hasPermission(Manifest.permission.READ_MEDIA_AUDIO)}")
+    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+      Log.d(TAG, "READ_EXTERNAL_STORAGE: ${hasPermission(Manifest.permission.READ_EXTERNAL_STORAGE)}")
+      Log.d(TAG, "WRITE_EXTERNAL_STORAGE: ${hasPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)}")
+    }
+    
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+      Log.d(TAG, "MANAGE_EXTERNAL_STORAGE: ${Environment.isExternalStorageManager()}")
+    }
+    
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+      Log.d(TAG, "SYSTEM_ALERT_WINDOW (Floating Window): ${Settings.canDrawOverlays(this)}")
+    }
+    
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+      val appOps = getSystemService(android.app.AppOpsManager::class.java)
+      val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        appOps.unsafeCheckOpNoThrow(
+          android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
+          android.os.Process.myUid(),
+          packageName
+        )
+      } else {
+        @Suppress("DEPRECATION")
+        appOps.checkOpNoThrow(
+          android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
+          android.os.Process.myUid(),
+          packageName
+        )
+      }
+      Log.d(TAG, "USAGE_STATS: ${mode == android.app.AppOpsManager.MODE_ALLOWED}")
+    }
+    
+    Log.d(TAG, "=== Permission Status Check Complete ===")
+  }
+  
+  private fun hasPermission(permission: String): Boolean {
+    return ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
   }
   
   override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -318,12 +378,25 @@ class MainActivity : TauriActivity() {
     }
   }
   
-  private fun requestStoragePermissions() {
+  // 幂等式请求所有需要的权限
+  private fun requestAllPermissions() {
+    Log.d(TAG, "requestAllPermissions called")
+    
+    // 1. 先请求运行时权限
+    requestRuntimePermissions()
+    
+    // 2. 然后请求特殊权限（需要跳转到设置页面的）
+    // 注意：这些特殊权限会依次请求，避免同时打开多个设置页面
+    Handler(Looper.getMainLooper()).postDelayed({
+      requestManageStoragePermission()
+    }, 500)
+  }
+  
+  private fun requestRuntimePermissions() {
+    val permissionsToRequest = mutableListOf<String>()
+    
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-      // Android 13+ (API 33+): 请求新的媒体权限 + MANAGE_EXTERNAL_STORAGE
-      val permissionsToRequest = mutableListOf<String>()
-      
-      // 请求图片、视频、音频权限
+      // Android 13+ (API 33+): 请求新的媒体权限
       if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES) 
           != PackageManager.PERMISSION_GRANTED) {
         permissionsToRequest.add(Manifest.permission.READ_MEDIA_IMAGES)
@@ -338,47 +411,8 @@ class MainActivity : TauriActivity() {
           != PackageManager.PERMISSION_GRANTED) {
         permissionsToRequest.add(Manifest.permission.READ_MEDIA_AUDIO)
       }
-      
-      // 如果有未授权的媒体权限，先请求它们
-      if (permissionsToRequest.isNotEmpty()) {
-        storagePermissionLauncher.launch(permissionsToRequest.toTypedArray())
-      }
-      
-      // 同时请求完整存储管理权限（用于访问任意目录）
-      if (!Environment.isExternalStorageManager()) {
-        try {
-          val intent = android.content.Intent(
-            android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
-            android.net.Uri.parse("package:$packageName")
-          )
-          manageStorageLauncher.launch(intent)
-        } catch (e: Exception) {
-          val intent = android.content.Intent(
-            android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION
-          )
-          manageStorageLauncher.launch(intent)
-        }
-      }
-    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-      // Android 11-12 (API 30-32): 只请求 MANAGE_EXTERNAL_STORAGE
-      if (!Environment.isExternalStorageManager()) {
-        try {
-          val intent = android.content.Intent(
-            android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
-            android.net.Uri.parse("package:$packageName")
-          )
-          manageStorageLauncher.launch(intent)
-        } catch (e: Exception) {
-          val intent = android.content.Intent(
-            android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION
-          )
-          manageStorageLauncher.launch(intent)
-        }
-      }
     } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-      // Android 6.0 - 10 (API 23-29): 请求传统存储权限
-      val permissionsToRequest = mutableListOf<String>()
-      
+      // Android 6.0 - 12 (API 23-32): 请求传统存储权限
       if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) 
           != PackageManager.PERMISSION_GRANTED) {
         permissionsToRequest.add(Manifest.permission.READ_EXTERNAL_STORAGE)
@@ -388,11 +422,172 @@ class MainActivity : TauriActivity() {
           != PackageManager.PERMISSION_GRANTED) {
         permissionsToRequest.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
       }
-      
-      if (permissionsToRequest.isNotEmpty()) {
-        storagePermissionLauncher.launch(permissionsToRequest.toTypedArray())
+    }
+    
+    if (permissionsToRequest.isNotEmpty()) {
+      Log.d(TAG, "Requesting runtime permissions: ${permissionsToRequest.joinToString()}")
+      storagePermissionLauncher.launch(permissionsToRequest.toTypedArray())
+    } else {
+      Log.d(TAG, "All runtime permissions already granted")
+    }
+  }
+  
+  private fun requestManageStoragePermission() {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+      if (!Environment.isExternalStorageManager()) {
+        Log.d(TAG, "Requesting MANAGE_EXTERNAL_STORAGE permission")
+        try {
+          val intent = android.content.Intent(
+            android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+            android.net.Uri.parse("package:$packageName")
+          )
+          manageStorageLauncher.launch(intent)
+        } catch (e: Exception) {
+          val intent = android.content.Intent(
+            android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION
+          )
+          manageStorageLauncher.launch(intent)
+        }
+      } else {
+        Log.d(TAG, "MANAGE_EXTERNAL_STORAGE already granted, requesting floating window permission next")
+        // 存储权限已授权，继续请求悬浮窗权限
+        requestFloatingWindowPermissionIfNeeded()
+      }
+    } else {
+      // Android 11 以下不需要 MANAGE_EXTERNAL_STORAGE，直接请求悬浮窗权限
+      Log.d(TAG, "Android < 11, skipping MANAGE_EXTERNAL_STORAGE, requesting floating window permission")
+      requestFloatingWindowPermissionIfNeeded()
+    }
+  }
+  
+  private fun requestFloatingWindowPermissionIfNeeded() {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+      if (!Settings.canDrawOverlays(this)) {
+        // 检查是否已经显示过权限对话框
+        if (!permissionDialogShown) {
+          Log.d(TAG, "Floating window permission not granted, showing dialog")
+          // 弹窗提示用户需要悬浮窗权限
+          showFloatingWindowPermissionDialog()
+          // 标记已经显示过权限对话框
+          markPermissionDialogAsShown()
+        } else {
+          Log.d(TAG, "Floating window permission not granted, but dialog already shown before, skipping")
+          // 即使不弹窗，我们还是继续检查使用情况访问权限
+          requestUsageStatsPermissionIfNeeded()
+        }
+      } else {
+        Log.d(TAG, "Floating window permission already granted, checking usage stats permission")
+        requestUsageStatsPermissionIfNeeded()
+      }
+    } else {
+      // Android 6.0 以下不需要悬浮窗权限
+      Log.d(TAG, "Android < 6.0, skipping floating window permission, checking usage stats permission")
+      requestUsageStatsPermissionIfNeeded()
+    }
+  }
+  
+  private fun showFloatingWindowPermissionDialog() {
+    runOnUiThread {
+      try {
+        // 直接使用 androidx AlertDialog.Builder
+        val builder = androidx.appcompat.app.AlertDialog.Builder(this)
+        builder.setTitle("需要悬浮窗权限")
+        builder.setMessage("为了使用悬浮窗快捷搜索功能，需要授予悬浮窗权限。\n\n请点击\"确定\"前往设置页面授权。")
+        builder.setPositiveButton("确定") { dialog, _ ->
+          dialog.dismiss()
+          requestFloatingWindowPermission()
+        }
+        builder.setNegativeButton("取消") { dialog, _ ->
+          dialog.dismiss()
+          Log.d(TAG, "User cancelled floating window permission request")
+          requestUsageStatsPermissionIfNeeded()
+        }
+        
+        val dialog = builder.create()
+        dialog.show()
+        Log.d(TAG, "Floating window permission dialog shown")
+      } catch (e: Exception) {
+        Log.e(TAG, "Failed to show floating window permission dialog", e)
+        requestUsageStatsPermissionIfNeeded()
       }
     }
+  }
+  
+  private fun requestUsageStatsPermissionIfNeeded() {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+      // 检查是否已授予使用情况访问权限
+      val appOps = getSystemService(android.app.AppOpsManager::class.java)
+      val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        appOps.unsafeCheckOpNoThrow(
+          android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
+          android.os.Process.myUid(),
+          packageName
+        )
+      } else {
+        @Suppress("DEPRECATION")
+        appOps.checkOpNoThrow(
+          android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
+          android.os.Process.myUid(),
+          packageName
+        )
+      }
+      
+      if (mode != android.app.AppOpsManager.MODE_ALLOWED) {
+        // 检查是否已经显示过权限对话框
+        if (!permissionDialogShown) {
+          Log.d(TAG, "Usage stats permission not granted, showing dialog")
+          // 弹窗提示用户需要这个权限
+          showUsageStatsPermissionDialog()
+          // 标记已经显示过权限对话框
+          markPermissionDialogAsShown()
+        } else {
+          Log.d(TAG, "Usage stats permission not granted, but dialog already shown before, skipping")
+        }
+      } else {
+        Log.d(TAG, "Usage stats permission already granted")
+      }
+    } else {
+      Log.d(TAG, "Android < 5.0, skipping usage stats permission")
+    }
+  }
+  
+  private fun markPermissionDialogAsShown() {
+    if (!permissionDialogShown) {
+      permissionDialogShown = true
+      val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+      prefs.edit().putBoolean(KEY_PERMISSION_DIALOG_SHOWN, true).apply()
+      Log.d(TAG, "Marked permission dialog as shown")
+    }
+  }
+  
+  private fun showUsageStatsPermissionDialog() {
+    runOnUiThread {
+      try {
+        // 直接使用 androidx AlertDialog.Builder
+        val builder = androidx.appcompat.app.AlertDialog.Builder(this)
+        builder.setTitle("需要使用情况访问权限")
+        builder.setMessage("为了让悬浮窗能够智能检测前台应用，需要授予使用情况访问权限。\n\n请点击\"确定\"前往设置页面授权。")
+        builder.setPositiveButton("确定") { dialog, _ ->
+          dialog.dismiss()
+          requestUsageStatsPermission()
+        }
+        builder.setNegativeButton("取消") { dialog, _ ->
+          dialog.dismiss()
+          Log.d(TAG, "User cancelled usage stats permission request")
+        }
+        
+        val dialog = builder.create()
+        dialog.show()
+        Log.d(TAG, "Usage stats permission dialog shown")
+      } catch (e: Exception) {
+        Log.e(TAG, "Failed to show usage stats permission dialog", e)
+      }
+    }
+  }
+  
+  // 保留原有的 requestStoragePermissions 函数，供前端调用
+  private fun requestStoragePermissions() {
+    requestAllPermissions()
   }
   
   private fun findWebView(): WebView? {
@@ -682,6 +877,28 @@ class MainActivity : TauriActivity() {
       } else {
         Toast.makeText(this, "您的 Android 版本不支持此功能", Toast.LENGTH_SHORT).show()
       }
+    }
+  }
+  
+  @JavascriptInterface
+  fun resetPermissionDialogFlag() {
+    Log.d(TAG, "resetPermissionDialogFlag called")
+    permissionDialogShown = false
+    val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    prefs.edit().putBoolean(KEY_PERMISSION_DIALOG_SHOWN, false).apply()
+  }
+  
+  @JavascriptInterface
+  fun requestAllPermissionsFromJS() {
+    Log.d(TAG, "requestAllPermissionsFromJS called")
+    runOnUiThread {
+      // 重置标志，允许再次显示权限对话框
+      permissionDialogShown = false
+      val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+      prefs.edit().putBoolean(KEY_PERMISSION_DIALOG_SHOWN, false).apply()
+      
+      // 重新请求所有权限
+      requestAllPermissions()
     }
   }
 

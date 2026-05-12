@@ -443,7 +443,7 @@ async function autoSaveConfig() {
         </div>
         
         <!-- 使用情况访问权限授权 - 仅 Android 显示 -->
-        <div class="setting-row" v-if="isAndroidTauri()" @click="requestUsageStatsPermission">
+        <!-- <div class="setting-row" v-if="isAndroidTauri()" @click="requestUsageStatsPermission">
           <div class="setting-label">
             <label>授权使用情况访问</label>
             <p class="setting-desc">允许悬浮窗根据当前应用自动显示/隐藏</p>
@@ -452,7 +452,7 @@ async function autoSaveConfig() {
           <div class="setting-control">
             <Icon name="chevron-right" :size="20" class="arrow-icon" />
           </div>
-        </div>
+        </div> -->
         
         <!-- <div class="setting-row" @click="showThemePopup = true">
           <div class="setting-label">
