@@ -45,17 +45,7 @@ function selectColorMode(value: 'system' | 'light' | 'dark') {
   showColorModePopup.value = false;
 }
 
-const themeStyleOptions: { value: 'default' | 'modern' | 'minimal'; label: string }[] = [
-  { value: 'default', label: '默认' },
-  { value: 'modern', label: '现代' },
-  { value: 'minimal', label: '极简' }
-];
 
-function selectThemeStyle(value: 'default' | 'modern' | 'minimal') {
-  config.value.theme_style = value;
-  autoSaveConfig();
-  showThemePopup.value = false;
-}
 
 // 用于存储 matchMedia 监听器引用，以便在组件卸载时移除
 let colorSchemeListener: ((e: MediaQueryListEvent) => void) | null = null;
@@ -518,33 +508,6 @@ async function autoSaveConfig() {
     </div>
   </var-popup>
   
-  <var-popup :show="showThemePopup" @click-overlay="showThemePopup = false">
-    <div class="settings-popup-content">
-      <div class="settings-popup-header">
-        <h3>主题</h3>
-        <var-button text round @click="showThemePopup = false">
-          <Icon name="x" :size="20" />
-        </var-button>
-      </div>
-      <div class="settings-popup-body">
-        <div 
-          v-for="option in themeStyleOptions" 
-          :key="option.value" 
-          class="popup-option"
-          :class="{ active: config.theme_style === option.value }"
-          @click="selectThemeStyle(option.value)"
-        >
-          <div class="radio-wrapper">
-            <div class="radio" :class="{ checked: config.theme_style === option.value }"></div>
-          </div>
-          <span class="option-label">{{ option.label }}</span>
-        </div>
-      </div>
-      <div class="settings-popup-footer">
-        <var-button type="default" block @click="showThemePopup = false">取消</var-button>
-      </div>
-    </div>
-  </var-popup>
 </template>
 
 <style scoped>
@@ -878,9 +841,12 @@ async function autoSaveConfig() {
 }
 
 .option-label {
-  font-size: 16px;
-  color: var(--color-text);
-  flex: 1;
+   flex: 1;
+   font-size: 16px;
+   white-space: nowrap;
+   overflow: hidden;
+   text-overflow: ellipsis;
+   color: var(--color-text);
 }
 
 .selected-value {
