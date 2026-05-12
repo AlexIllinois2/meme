@@ -372,4 +372,19 @@ onUnmounted(() => {
 .keyword-input {
   flex: 1;
 }
+
+/* 修复深色模式下加号按钮颜色 */
+:global(.var-dark .keyword-manager .var-button--primary) {
+  background-color: var(--color-primary) !important;
+  color: white !important;
+}
+
+:global(.var-dark .keyword-manager .var-button--primary:hover) {
+  background-color: var(--color-primary) !important;
+  opacity: 0.9;
+}
+
+:global(.var-dark .keyword-manager .var-button--primary .var-icon) {
+  color: white !important;
+}
 </style>

@@ -29,8 +29,8 @@ const showThemePopup = ref(false);
 
 const colorModeOptions: { value: 'system' | 'light' | 'dark'; label: string }[] = [
   { value: 'system', label: '跟随系统' },
-  { value: 'light', label: '浅色主题' },
-  { value: 'dark', label: '深色主题' }
+  { value: 'light', label: '浅色' },
+  { value: 'dark', label: '深色' }
 ];
 
 const colorModeLabel = computed(() => {
@@ -111,6 +111,7 @@ async function loadConfig() {
       config.value.pinyin_search = result.pinyin_search || false;
       config.value.acronym_search = result.acronym_search || false;
       config.value.global_floating_window = result.global_floating_window || false;
+      // 只更新配置，但不会重置颜色模式 - 让App.vue的currentColorMode保持不变
       updateColorMode(result.color_mode);
       
       // Android 平台：从原生服务同步悬浮窗实际状态
@@ -290,7 +291,7 @@ async function selectMemeDir() {
       }
     } catch (error) {
       console.error('Failed to select directory:', error);
-      Snackbar.error('选择目录失败: ' + error);
+      Snackbar.error('选择文件夹失败: ' + error);
     }
     return;
   }
@@ -306,7 +307,7 @@ async function selectMemeDir() {
     const selected = await open({
       directory: true,
       multiple: false,
-      title: '选择表情包存储目录'
+      title: '选择表情包文件夹'
     });
     
     if (selected) {
@@ -410,15 +411,15 @@ async function autoSaveConfig() {
         <div class="setting-row" @click="selectMemeDir">
           <Icon name="folder-3" :size="22" class="setting-icon" />
           <div class="setting-label">
-            <label>本地存储目录</label>
-            <p class="setting-path">{{ config.meme_dir || '点击选择目录' }}</p>
+            <label>表情包文件夹</label>
+            <p class="setting-path">{{ config.meme_dir || '点击选择文件夹' }}</p>
           </div>
           <Icon name="chevron-right" :size="20" class="arrow-icon" />
         </div>
         
         <div class="setting-row" @click="showColorModePopup = true">
           <div class="setting-label">
-            <label>颜色模式</label>
+            <label>主题</label>
           </div>
           <div class="setting-control">
             <span class="selected-value">{{ colorModeLabel }}</span>

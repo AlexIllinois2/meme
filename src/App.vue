@@ -75,7 +75,7 @@ const selectedImages = ref<number[]>([]);
 // 全局编辑模式状态
 const isGlobalEditMode = ref(false);
 // 全局悬浮窗状态
-const globalFloatingWindowEnabled = ref(false);
+const globalFloatingWindowEnabled = ref(true);
 const selectedModeIds = ref<number[]>([]);
 const selectedGroupIds = ref<number[]>([]);
 
@@ -161,11 +161,6 @@ function handleAndroidBack(event: any) {
   }
   if (showModeEditPopup.value) {
     showModeEditPopup.value = false;
-    event.preventDefault?.();
-    return true;
-  }
-  if (showAddImagePopup.value) {
-    showAddImagePopup.value = false;
     event.preventDefault?.();
     return true;
   }
@@ -366,7 +361,6 @@ async function submitAddMode() {
 // 新增分组弹窗状态
 const showAddGroupPopup = ref(false);
 const newGroupName = ref('');
-const showAddImagePopup = ref(false);
 
 // 显示新增分组弹窗
 function showAddGroupDialog() {
@@ -417,61 +411,6 @@ async function submitAddGroup() {
   } catch (error) {
     console.error('Failed to add group:', error);
     Snackbar.error('创建分组失败');
-  }
-}
-
-// 显示新增图片弹窗
-async function showAddImageDialog() {
-  if (!config.value || !selectedGroupId.value || !selectedModeId.value) {
-    Snackbar.warning('请先选择分组');
-    return;
-  }
-  // Android 端直接调用系统图片选择器
-  if (isAndroidTauri()) {
-    await uploadImagesAndroid();
-    return;
-  }
-  showAddImagePopup.value = true;
-}
-
-// 处理图片上传（编辑模式版本）
-async function handleEditModeUpload() {
-  if (!config.value || !selectedGroupId.value || !selectedModeId.value) {
-    Snackbar.warning('请先选择分组');
-    return;
-  }
-  
-  try {
-    const { open } = await import("@tauri-apps/plugin-dialog");
-    const selected = await open({
-      multiple: true,
-      filters: [{
-        name: "Images",
-        extensions: ["png", "jpg", "jpeg", "gif", "webp", "bmp"]
-      }]
-    });
-    
-    if (!selected || (Array.isArray(selected) && selected.length === 0)) {
-      return;
-    }
-    
-    const filePaths = Array.isArray(selected) ? selected : [selected];
-    
-    await invoke("upload_images", {
-      filePaths: filePaths,
-      groupId: selectedGroupId.value,
-      modeId: selectedModeId.value,
-      memeDir: config.value.meme_dir
-    });
-    
-    Snackbar.success(`成功上传 ${filePaths.length} 张图片`);
-    showAddImagePopup.value = false;
-    
-    // 刷新图片列表
-    await loadImages(selectedGroupId.value);
-  } catch (error) {
-    console.error("Failed to upload images:", error);
-    Snackbar.warning("上传图片失败: " + error);
   }
 }
 
@@ -809,12 +748,33 @@ onMounted(async () => {
   if (isAndroidTauri()) {
     window.addEventListener('tauri-android-back', handleAndroidBack);
   }
+  
+  // 桌面端 ESC 键监听
+  if (!isAndroidTauri()) {
+    window.addEventListener('keydown', handleEscKey);
+  }
 });
+
+// 桌面端 ESC 键处理
+function handleEscKey(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    // 使用与 Android 返回键相同的处理逻辑
+    const handled = handleAndroidBack(event);
+    if (handled) {
+      event.preventDefault();
+    }
+  }
+}
 
 onUnmounted(() => {
   // 移除 Android 返回键监听
   if (isAndroidTauri()) {
     window.removeEventListener('tauri-android-back', handleAndroidBack);
+  }
+  
+  // 移除桌面端 ESC 键监听
+  if (!isAndroidTauri()) {
+    window.removeEventListener('keydown', handleEscKey);
   }
   
   // 清理事件监听
@@ -1295,11 +1255,11 @@ async function uploadImages() {
       });
       
       await loadImages(selectedGroupId.value);
-      Snackbar.success('上传成功');
+      Snackbar.success('添加成功');
     }
   } catch (error) {
     console.error("Failed to upload images:", error);
-    Snackbar.warning("上传图片失败: " + error);
+    Snackbar.warning("添加图片失败: " + error);
   }
 }
 
@@ -1390,11 +1350,11 @@ async function uploadImagesAndroid() {
 		// 步骤4：刷新图片列表
 		await loadImages(selectedGroupId.value);
 		
-		Snackbar.success(`成功上传 ${successCount} 张图片`);
+		Snackbar.success(`成功添加 ${successCount} 张图片`);
 		console.log('[Android] uploadImagesAndroid 完成');
 	} catch (error) {
 		console.error("[Android] 上传失败:", error);
-		Snackbar.error('上传失败: ' + error);
+		Snackbar.error('添加失败: ' + error);
 	}
 }
 
@@ -2271,7 +2231,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
               </template>
             </var-input>
           <div class="search-actions">
-            <button class="btn-icon" @click="uploadImages" title="上传图片">
+            <button class="btn-icon" @click="uploadImages" title="添加图片">
               <Icon name="image" :size="24" />
             </button>
             <!-- 全局编辑模式按钮 -->
@@ -2279,7 +2239,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
               v-if="!isGlobalEditMode"
               class="btn-icon"
               @click="toggleGlobalEditMode" 
-              title="进入编辑模式"
+              title="编辑"
             >
               <Icon name="edit-2" :size="24" />
             </button>
@@ -2358,7 +2318,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
                 </div>
                 <div class="group-action-item" @click="handleManageKeywords">
                   <var-icon name="label" size="20" />
-                  <span>管理关键词</span>
+                  <span>关键词</span>
                 </div>
                 <div class="group-action-divider"></div>
                 <div class="group-action-item danger" @click="handleDeleteGroup">
@@ -2522,7 +2482,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
           <div
             v-if="isGlobalEditMode || images.length === 0"
             class="image-item add-image-item"
-            @click="showAddImageDialog"
+            @click="uploadImages"
           >
             <div class="add-image-content">
               <var-icon name="plus" size="32" color="var(--color-primary)" />
@@ -2695,33 +2655,6 @@ async function handleImageMenuSelect(img: Image, action: string) {
           </div>
         </var-popup>
 
-        <!-- 新增图片弹窗 -->
-        <var-popup class="edit-mode-popup" :show="showAddImagePopup" @click-overlay="showAddImagePopup = false">
-          <div class="edit-popup">
-            <div class="edit-popup-header">
-              <h3>添加图片</h3>
-              <var-button text round @click="showAddImagePopup = false">
-        <var-icon name="window-close" size="20" color="var(--color-text)" />
-      </var-button>
-            </div>
-            <div class="edit-popup-body">
-              <div class="current-group-display" v-if="selectedGroupId">
-                <var-icon name="image" size="16" />
-                <span>添加到: {{ groups.find(g => g.id === selectedGroupId)?.name }}</span>
-              </div>
-              <div class="upload-hint">
-                <var-icon name="cloud-upload" size="48" color="var(--color-primary)" />
-                <p>点击选择图片上传</p>
-                <p class="upload-subtext">支持多选，支持 png、jpg、jpeg、gif、webp、bmp</p>
-              </div>
-              <div class="edit-popup-actions">
-                <var-button type="primary" block @click="handleEditModeUpload">选择图片</var-button>
-                <var-button type="default" block @click="showAddImagePopup = false">取消</var-button>
-              </div>
-            </div>
-          </div>
-        </var-popup>
-
         <!-- 关键词管理弹窗 -->
         <KeywordManager
           v-model:show="showKeywordManager"
@@ -2732,7 +2665,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
         <var-popup class="custom-apps-popup" :show="showCustomAppsPopup" @click-overlay="showCustomAppsPopup = false">
           <div class="keyword-manager">
             <div class="keyword-manager-header">
-              <h3>管理分享应用</h3>
+              <h3>历史应用</h3>
               <button class="btn-icon" @click="showCustomAppsPopup = false">
                 <Icon name="close" :size="24" color="var(--color-text-secondary)" />
               </button>
@@ -2810,7 +2743,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
       
       <!-- 浮动搜索按钮 -->
       <FloatingSearchButton
-        :visible="activeMenu === 'home' && !isGlobalEditMode && !globalFloatingWindowEnabled"
+        :visible="activeMenu === 'home' && !isGlobalEditMode && (!globalFloatingWindowEnabled || !isAndroidTauri())" 
         @click="handleFloatingSearchClick"
       />
     </div>
@@ -2881,6 +2814,15 @@ async function handleImageMenuSelect(img: Image, action: string) {
   flex: 1;
   border-radius: 16px;
   background-color: var(--color-surface-variant);
+}
+
+/* 修复深色模式下搜索框文字颜色 */
+:global(.var-dark .search-input .var-input__input) {
+  color: var(--color-text) !important;
+}
+
+:global(.var-dark .search-input .var-input__input::placeholder) {
+  color: var(--color-text-secondary) !important;
 }
 
 .search-actions {

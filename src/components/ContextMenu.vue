@@ -121,7 +121,7 @@ defineExpose({
   close: closeMenu,
 });
 
-// Android 返回键处理 - 如果菜单打开，关闭它
+// Android 返回键/桌面ESC键处理 - 如果菜单打开，关闭它
 function handleBackButton(event: Event) {
   if (show.value) {
     closeMenu();
@@ -129,15 +129,30 @@ function handleBackButton(event: Event) {
   }
 }
 
+function handleEscKey(event: KeyboardEvent) {
+  if (event.key === 'Escape' && show.value) {
+    closeMenu();
+    event.preventDefault();
+  }
+}
+
 onMounted(() => {
   if (typeof window !== 'undefined') {
     window.addEventListener('tauri-android-back', handleBackButton);
+    // 桌面端添加ESC键监听
+    if (!/Android/i.test(navigator.userAgent)) {
+      window.addEventListener('keydown', handleEscKey);
+    }
   }
 });
 
 onUnmounted(() => {
   if (typeof window !== 'undefined') {
     window.removeEventListener('tauri-android-back', handleBackButton);
+    // 桌面端移除ESC键监听
+    if (!/Android/i.test(navigator.userAgent)) {
+      window.removeEventListener('keydown', handleEscKey);
+    }
   }
 });
 </script>
