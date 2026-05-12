@@ -28,14 +28,14 @@ const showColorModePopup = ref(false);
 const showThemePopup = ref(false);
 
 const colorModeOptions: { value: 'system' | 'light' | 'dark'; label: string }[] = [
-  { value: 'system', label: '跟随系统' },
+  { value: 'system', label: '系统' },
   { value: 'light', label: '浅色' },
   { value: 'dark', label: '深色' }
 ];
 
 const colorModeLabel = computed(() => {
   const option = colorModeOptions.find(o => o.value === config.value.color_mode);
-  return option ? option.label : '跟随系统';
+  return option ? option.label : '系统';
 });
 
 function selectColorMode(value: 'system' | 'light' | 'dark') {
