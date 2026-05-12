@@ -228,6 +228,16 @@ onMounted(() => {
   background-color: var(--color-surface-variant);
 }
 
+/* 修复深色模式下关闭按钮颜色 */
+.keyword-manager-header .btn-icon {
+  color: var(--color-text-2);
+}
+
+.keyword-manager-header .btn-icon:hover {
+  color: var(--color-primary);
+  background-color: var(--color-primary-light);
+}
+
 .keyword-manager-header h3 {
   margin: 0;
   font-size: 16px;

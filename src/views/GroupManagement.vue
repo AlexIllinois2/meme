@@ -293,7 +293,7 @@ async function deleteSelectedGroups() {
           <div class="add-popup-header">
             <h3>新增分组</h3>
             <button class="btn-icon" @click="closeAddPopup">
-              <Icon name="close" :size="24" />
+              <Icon name="close" :size="24" color="var(--color-text-secondary)" />
             </button>
           </div>
           <div class="add-popup-body">

@@ -329,7 +329,7 @@ async function moveModeDown(modeId: number) {
           <div class="add-popup-header">
             <h3>新增模式</h3>
             <button class="btn-icon" @click="closeAddPopup">
-              <Icon name="close" :size="24" />
+              <Icon name="close" :size="24" color="var(--color-text-secondary)" />
             </button>
           </div>
           <div class="add-popup-body">

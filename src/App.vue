@@ -744,26 +744,44 @@ onMounted(async () => {
   // Android 返回键处理
   if (isAndroidTauri()) {
     window.addEventListener('tauri-android-back', (event: Event) => {
-      // 如果在编辑模式，先退出编辑模式
+      // 优先级 1: 如果有打开的弹窗，关闭弹窗
+      if (showModeEditPopup.value || showGroupEditPopup.value || 
+          showAddModePopup.value || showAddGroupPopup.value || 
+          showAddImagePopup.value || showCustomAppsPopup.value ||
+          showResultDialog.value || showKeywordManager.value) {
+        showModeEditPopup.value = false;
+        showGroupEditPopup.value = false;
+        showAddModePopup.value = false;
+        showAddGroupPopup.value = false;
+        showAddImagePopup.value = false;
+        showCustomAppsPopup.value = false;
+        showResultDialog.value = false;
+        showKeywordManager.value = false;
+        event.preventDefault?.();
+        return;
+      }
+      
+      // 优先级 2: 如果在编辑模式，先退出编辑模式
       if (isGlobalEditMode.value) {
         exitGlobalEditMode();
         event.preventDefault?.();
         return;
       }
-      // 如果在搜索框，先退出搜索框
+      
+      // 优先级 3: 如果在搜索框，先退出搜索框
       if (searchInputRef.value) {
         searchInputRef.value.blur();
         event.preventDefault?.();
         return;
       }
 
-      // 如果在子页面，返回主页
+      // 优先级 4: 如果在子页面，返回主页
       if (activeMenu.value !== 'home') {
         activeMenu.value = 'home';
         // 阻止默认退出行为
         event.preventDefault?.();
       } else {
-        // 在主页时，最小化应用到后台（而不是退出）
+        // 优先级 5: 在主页时，最小化应用到后台（而不是退出）
         if (typeof (window as any).AndroidNative !== 'undefined' && (window as any).AndroidNative.minimizeApp) {
           console.log('[Android] Minimizing app to background');
           (window as any).AndroidNative.minimizeApp();
@@ -2278,8 +2296,8 @@ async function handleImageMenuSelect(img: Image, action: string) {
               <div class="group-action-header">
                 <h3>{{ currentEditingGroup?.name }}</h3>
                 <var-button text round @click="closeGroupActionMenu">
-                  <var-icon name="window-close" size="20" />
-                </var-button>
+                <var-icon name="window-close" size="20" color="var(--color-text)" />
+              </var-button>
               </div>
               <div class="group-action-list">
                 <div class="group-action-item" @click="handleRenameGroup">
@@ -2520,8 +2538,8 @@ async function handleImageMenuSelect(img: Image, action: string) {
             <div class="edit-popup-header">
               <h3>编辑模式</h3>
               <var-button text round @click="showModeEditPopup = false">
-                <var-icon name="window-close" size="20" />
-              </var-button>
+        <var-icon name="window-close" size="20" color="var(--color-text)" />
+      </var-button>
             </div>
             <div class="edit-popup-body">
               <var-input
@@ -2552,8 +2570,8 @@ async function handleImageMenuSelect(img: Image, action: string) {
             <div class="edit-popup-header">
               <h3>重命名分组</h3>
               <var-button text round @click="showGroupEditPopup = false">
-                <var-icon name="window-close" size="20" />
-              </var-button>
+        <var-icon name="window-close" size="20" color="var(--color-text)" />
+      </var-button>
             </div>
             <div class="edit-popup-body">
               <var-input
@@ -2577,8 +2595,8 @@ async function handleImageMenuSelect(img: Image, action: string) {
             <div class="edit-popup-header">
               <h3>新增模式</h3>
               <var-button text round @click="showAddModePopup = false">
-                <var-icon name="window-close" size="20" />
-              </var-button>
+        <var-icon name="window-close" size="20" color="var(--color-text)" />
+      </var-button>
             </div>
             <div class="edit-popup-body">
               <var-input
@@ -2602,8 +2620,8 @@ async function handleImageMenuSelect(img: Image, action: string) {
             <div class="edit-popup-header">
               <h3>新增分组</h3>
               <var-button text round @click="showAddGroupPopup = false">
-                <var-icon name="window-close" size="20" />
-              </var-button>
+        <var-icon name="window-close" size="20" color="var(--color-text)" />
+      </var-button>
             </div>
             <div class="edit-popup-body">
               <div class="current-mode-display" v-if="selectedModeId">
@@ -2631,8 +2649,8 @@ async function handleImageMenuSelect(img: Image, action: string) {
             <div class="edit-popup-header">
               <h3>添加图片</h3>
               <var-button text round @click="showAddImagePopup = false">
-                <var-icon name="window-close" size="20" />
-              </var-button>
+        <var-icon name="window-close" size="20" color="var(--color-text)" />
+      </var-button>
             </div>
             <div class="edit-popup-body">
               <div class="current-group-display" v-if="selectedGroupId">
@@ -2664,7 +2682,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
             <div class="keyword-manager-header">
               <h3>管理分享应用</h3>
               <button class="btn-icon" @click="showCustomAppsPopup = false">
-                <Icon name="close" :size="24" />
+                <Icon name="close" :size="24" color="var(--color-text-secondary)" />
               </button>
             </div>
             
@@ -4067,7 +4085,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
 }
 
 /* 确保 overlay 有正确的蒙版 */
-:global(.var-popup__overlay) {
+:global(body .var-popup__overlay) {
   background-color: rgba(0, 0, 0, 0.5) !important;
 }
 
@@ -4303,6 +4321,38 @@ async function handleImageMenuSelect(img: Image, action: string) {
   /* 确保滚动流畅 */
   -webkit-overflow-scrolling: touch;
   scroll-behavior: smooth;
+}
+
+/* 关键词芯片样式 */
+.keyword-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  background-color: var(--color-primary-light);
+  color: var(--color-primary);
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.keyword-chip:hover {
+  background-color: var(--color-primary);
+  color: white;
+}
+
+.keyword-chip .remove-btn {
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.keyword-chip:hover .remove-btn {
+  opacity: 1;
+}
+
+.keyword-chip :deep(.var-button) {
+  color: inherit;
 }
 
 /* 应用列表容器 - 使用 flexbox 自动换行 */

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import Icon from "./Icon.vue";
 
 interface MenuItem {
@@ -119,6 +119,26 @@ const menuStyle = computed(() => ({
 defineExpose({
   open: openMenu,
   close: closeMenu,
+});
+
+// Android 返回键处理 - 如果菜单打开，关闭它
+function handleBackButton(event: Event) {
+  if (show.value) {
+    closeMenu();
+    event.preventDefault?.();
+  }
+}
+
+onMounted(() => {
+  if (typeof window !== 'undefined') {
+    window.addEventListener('tauri-android-back', handleBackButton);
+  }
+});
+
+onUnmounted(() => {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('tauri-android-back', handleBackButton);
+  }
 });
 </script>
 
