@@ -34,7 +34,7 @@ pub fn add_custom_share_app(package_name: String, app_name: Option<String>) -> R
     let conn = init_db().map_err(|e| e.to_string())?;
     
     conn.execute(
-        "INSERT OR IGNORE INTO custom_share_apps (package_name, app_name) VALUES (?, ?)",
+        "INSERT INTO custom_share_apps (package_name, app_name) VALUES (?, ?) ON CONFLICT(package_name) DO UPDATE SET app_name = excluded.app_name",
         params![package_name, app_name],
     ).map_err(|e| e.to_string())?;
 

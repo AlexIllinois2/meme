@@ -37,6 +37,7 @@ class MainActivity : TauriActivity() {
   private val ACTION_SHARE_RESULT = "com.v.meme.ACTION_SHARE_RESULT"
   
   private var permissionFlowInProgress = false
+  private var pendingSharePackage: String? = null
   
   // BroadcastReceiver 用于接收分享结果
   private val shareResultReceiver = object : BroadcastReceiver() {
@@ -53,10 +54,7 @@ class MainActivity : TauriActivity() {
           val packageName = chosenComponent.packageName
           Log.d(TAG, "User selected app via chooser: $packageName")
           
-          // 如果不是微信或 QQ，自动保存
           if (packageName != "com.tencent.mm" && packageName != "com.tencent.mobileqq") {
-            val appName = getApplicationName(packageName)
-            
             // 1. 保存到 SharedPreferences（供悬浮窗服务使用）
             val prefs = getSharedPreferences("custom_share_apps_prefs", Context.MODE_PRIVATE)
             val savedApps = prefs.getStringSet("apps", emptySet())?.toMutableSet() ?: mutableSetOf()
@@ -65,28 +63,18 @@ class MainActivity : TauriActivity() {
               prefs.edit().putStringSet("apps", savedApps).apply()
               Log.d(TAG, "Saved to SharedPreferences: $packageName")
               
-              // 2. 如果悬浮窗服务正在运行，重启它以重新加载配置
               if (FloatingWindowService.isRunning) {
                 Log.d(TAG, "Restarting floating window service to reload config")
                 val intent = Intent(context, FloatingWindowService::class.java)
                 context?.stopService(intent)
-                // 等待一下再启动
                 Thread.sleep(200)
                 startFloatingWindowService()
               }
             }
             
-            // 3. 保存到数据库（供前端显示）
-            val webView = findWebView()
-            webView?.evaluateJavascript("""
-                (function() {
-                    if (window.onCustomAppSelected) {
-                        window.onCustomAppSelected('$packageName', '$appName');
-                    }
-                })()
-            """.trimIndent(), null)
-            
-            Toast.makeText(this@MainActivity, "已自动保存应用: $appName", Toast.LENGTH_SHORT).show()
+            // 2. 标记为待处理，在 onResume 中通过 WebView 通知前端
+            pendingSharePackage = packageName
+            Log.d(TAG, "Marked as pending share: $packageName")
           }
         }
       }
@@ -158,30 +146,11 @@ class MainActivity : TauriActivity() {
         }
     }
 
-    private fun getApplicationName(packageName: String): String {
-        return try {
-            val pm = packageManager
-            val ai = pm.getApplicationInfo(packageName, 0)
-            pm.getApplicationLabel(ai).toString()
-        } catch (e: Exception) {
-            packageName
-        }
-    }
-  
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
     
     Log.d(TAG, "onCreate called")
-    
-    // 注册 BroadcastReceiver
-    val filter = IntentFilter(ACTION_SHARE_RESULT)
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-      registerReceiver(shareResultReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-    } else {
-      @Suppress("DEPRECATION")
-      registerReceiver(shareResultReceiver, filter)
-    }
     
     if (BuildConfig.DEBUG) {
       WebView.setWebContentsDebuggingEnabled(true)
@@ -249,9 +218,40 @@ class MainActivity : TauriActivity() {
       injectJavaScriptInterface()
     }
     
-    // 每次回到前台时，幂等式检查并请求未授权的权限
-    // 注意：我们只检查状态，不自动弹出权限申请对话框，避免骚扰用户
     logPermissionStatus()
+    
+    // 处理待保存的分享应用（在 onResume 中处理，确保 WebView 已就绪）
+    processPendingShare()
+  }
+
+  private fun processPendingShare() {
+    val packageName = pendingSharePackage ?: return
+    pendingSharePackage = null
+    
+    Log.d(TAG, "Processing pending share: $packageName")
+    
+    val appName = try {
+      val ai = packageManager.getApplicationInfo(packageName, 0)
+      packageManager.getApplicationLabel(ai).toString()
+    } catch (e: Exception) {
+      Log.e(TAG, "Failed to get app name for $packageName", e)
+      packageName
+    }
+    
+    val webView = findWebView()
+    if (webView != null) {
+      webView.evaluateJavascript("""
+        (function() {
+          if (window.onCustomAppSelected) {
+            window.onCustomAppSelected('$packageName', '$appName');
+          }
+        })()
+      """.trimIndent(), null)
+      Toast.makeText(this, "已自动保存应用: $appName", Toast.LENGTH_SHORT).show()
+    } else {
+      Log.w(TAG, "WebView not found, cannot process pending share")
+      pendingSharePackage = packageName
+    }
   }
   
   private fun logPermissionStatus() {
@@ -871,6 +871,19 @@ class MainActivity : TauriActivity() {
   fun resetPermissionDialogFlag() {
     Log.d(TAG, "resetPermissionDialogFlag called")
     permissionFlowInProgress = false
+  }
+
+  @JavascriptInterface
+  fun getApplicationName(packageName: String): String {
+    Log.d(TAG, "getApplicationName called for: $packageName")
+    return try {
+      val pm = packageManager
+      val ai = pm.getApplicationInfo(packageName, 0)
+      pm.getApplicationLabel(ai).toString()
+    } catch (e: Exception) {
+      Log.e(TAG, "Failed to get application name for $packageName", e)
+      packageName
+    }
   }
   
   @JavascriptInterface

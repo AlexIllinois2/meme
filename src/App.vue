@@ -466,10 +466,12 @@ const themeKey = ref(0);
 if (typeof window !== 'undefined') {
   (window as any).onCustomAppSelected = async (packageName: string, appName: string) => {
     try {
+      if ((!appName || appName === packageName) && isAndroidTauri() && typeof (window as any).AndroidNative?.getApplicationName === 'function') {
+        appName = (window as any).AndroidNative.getApplicationName(packageName);
+      }
       await invoke('add_custom_share_app', { packageName, appName });
       Snackbar.success(`已保存应用: ${appName || packageName}`);
       await loadCustomApps();
-      // 自动切换到该应用
       shareApp.value = packageName;
       handleShareAppChange(packageName);
     } catch (error) {
@@ -920,6 +922,24 @@ async function loadCustomApps() {
   try {
     customShareApps.value = await invoke<any[]>("get_custom_share_apps") || [];
     
+    // 补全缺失的应用名（app_name 为空或等于包名时，从原生端获取真实应用名）
+    if (isAndroidTauri() && typeof (window as any).AndroidNative?.getApplicationName === 'function') {
+      let needsUpdate = false;
+      for (const app of customShareApps.value) {
+        if (!app.app_name || app.app_name === app.package_name) {
+          const realName = (window as any).AndroidNative.getApplicationName(app.package_name);
+          if (realName && realName !== app.package_name) {
+            app.app_name = realName;
+            needsUpdate = true;
+            await invoke('add_custom_share_app', { packageName: app.package_name, appName: realName });
+          }
+        }
+      }
+      if (needsUpdate) {
+        console.log('Updated missing app names for custom apps');
+      }
+    }
+    
     // 同步到 SharedPreferences（确保悬浮窗服务能读取到最新数据）
     if (isAndroidTauri() && typeof (window as any).AndroidNative?.syncCustomAppsToPrefs === 'function') {
       const packages = customShareApps.value.map(app => app.package_name);
@@ -941,6 +961,12 @@ async function removeCustomApp(id: number) {
     if (isAndroidTauri() && typeof (window as any).AndroidNative?.syncCustomAppsToPrefs === 'function') {
       const packages = customShareApps.value.map(app => app.package_name);
       (window as any).AndroidNative.syncCustomAppsToPrefs(JSON.stringify(packages));
+    }
+    
+    // 如果历史应用被删完了，自动切回 "all"
+    if (customShareApps.value.length === 0 && shareApp.value !== 'all') {
+      shareApp.value = 'all';
+      handleShareAppChange('all');
     }
   } catch (error) {
     console.error("Failed to remove custom app:", error);

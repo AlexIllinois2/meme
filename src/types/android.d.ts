@@ -10,6 +10,9 @@ declare global {
       pickShareApp: () => void;
       syncCustomAppsToPrefs: (packagesJson: string) => void;
       requestUsageStatsPermission: () => void;
+      getApplicationName: (packageName: string) => string;
+      requestAllPermissionsFromJS: () => void;
+      resetPermissionDialogFlag: () => void;
     };
     triggerSearchFocus: () => void;
   }
