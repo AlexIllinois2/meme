@@ -79,7 +79,7 @@ const globalFloatingWindowEnabled = ref(true);
 const selectedModeIds = ref<number[]>([]);
 const selectedGroupIds = ref<number[]>([]);
 
-// 首次使用提示蒙版
+// 首次使用提示弹窗
 const showFirstUseMask = ref(false);
 const hasUserInteracted = ref(false);
 
@@ -2782,21 +2782,12 @@ async function handleImageMenuSelect(img: Image, action: string) {
       />
     </div>
 
-    <!-- 首次使用提示蒙版 -->
-    <div v-if="showFirstUseMask" class="first-use-mask" @click="handleUserInteraction" @touchstart="handleUserInteraction">
-      <div class="first-use-card">
-        <div class="first-use-icon">
-          <Icon name="keyboard" color="#4A90E2" :size="48" />
-        </div>
-        <h2 class="first-use-title">首次使用提示</h2>
-        <p class="first-use-description">
-          (由于WebView限制)<br/>
-          App启动后首次使用需要<br/>
-          轻触屏幕以解锁自动能力<br/>
-        </p>
-        <div class="first-use-arrow">
-          <Icon name="arrow-down" color="#999" :size="32" />
-        </div>
+    <!-- 首次使用提示弹窗 -->
+    <div v-if="showFirstUseMask" class="first-use-popup" @click.stop="handleUserInteraction">
+      <div class="first-use-popup-arrow"></div>
+      <div class="first-use-popup-card">
+        <Icon name="arrow-up-circle" color="#fff" :size="22" />
+        <span>点击这里开始搜索</span>
       </div>
     </div>
   </ThemeProvider>
@@ -4151,106 +4142,52 @@ async function handleImageMenuSelect(img: Image, action: string) {
 
 /* 修复移动端按钮点击后高亮状态不自动取消的问题 */
 
-/* 首次使用提示蒙版 */
-.first-use-mask {
+/* 首次使用提示弹窗 */
+.first-use-popup {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.7);
+  top: 72px;
+  left: 16px;
+  z-index: 1000;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
-  backdrop-filter: blur(8px);
-  animation: fadeIn 0.3s ease-in-out;
+  flex-direction: column;
+  align-items: flex-start;
+  animation: popupFadeIn 0.3s ease-out;
   pointer-events: auto;
 }
 
-.first-use-card {
-  background-color: #fff;
-  border-radius: 24px;
-  padding: 48px 32px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  text-align: center;
-  max-width: 360px;
-  animation: slideUp 0.5s ease-out;
-}
-
-.first-use-icon {
-  margin-bottom: 24px;
-  padding: 16px;
-  background-color: rgba(74, 144, 226, 0.1);
-  border-radius: 50%;
-  display: inline-block;
-}
-
-.first-use-title {
-  font-size: 24px;
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 16px;
-}
-
-.first-use-description {
+.first-use-popup-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #4A90E2;
+  color: #fff;
+  padding: 12px 24px;
+  border-radius: 12px;
   font-size: 16px;
-  color: #666;
-  line-height: 1.6;
-  margin-bottom: 32px;
+  font-weight: 500;
+  box-shadow: 0 4px 20px rgba(74, 144, 226, 0.4);
+  white-space: nowrap;
+  cursor: pointer;
 }
 
-.first-use-arrow {
-  animation: bounce 2s infinite;
+.first-use-popup-arrow {
+  width: 0;
+  height: 0;
+  margin-left: 24px;
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-bottom: 10px solid #4A90E2;
 }
 
-@keyframes fadeIn {
+@keyframes popupFadeIn {
   from {
     opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes slideUp {
-  from {
-    transform: translateY(50px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
-@keyframes bounce {
-  0%, 20%, 50%, 80%, 100% {
-    transform: translateY(0);
-  }
-  40% {
     transform: translateY(-10px);
   }
-  60% {
-    transform: translateY(-5px);
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
-}
-
-/* 深色模式适配 */
-:global(.dark-mode) .first-use-card {
-  background-color: #2c2c2c;
-}
-
-:global(.dark-mode) .first-use-title {
-  color: #fff;
-}
-
-:global(.dark-mode) .first-use-description {
-  color: #aaa;
-}
-
-:global(.dark-mode) .first-use-arrow {
-  color: #666;
 }
 @media (hover: none) {
   /* 搜索栏按钮 */
