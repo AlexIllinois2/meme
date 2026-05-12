@@ -1212,6 +1212,11 @@ async function switchMode(active: string | number) {
       inline: 'center'
     });
   }
+  
+  // 切换模式后，如果搜索栏有内容，自动进行搜索
+  if (searchKeyword.value.trim()) {
+    await searchImages();
+  }
 }
 
 async function switchGroup(active: string | number) {
@@ -4131,19 +4136,27 @@ async function handleImageMenuSelect(img: Image, action: string) {
   background-color: var(--color-surface) !important;
 }
 
-/* 确保所有弹窗的 overlay 都有正确的蒙版透明度 */
+/* 取消所有弹窗的蒙板显示 */
 :global(.var-popup__overlay),
 :global(body .var-popup__overlay),
 :global(.var-overlay),
 :global(body .var-overlay) {
-  background-color: rgba(0, 0, 0, 0.5) !important;
-  opacity: 1 !important;
+  background-color: transparent !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 
-/* 确保深色模式下也有正确的蒙版 */
+/* 确保深色模式下也没有蒙板 */
 :global(.var-dark .var-popup__overlay),
 :global(.var-dark .var-overlay) {
-  background-color: rgba(0, 0, 0, 0.6) !important;
+  background-color: transparent !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* 首次使用提示保留蒙板 */
+.first-use-mask {
+  pointer-events: auto !important;
 }
 
 @media (max-width: 768px) {

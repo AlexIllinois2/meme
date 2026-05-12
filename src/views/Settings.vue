@@ -192,12 +192,7 @@ async function toggleGlobalFloatingWindow(enabled: boolean) {
   }
 }
 
-// 请求使用情况访问权限
-function requestUsageStatsPermission() {
-  if (isAndroidTauri() && typeof (window as any).AndroidNative?.requestUsageStatsPermission === 'function') {
-    (window as any).AndroidNative.requestUsageStatsPermission();
-  }
-}
+
 
 // 检测是否为移动端 - 预留功能
 // const isMobile = () => {
