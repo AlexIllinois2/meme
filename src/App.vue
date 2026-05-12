@@ -2585,7 +2585,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
         </div>
 
         <!-- 模式编辑弹窗 -->
-        <var-popup class="edit-mode-popup" :show="showModeEditPopup" @click-overlay="showModeEditPopup = false">
+        <var-popup  class="edit-mode-popup" :show="showModeEditPopup" @click-overlay="showModeEditPopup = false">
           <div class="edit-popup">
             <div class="edit-popup-header">
               <h3>编辑模式</h3>
@@ -4124,9 +4124,9 @@ async function handleImageMenuSelect(img: Image, action: string) {
 }
 
 /* 全局覆盖所有 var-popup 使用主题背景色 */
-:global(body .var-popup) {
+/* :global(body .var-popup) {
   background-color: var(--color-surface) !important;
-}
+} */
 
 :global(body .var-popup--center) {
   background-color: var(--color-surface) !important;
@@ -4136,26 +4136,21 @@ async function handleImageMenuSelect(img: Image, action: string) {
   background-color: var(--color-surface) !important;
 }
 
-/* 取消所有弹窗的蒙板显示 */
+/* 取消所有弹窗的蒙板显示，但保留点击事件 */
 :global(.var-popup__overlay),
 :global(body .var-popup__overlay),
 :global(.var-overlay),
 :global(body .var-overlay) {
   background-color: transparent !important;
-  opacity: 0 !important;
-  pointer-events: none !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
 }
 
 /* 确保深色模式下也没有蒙板 */
 :global(.var-dark .var-popup__overlay),
 :global(.var-dark .var-overlay) {
   background-color: transparent !important;
-  opacity: 0 !important;
-  pointer-events: none !important;
-}
-
-/* 首次使用提示保留蒙板 */
-.first-use-mask {
+  opacity: 1 !important;
   pointer-events: auto !important;
 }
 
@@ -4352,7 +4347,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
 }
 
 /* 强制设置背景色，优先级最高 */
-.custom-apps-popup :deep(.var-popup),
+/* .custom-apps-popup :deep(.var-popup), */
 .custom-apps-popup :deep(.var-popup__content),
 .custom-apps-popup .keyword-manager {
   background-color: var(--color-surface) !important;

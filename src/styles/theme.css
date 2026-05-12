@@ -1,4 +1,8 @@
 /* 全局主题变量 - 现代浮动卡片风格 */
+/* 强制隐藏蒙层 */
+:deep(.var-popup__overlay) {
+  display: none !important;
+}
 :root {
   /* 安全区域 - 用于处理状态栏和导航栏 */
   --safe-area-top: env(safe-area-inset-top);
