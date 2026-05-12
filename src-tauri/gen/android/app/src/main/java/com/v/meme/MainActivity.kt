@@ -674,7 +674,7 @@ class MainActivity : TauriActivity() {
             this@MainActivity,
             0,
             Intent(ACTION_SHARE_RESULT),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
           )
           
           // 使用 createChooser 并传入 PendingIntent
