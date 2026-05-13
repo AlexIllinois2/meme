@@ -32,6 +32,12 @@ fn trigger_search_focus(app_handle: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+// 退出应用命令
+#[tauri::command]
+fn exit_app(app_handle: tauri::AppHandle) {
+    std::process::exit(0);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut builder = tauri::Builder::default()
@@ -98,6 +104,8 @@ pub fn run() {
             // 剪贴板粘贴（桌面端支持，Android 返回错误）
             image::paste_image_from_clipboard,
             image::paste_image_from_clipboard_raw,
+            // 应用控制
+            exit_app,
             // 索引刷新
             image::refresh_index,
             image::full_refresh,

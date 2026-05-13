@@ -381,6 +381,14 @@ async function autoSaveConfig() {
 //     title: '确认重置',
 //     message: '确定要重置为默认设置吗？',
 //     confirmButton: true,
+// 
+function openUserAgreement() {
+  window.dispatchEvent(new CustomEvent('navigateToMenu', { detail: 'user-agreement' }));
+}
+
+function openPrivacyPolicy() {
+  window.dispatchEvent(new CustomEvent('navigateToMenu', { detail: 'privacy-policy' }));
+}
 
 
 </script>
@@ -463,6 +471,24 @@ async function autoSaveConfig() {
           关于
         </h2>
         
+        <div class="setting-row" @click="openUserAgreement">
+          <Icon name="file-text" :size="22" class="setting-icon" />
+          <div class="setting-label">
+            <label>用户协议</label>
+            <p class="setting-desc">查看用户使用协议</p>
+          </div>
+          <Icon name="chevron-right" :size="20" class="arrow-icon" />
+        </div>
+        
+        <div class="setting-row" @click="openPrivacyPolicy">
+          <Icon name="shield" :size="22" class="setting-icon" />
+          <div class="setting-label">
+            <label>隐私政策</label>
+            <p class="setting-desc">查看隐私保护政策</p>
+          </div>
+          <Icon name="chevron-right" :size="20" class="arrow-icon" />
+        </div>
+
         <div class="setting-row" @click="goSupport">
           <Icon name="heart" :size="22" class="setting-icon" />
           <div class="setting-label">

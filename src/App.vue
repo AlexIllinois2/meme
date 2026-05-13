@@ -9,6 +9,8 @@ import GroupManagement from "./views/GroupManagement.vue";
 import KeywordManagement from "./views/KeywordManagement.vue";
 import Settings from "./views/Settings.vue";
 import Support from "./views/Support.vue";
+import UserAgreement from "./views/UserAgreement.vue";
+import PrivacyPolicy from "./views/PrivacyPolicy.vue";
 import ContextMenu from "./components/ContextMenu.vue";
 import KeywordManager from "./components/KeywordManager.vue";
 import ThemeProvider from "./components/ThemeProvider.vue";
@@ -83,6 +85,36 @@ const selectedGroupIds = ref<number[]>([]);
 // 首次使用提示弹窗
 const showFirstUseMask = ref(false);
 const hasUserInteracted = ref(false);
+// 协议确认弹窗
+const showAgreementConfirm = ref(false);
+const hasAcceptedAgreement = ref(false);
+
+// 协议确认处理
+const handleAgreementAccept = () => {
+  hasAcceptedAgreement.value = true;
+  showAgreementConfirm.value = false;
+  localStorage.setItem('meme_agreement_accepted', 'true');
+};
+
+const handleAgreementReject = () => {
+  showAgreementConfirm.value = false;
+  // 如果用户拒绝协议，退出应用
+  if (isTauri) {
+    invoke('exit_app');
+  } else {
+    window.close();
+  }
+};
+
+const openUserAgreementFromPopup = () => {
+  showAgreementConfirm.value = false;
+  activeMenu.value = 'user-agreement';
+};
+
+const openPrivacyPolicyFromPopup = () => {
+  showAgreementConfirm.value = false;
+  activeMenu.value = 'privacy-policy';
+};
 
 // 监听用户交互
 function handleUserInteraction(_e: Event) {
@@ -548,6 +580,14 @@ onMounted(async () => {
     }
   }
 
+  // 检查是否已接受用户协议
+  const agreementAccepted = localStorage.getItem('meme_agreement_accepted');
+  hasAcceptedAgreement.value = agreementAccepted === 'true';
+  
+  if (!hasAcceptedAgreement.value) {
+    showAgreementConfirm.value = true;
+  }
+
   // 先加载配置，但不设置响应式监听
   await loadConfig();
   
@@ -762,8 +802,10 @@ onMounted(async () => {
   }) as EventListener);
 
   // 监听用户交互
-  document.addEventListener('touchstart', handleUserInteraction, { passive: false });
-  document.addEventListener('click', handleUserInteraction);
+document.addEventListener('touchstart', handleUserInteraction, { passive: false });
+document.addEventListener('click', handleUserInteraction);
+
+
   
   // Android 返回键监听
   if (isAndroidTauri()) {
@@ -2806,6 +2848,8 @@ async function handleImageMenuSelect(img: Image, action: string) {
       <KeywordManagement v-else-if="activeMenu === 'keyword'" />
       <Settings v-else-if="activeMenu === 'settings'" />
       <Support v-else-if="activeMenu === 'support'" />
+      <UserAgreement v-else-if="activeMenu === 'user-agreement'" @open-privacy-policy="activeMenu = 'privacy-policy'" />
+      <PrivacyPolicy v-else-if="activeMenu === 'privacy-policy'" />
       </main>
       
       <!-- 浮动搜索按钮 -->
@@ -2823,6 +2867,25 @@ async function handleImageMenuSelect(img: Image, action: string) {
         <span>Σ(っ °Д °;)っ!!! 你不要过来啊!!!</span>
       </div>
     </div>
+    
+    <!-- 用户协议确认弹窗 -->
+    <var-popup v-model:show="showAgreementConfirm" class="agreement-confirm-popup" teleport="body">
+      <var-card class="agreement-confirm-card">
+        <div class="agreement-header">
+          <h2>用户协议和隐私政策</h2>
+        </div>
+        <div class="agreement-content">
+          <p>欢迎使用咪萌！请您务必审慎阅读、充分理解以下条款内容。</p>
+          <p>1. 本应用仅供个人非商业用途使用，禁止反编译、修改或用于商业目的。</p>
+          <p>2. 本应用仅在本地存储您的数据，不会收集或传输您的个人信息。</p>
+          <p>3. 请您认真阅读并理解<a @click="openUserAgreementFromPopup" class="link">《用户服务协议》</a>和<a @click="openPrivacyPolicyFromPopup" class="link">《隐私政策》</a>的全部内容。</p>
+        </div>
+        <div class="agreement-actions">
+          <var-button type="default" block @click="handleAgreementReject">拒绝</var-button>
+          <var-button type="primary" block @click="handleAgreementAccept" style="margin-top: 12px;">同意并继续</var-button>
+        </div>
+      </var-card>
+    </var-popup>
   </ThemeProvider>
 </template>
 
@@ -4214,6 +4277,49 @@ async function handleImageMenuSelect(img: Image, action: string) {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* 协议确认弹窗样式 */
+:global(.agreement-confirm-popup .var-popup__content) {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+
+.agreement-confirm-card {
+  width: 90%;
+  min-width: 320px;
+  max-width: 500px;
+  padding: 24px;
+  margin: 0 auto;
+}
+
+.agreement-header h2 {
+  text-align: center;
+  font-size: 20px;
+  margin-bottom: 20px;
+  color: var(--text-color);
+}
+
+.agreement-content p {
+  font-size: 14px;
+  line-height: 1.6;
+  margin-bottom: 12px;
+  color: var(--text-secondary);
+}
+
+.agreement-content .link {
+  color: var(--color-primary);
+  cursor: pointer;
+}
+
+.agreement-content .link:hover {
+  text-decoration: underline;
+}
+
+.agreement-actions {
+  margin-top: 24px;
 }
 @media (hover: none) {
   /* 搜索栏按钮 */
