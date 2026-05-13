@@ -45,11 +45,11 @@ function goBack() {
   window.dispatchEvent(new CustomEvent('navigateHome'));
 }
 
-function openLink(url: string) {
-  if (typeof window !== 'undefined') {
-    window.open(url, '_blank');
-  }
-}
+// function openLink(url: string) {
+//   if (typeof window !== 'undefined') {
+//     window.open(url, '_blank');
+//   }
+// }
 
 async function saveQrcode(method: any) {
   try {
