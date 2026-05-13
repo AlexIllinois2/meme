@@ -72,9 +72,12 @@ class MainActivity : TauriActivity() {
               }
             }
             
-            // 2. 标记为待处理，在 onResume 中通过 WebView 通知前端
+            // 2. 标记为待处理，并立即尝试通知前端
             pendingSharePackage = packageName
             Log.d(TAG, "Marked as pending share: $packageName")
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+              processPendingShare()
+            }
           }
         }
       }
