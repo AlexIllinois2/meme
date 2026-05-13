@@ -93,7 +93,7 @@ onUnmounted(() => {
           <var-tab
             v-for="(method, index) in paymentMethods"
             :key="index"
-            :name="method.name"
+            :name="index"
           >
             <Icon :name="method.icon" :size="18" />
             <span>{{ method.name }}</span>
