@@ -220,18 +220,23 @@ class FloatingWindowService : Service() {
     private fun createFloatingView() {
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
 
-        // 加载保存的位置
-        val savedPosition = loadPosition()
-        
         // 获取屏幕尺寸用于边界检测
         val display = windowManager.defaultDisplay
         val screenWidth = display.width
         val screenHeight = display.height
         val buttonSize = 140
         
+        // 默认位置：屏幕右边贴边，垂直居中
+        val defaultX = screenWidth - buttonSize
+        val defaultY = screenHeight * 2 / 3 - buttonSize / 2
+        
+        // 加载保存的位置（首次使用默认右边居中）
+        val savedX = prefs.getInt(KEY_POS_X, defaultX)
+        val savedY = prefs.getInt(KEY_POS_Y, defaultY)
+        
         // 计算带边界检测的初始位置
-        val initialPosX = clampPosition(savedPosition.first, 0, screenWidth - buttonSize)
-        val initialPosY = clampPosition(savedPosition.second, 0, screenHeight - buttonSize)
+        val initialPosX = clampPosition(savedX, 0, screenWidth - buttonSize)
+        val initialPosY = clampPosition(savedY, 0, screenHeight - buttonSize)
 
         // 创建悬浮窗 View - 圆形半透明按钮
         val context = this
@@ -365,17 +370,6 @@ class FloatingWindowService : Service() {
             .putInt(KEY_POS_X, x)
             .putInt(KEY_POS_Y, y)
             .apply()
-    }
-
-    /**
-     * 从 SharedPreferences 加载保存的位置
-     * @return Pair<x, y> 坐标
-     */
-    private fun loadPosition(): Pair<Int, Int> {
-        val x = prefs.getInt(KEY_POS_X, DEFAULT_POS_X)
-        val y = prefs.getInt(KEY_POS_Y, DEFAULT_POS_Y)
-        Log.d(TAG, "加载保存的位置: ($x, $y)")
-        return Pair(x, y)
     }
 
     /**
