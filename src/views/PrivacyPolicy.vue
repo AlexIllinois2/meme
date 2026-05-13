@@ -101,7 +101,7 @@ function goBack() {
           <h2>十二、版本说明</h2>
           <p>本应用分为两个版本：</p>
           <p>1. Web版本：已开源，基于MIT许可证，源代码地址：<a href="https://github.com/AlexIllinois2/meme_web" target="_blank" class="link">https://github.com/AlexIllinois2/meme_web</a></p>
-          <p>2. Tauri桌面版本：暂时闭源，免费供个人非商业用途使用</p>
+          <p>2. Tauri版本：暂时闭源，免费供个人非商业用途使用</p>
         </div>
         
         <div class="last-updated">
