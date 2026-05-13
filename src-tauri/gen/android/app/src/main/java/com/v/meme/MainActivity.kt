@@ -12,6 +12,8 @@ import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.provider.MediaStore
+import android.content.ContentValues
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.IntentFilter
@@ -915,6 +917,55 @@ class MainActivity : TauriActivity() {
     runOnUiThread {
       permissionFlowInProgress = false
       requestAllPermissions()
+    }
+  }
+
+  @JavascriptInterface
+  fun saveImageToGallery(json: String) {
+    Log.d(TAG, "saveImageToGallery called: $json")
+    try {
+      val obj = org.json.JSONObject(json)
+      val path = obj.getString("path")
+      val displayName = obj.getString("displayName")
+
+      val file = java.io.File(path)
+      if (!file.exists()) {
+        Log.e(TAG, "File not found: $path")
+        return
+      }
+
+      val mimeType = if (displayName.endsWith(".jpg") || displayName.endsWith(".jpeg")) {
+        "image/jpeg"
+      } else if (displayName.endsWith(".gif")) {
+        "image/gif"
+      } else {
+        "image/png"
+      }
+
+      val contentValues = ContentValues().apply {
+        put(MediaStore.Images.Media.DISPLAY_NAME, displayName)
+        put(MediaStore.Images.Media.MIME_TYPE, mimeType)
+        put(MediaStore.Images.Media.IS_PENDING, 1)
+      }
+
+      val uri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+      if (uri != null) {
+        contentResolver.openOutputStream(uri)?.use { outputStream ->
+          file.inputStream().use { inputStream ->
+            inputStream.copyTo(outputStream)
+          }
+        }
+        contentValues.clear()
+        contentValues.put(MediaStore.Images.Media.IS_PENDING, 0)
+        contentResolver.update(uri, contentValues, null, null)
+        Log.d(TAG, "Image saved to MediaStore: $uri")
+      } else {
+        Log.e(TAG, "Failed to create MediaStore entry")
+      }
+
+      file.delete()
+    } catch (e: Exception) {
+      Log.e(TAG, "Failed to save image to gallery", e)
     }
   }
 

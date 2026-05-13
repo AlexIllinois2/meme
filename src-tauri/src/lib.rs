@@ -12,6 +12,7 @@ mod image;
 mod trash;
 mod custom_share;
 mod meme_fs;
+mod save_image;
 #[cfg(target_os = "android")]
 mod android_picker;
 
@@ -110,6 +111,8 @@ pub fn run() {
             custom_share::get_custom_share_apps,
             custom_share::add_custom_share_app,
             custom_share::remove_custom_share_app,
+            // 保存图片到相册
+            save_image::save_image_to_gallery,
             // 悬浮窗触发搜索聚焦
             trigger_search_focus,
         ]);
@@ -177,6 +180,8 @@ pub fn run() {
             custom_share::get_custom_share_apps,
             custom_share::add_custom_share_app,
             custom_share::remove_custom_share_app,
+            // 保存图片到相册
+            save_image::save_image_to_gallery,
         ]);
     }
     

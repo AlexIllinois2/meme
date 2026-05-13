@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
+import { Snackbar } from '@varlet/ui';
+import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import alipayImg from '@/assets/images/support/alipay.jpg'
 import wechatImg from '@/assets/images/support/wechat.png'
 import qqImg from '@/assets/images/support/qq.png'
@@ -48,6 +51,42 @@ function openLink(url: string) {
   }
 }
 
+async function saveQrcode(method: any) {
+  try {
+    const imgSrc = method.qrcode;
+    const response = await fetch(imgSrc);
+    const blob = await response.blob();
+
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        const base64 = result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+
+    const ext = method.name.includes('微信') ? 'png' : 'jpg';
+    const filename = `${method.name}收款码.${ext}`;
+
+    const result = await invoke<string>('save_image_to_gallery', {
+      imageData: base64,
+      filename: filename,
+    });
+
+    if (isAndroidTauri()) {
+      Snackbar.success('图片已保存到相册');
+    } else {
+      Snackbar.success(`已保存到 ${result}`);
+    }
+  } catch (error) {
+    console.error('保存失败:', error);
+    Snackbar.error('保存失败');
+  }
+}
+
 const isAndroidTauri = () => {
   return /Android/i.test(navigator.userAgent);
 };
@@ -58,15 +97,27 @@ function handleAndroidBack(event: any) {
   return true;
 }
 
-onMounted(() => {
+let unlistenSaveImage: (() => void) | null = null;
+
+onMounted(async () => {
   if (isAndroidTauri()) {
     window.addEventListener('tauri-android-back', handleAndroidBack);
+
+    unlistenSaveImage = await listen<{ path: string; displayName: string }>('saveImageToGallery', (event) => {
+      const win = window as any;
+      if (win.AndroidNative && win.AndroidNative.saveImageToGallery) {
+        win.AndroidNative.saveImageToGallery(JSON.stringify(event.payload));
+      }
+    });
   }
 });
 
 onUnmounted(() => {
   if (isAndroidTauri()) {
     window.removeEventListener('tauri-android-back', handleAndroidBack);
+    if (unlistenSaveImage) {
+      unlistenSaveImage();
+    }
   }
 });
 </script>
@@ -83,9 +134,12 @@ onUnmounted(() => {
 
     <div class="content">
       <div class="support-header">
-        <div class="heart-icon">❤️</div>
-        <h2>感谢你的支持</h2>
-        <p>你的每一份支持都是我持续开发的动力</p>
+        <!-- <div class="heart-icon">❤️</div> -->
+        <h2>为什么支持我?</h2>
+        <p>上一世, 我遭人背叛、含恨而终😭，<br>
+          老天让我重活一世，这一世😄,<br>
+          我定要卷土重来、报仇雪恨😠。<br>
+          v我5块，聆听我的复仇计划🥺。</p>
       </div>
 
       <div class="payment-section">
@@ -107,7 +161,7 @@ onUnmounted(() => {
           >
             <div class="payment-card">
               <div v-if="method.type === 'qrcode'" class="qrcode-section">
-                <div v-if="method.qrcode" class="qrcode-wrapper">
+                <div v-if="method.qrcode" class="qrcode-wrapper" @click="saveQrcode(method)">
                   <var-image
                     :src="method.qrcode"
                     fit="contain"
@@ -119,7 +173,8 @@ onUnmounted(() => {
                   <p>请添加{{ method.name }}收款码图片</p>
                   <p class="hint">将二维码图片路径填入 Support.vue 的 paymentMethods 中</p>
                 </div>
-                <p class="payment-desc">{{ method.desc }}</p>
+                <!-- <p class="payment-desc">{{ method.desc }}</p> -->
+                <!-- <p class="save-hint" v-if="method.qrcode">点击图片保存到下载目录</p> -->
               </div>
 
               <div v-else-if="method.type === 'link'" class="link-section">
@@ -138,7 +193,7 @@ onUnmounted(() => {
       </div>
 
       <div class="thanks-section">
-        <p>✨ 感谢每一位支持者 ✨</p>
+        <!-- <p>✨ 感谢每一位支持者 ✨</p> -->
       </div>
     </div>
   </div>
@@ -231,6 +286,23 @@ onUnmounted(() => {
   overflow: hidden;
   box-shadow: var(--shadow-md);
   background-color: var(--color-surface);
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.qrcode-wrapper:hover {
+  transform: scale(1.02);
+  box-shadow: var(--shadow-lg);
+}
+
+.qrcode-wrapper:active {
+  transform: scale(0.98);
+}
+
+.save-hint {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--color-text-3);
 }
 
 .qrcode-image {

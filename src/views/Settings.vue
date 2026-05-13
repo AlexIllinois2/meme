@@ -467,7 +467,7 @@ async function autoSaveConfig() {
           <Icon name="heart" :size="22" class="setting-icon" />
           <div class="setting-label">
             <label>支持一下</label>
-            <p class="setting-desc">请我吃包泡面</p>
+            <p class="setting-desc">喜欢本应用吗? 豪我一下吧</p>
           </div>
           <Icon name="chevron-right" :size="20" class="arrow-icon" />
         </div>
