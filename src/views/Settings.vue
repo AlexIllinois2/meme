@@ -16,9 +16,9 @@ const config = ref<Config>({
   last_group: 1,
   share_app: 'wechat',
   grid_size: 4,
-  pinyin_search: false,
-  acronym_search: false,
-  global_floating_window: false
+  pinyin_search: true,
+  acronym_search: true,
+  global_floating_window: true
 });
 
 const isSaving = ref(false);
@@ -98,9 +98,9 @@ async function loadConfig() {
       config.value.last_group = result.last_group || 1;
       config.value.share_app = result.share_app || '';
       config.value.grid_size = result.grid_size || 4;
-      config.value.pinyin_search = result.pinyin_search || false;
-      config.value.acronym_search = result.acronym_search || false;
-      config.value.global_floating_window = result.global_floating_window || false;
+      config.value.pinyin_search = result.pinyin_search || true;
+      config.value.acronym_search = result.acronym_search || true;
+      config.value.global_floating_window = result.global_floating_window || true;
       // 只更新配置，但不会重置颜色模式 - 让App.vue的currentColorMode保持不变
       updateColorMode(result.color_mode);
       

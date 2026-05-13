@@ -53,8 +53,8 @@ pub fn init_db() -> Result<Connection> {
             last_group INTEGER DEFAULT 1,
             share_app TEXT DEFAULT '',
             grid_size INTEGER DEFAULT 4,
-            pinyin_search INTEGER DEFAULT 0,
-            acronym_search INTEGER DEFAULT 0,
+            pinyin_search INTEGER DEFAULT 1,
+            acronym_search INTEGER DEFAULT 1,
             global_floating_window INTEGER DEFAULT 1
         )",
         [],
@@ -68,7 +68,7 @@ pub fn init_db() -> Result<Connection> {
     ).unwrap_or(0) > 0;
     
     if !has_pinyin_search {
-        conn.execute("ALTER TABLE config ADD COLUMN pinyin_search INTEGER DEFAULT 0", [])?;
+        conn.execute("ALTER TABLE config ADD COLUMN pinyin_search INTEGER DEFAULT 1", [])?;
     }
     
     // 检查并添加 acronym_search 列（兼容旧数据库）
@@ -79,7 +79,7 @@ pub fn init_db() -> Result<Connection> {
     ).unwrap_or(0) > 0;
     
     if !has_acronym_search {
-        conn.execute("ALTER TABLE config ADD COLUMN acronym_search INTEGER DEFAULT 0", [])?;
+        conn.execute("ALTER TABLE config ADD COLUMN acronym_search INTEGER DEFAULT 1", [])?;
     }
     
     // 检查并添加 theme_style 列（兼容旧数据库）

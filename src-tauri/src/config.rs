@@ -57,8 +57,8 @@ pub fn get_config() -> Result<Config, String> {
                 last_group: 1,
                 share_app: String::new(),
                 grid_size: 4,
-                pinyin_search: false,
-                acronym_search: false,
+                pinyin_search: true,
+                acronym_search: true,
                 global_floating_window: true,
             })
         }

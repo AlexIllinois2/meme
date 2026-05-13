@@ -431,8 +431,8 @@ const isMenuPopupOpen = ref(false);
 const menuAnchor = ref<HTMLElement | { $el: HTMLElement } | null>(null);
 const showGroupActionMenu = ref(false);
 const currentEditingGroup = ref<Group | null>(null);
-const pinyinSearchEnabled = ref(false);
-const acronymSearchEnabled = ref(false);
+const pinyinSearchEnabled = ref(true);
+const acronymSearchEnabled = ref(true);
 // 预览功能已移除，相关变量保留以备后续需要
 // const isImagePreviewOpen = ref(false);
 // const previewImageIndex = ref(0);
@@ -880,8 +880,8 @@ async function loadConfig() {
       
       gridColumns.value = config.value.grid_size || 4;
       currentColorMode.value = config.value.color_mode as 'system' | 'light' | 'dark';
-      pinyinSearchEnabled.value = config.value.pinyin_search || false;
-      acronymSearchEnabled.value = config.value.acronym_search || false;
+      pinyinSearchEnabled.value = config.value.pinyin_search || true;
+      acronymSearchEnabled.value = config.value.acronym_search || true;
       
       // Android 平台：从原生服务同步悬浮窗实际状态，并在需要时自动启动服务
       if (/Android/i.test(navigator.userAgent)) {
@@ -900,11 +900,11 @@ async function loadConfig() {
           console.log('[Floating] Synced from native service:', nativeEnabled, 'config:', shouldBeEnabled);
         } catch (e) {
           // 如果无法获取原生状态，使用配置中的值
-          globalFloatingWindowEnabled.value = config.value.global_floating_window || false;
+          globalFloatingWindowEnabled.value = config.value.global_floating_window || true;
           console.warn('[Floating] Failed to get native status, using config value:', e);
         }
       } else {
-        globalFloatingWindowEnabled.value = config.value.global_floating_window || false;
+        globalFloatingWindowEnabled.value = config.value.global_floating_window || true;
       }
       
       // 加载自定义分享应用
@@ -1016,9 +1016,9 @@ async function setupInitialConfig() {
       last_group: 1,
       share_app: "",
       grid_size: 4,
-      pinyin_search: false,
-      acronym_search: false,
-      global_floating_window: false
+      pinyin_search: true,
+      acronym_search: true,
+      global_floating_window: true
     };
     config.value = newConfig;
     await safeUpdateConfig(config.value);
@@ -1039,9 +1039,9 @@ async function setupInitialConfig() {
       last_group: 1,
       share_app: "",
       grid_size: 4,
-      pinyin_search: false,
-      acronym_search: false,
-      global_floating_window: false
+      pinyin_search: true,
+      acronym_search: true,
+      global_floating_window: true
     };
     config.value = defaultConfig;
     await safeUpdateConfig(config.value);
@@ -2817,8 +2817,8 @@ async function handleImageMenuSelect(img: Image, action: string) {
     <div v-if="showFirstUseMask" class="first-use-popup" @click.stop="handleUserInteraction">
       <div class="first-use-popup-arrow"></div>
       <div class="first-use-popup-card">
-        <Icon name="arrow-up-circle" color="#fff" :size="22" />
-        <span>点击这里开始搜索</span>
+        <!-- <Icon name="arrow-up-circle" color="#fff" :size="22" /> -->
+        <span>Σ(っ °Д °;)っ!!! 你不要过来啊!!!</span>
       </div>
     </div>
   </ThemeProvider>
