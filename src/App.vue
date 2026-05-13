@@ -2748,7 +2748,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
               <div class="keywords-list">
                 <div v-if="customShareApps.length === 0" class="empty-state">
                   <Icon name="apps-2" :size="32" />
-                  <p>暂无自定义应用</p>
+                  <p>暂无应用</p>
                 </div>
                 
                 <div v-else class="keywords-chips">
@@ -3789,14 +3789,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
   background-color: var(--color-surface-variant);
   border-radius: 16px;
   margin: 20px 0;
-}
-.empty-state {
-  grid-column: 1 / -1;
-  text-align: center;
-  padding: 60px 20px;
-  background-color: var(--color-surface-variant);
-  border-radius: 16px;
-  margin: 20px 0;
+  color: var(--color-text-tertiary);
 }
 
 .edit-actions {
