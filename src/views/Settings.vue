@@ -125,6 +125,10 @@ async function goBack() {
   window.dispatchEvent(new CustomEvent('navigateHome'));
 }
 
+function goSupport() {
+  window.dispatchEvent(new CustomEvent('navigateToMenu', { detail: 'support' }));
+}
+
 function updateColorMode(mode: string) {
   const htmlElement = document.documentElement;
   
@@ -458,6 +462,15 @@ async function autoSaveConfig() {
           <Icon name="information" :size="24" />
           关于
         </h2>
+        
+        <div class="setting-row" @click="goSupport">
+          <Icon name="heart" :size="22" class="setting-icon" />
+          <div class="setting-label">
+            <label>支持一下</label>
+            <p class="setting-desc">请我吃包泡面</p>
+          </div>
+          <Icon name="chevron-right" :size="20" class="arrow-icon" />
+        </div>
         
         <div class="card about-card">
           <div class="about-content">

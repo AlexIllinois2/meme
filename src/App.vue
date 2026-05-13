@@ -8,6 +8,7 @@ import ModeManagement from "./views/ModeManagement.vue";
 import GroupManagement from "./views/GroupManagement.vue";
 import KeywordManagement from "./views/KeywordManagement.vue";
 import Settings from "./views/Settings.vue";
+import Support from "./views/Support.vue";
 import ContextMenu from "./components/ContextMenu.vue";
 import KeywordManager from "./components/KeywordManager.vue";
 import ThemeProvider from "./components/ThemeProvider.vue";
@@ -2804,6 +2805,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
       <GroupManagement v-else-if="activeMenu === 'group'" />
       <KeywordManagement v-else-if="activeMenu === 'keyword'" />
       <Settings v-else-if="activeMenu === 'settings'" />
+      <Support v-else-if="activeMenu === 'support'" />
       </main>
       
       <!-- 浮动搜索按钮 -->

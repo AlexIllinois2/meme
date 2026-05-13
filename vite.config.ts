@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 import compression from "vite-plugin-compression";
+import path from 'path'
 
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
@@ -14,6 +15,11 @@ export default defineConfig(async () => ({
       minRatio: 0.8,
     }),
   ],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),  // 👈 确保这行存在
+    },
+  },
   define: {
     __VUE_PROD_DEVTOOLS__: false,
     __DEV__: JSON.stringify(process.env.NODE_ENV !== 'production'),
