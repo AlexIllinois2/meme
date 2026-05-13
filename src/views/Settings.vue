@@ -390,6 +390,10 @@ function openPrivacyPolicy() {
   window.dispatchEvent(new CustomEvent('navigateToMenu', { detail: 'privacy-policy' }));
 }
 
+function openGitHubRepo() {
+  window.open('https://github.com/AlexIllinois2/meme_web', '_blank');
+}
+
 
 </script>
 
@@ -488,7 +492,16 @@ function openPrivacyPolicy() {
           </div>
           <Icon name="chevron-right" :size="20" class="arrow-icon" />
         </div>
-
+        
+        <div class="setting-row" @click="openGitHubRepo">
+          <Icon name="github" :size="22" class="setting-icon" />
+          <div class="setting-label">
+            <label>开源地址</label>
+            <p class="setting-desc">Web 版已开源r</p>
+          </div>
+          <Icon name="chevron-right" :size="20" class="arrow-icon" />
+        </div>
+        
         <div class="setting-row" @click="goSupport">
           <Icon name="heart" :size="22" class="setting-icon" />
           <div class="setting-label">
