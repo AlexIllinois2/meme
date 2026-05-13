@@ -162,6 +162,16 @@ class MainActivity : TauriActivity() {
     setupBackPressHandler()
     requestAllPermissions() // 请求所有需要的权限
     
+    // 注册 ShareResultReceiver（在 onCreate 中注册，不在 onStop 中注销，
+    // 确保 chooser 弹出后 Activity 进入后台时仍能接收分享结果）
+    val filter = IntentFilter(ACTION_SHARE_RESULT)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      registerReceiver(shareResultReceiver, filter, Context.RECEIVER_EXPORTED)
+    } else {
+      @Suppress("DEPRECATION")
+      registerReceiver(shareResultReceiver, filter)
+    }
+    
     // 检查启动 Intent
     handleIntent(intent)
   }
@@ -198,14 +208,6 @@ class MainActivity : TauriActivity() {
   override fun onStart() {
     super.onStart()
     Log.d(TAG, "onStart called, jsInterfaceInjected=$jsInterfaceInjected")
-    // 重新注册 BroadcastReceiver
-    val filter = IntentFilter(ACTION_SHARE_RESULT)
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-      registerReceiver(shareResultReceiver, filter, Context.RECEIVER_EXPORTED)
-    } else {
-      @Suppress("DEPRECATION")
-      registerReceiver(shareResultReceiver, filter)
-    }
     if (!jsInterfaceInjected) {
       injectJavaScriptInterface()
     }
@@ -310,7 +312,10 @@ class MainActivity : TauriActivity() {
   
   override fun onStop() {
     super.onStop()
-    // 注销 BroadcastReceiver
+  }
+
+  override fun onDestroy() {
+    super.onDestroy()
     try {
       unregisterReceiver(shareResultReceiver)
     } catch (e: Exception) {
@@ -854,6 +859,17 @@ class MainActivity : TauriActivity() {
     } catch (e: Exception) {
       Log.e(TAG, "Failed to sync custom apps", e)
     }
+  }
+
+  @JavascriptInterface
+  fun getCustomAppsFromPrefs(): String {
+    val prefs = getSharedPreferences("custom_share_apps_prefs", Context.MODE_PRIVATE)
+    val savedApps = prefs.getStringSet("apps", emptySet()) ?: emptySet()
+    val jsonArray = org.json.JSONArray()
+    for (app in savedApps) {
+      jsonArray.put(app)
+    }
+    return jsonArray.toString()
   }
 
   @JavascriptInterface

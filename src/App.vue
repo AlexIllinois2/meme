@@ -932,6 +932,24 @@ async function loadCustomApps() {
   try {
     customShareApps.value = await invoke<any[]>("get_custom_share_apps") || [];
     
+    // 从 SharedPreferences 同步到数据库（处理分享后未返回应用的情况）
+    if (isAndroidTauri() && typeof (window as any).AndroidNative?.getCustomAppsFromPrefs === 'function') {
+      const prefsJson = (window as any).AndroidNative.getCustomAppsFromPrefs();
+      if (prefsJson) {
+        const prefsPackages: string[] = JSON.parse(prefsJson);
+        for (const pkg of prefsPackages) {
+          if (pkg === 'com.tencent.mm' || pkg === 'com.tencent.mobileqq') continue;
+          const exists = customShareApps.value.some(app => app.package_name === pkg);
+          if (!exists) {
+            const appName = (window as any).AndroidNative.getApplicationName(pkg);
+            await invoke('add_custom_share_app', { packageName: pkg, appName: appName || pkg });
+            console.log('Synced from SharedPreferences to DB:', pkg, appName);
+          }
+        }
+        customShareApps.value = await invoke<any[]>("get_custom_share_apps") || [];
+      }
+    }
+    
     // 补全缺失的应用名（app_name 为空或等于包名时，从原生端获取真实应用名）
     if (isAndroidTauri() && typeof (window as any).AndroidNative?.getApplicationName === 'function') {
       let needsUpdate = false;
@@ -965,13 +983,16 @@ async function removeCustomApp(id: number) {
   try {
     await invoke("remove_custom_share_app", { id });
     Snackbar.success("已移除应用");
-    await loadCustomApps();
     
-    // 同步到 SharedPreferences
+    // 先同步到 SharedPreferences（必须在 loadCustomApps 之前，否则会被重新加回来）
     if (isAndroidTauri() && typeof (window as any).AndroidNative?.syncCustomAppsToPrefs === 'function') {
-      const packages = customShareApps.value.map(app => app.package_name);
+      const packages = customShareApps.value
+        .filter(app => app.id !== id)
+        .map(app => app.package_name);
       (window as any).AndroidNative.syncCustomAppsToPrefs(JSON.stringify(packages));
     }
+    
+    await loadCustomApps();
     
     // 如果历史应用被删完了，自动切回 "all"
     if (customShareApps.value.length === 0 && shareApp.value !== 'all') {
