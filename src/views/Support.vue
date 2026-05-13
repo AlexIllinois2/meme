@@ -188,13 +188,14 @@ onUnmounted(() => {
               </div>
 
               <div v-else-if="method.type === 'link'" class="link-section">
-                <div class="link-card" @click="openLink(method.url)">
+                <!-- <div class="link-card" @click="openLink(method.url)"> -->
+                <div class="link-card">
                   <Icon name="external-link" :size="48" />
-                  <h3>前往爱发电</h3>
-                  <p>{{ method.desc }}</p>
+                  <h3>爱发电</h3>
+                  <!-- <p>{{ method.desc }}</p>
                   <var-button type="primary" size="large" round>
                     立即支持
-                  </var-button>
+                  </var-button> -->
                 </div>
               </div>
             </div>
