@@ -201,7 +201,7 @@ class MainActivity : TauriActivity() {
     // 重新注册 BroadcastReceiver
     val filter = IntentFilter(ACTION_SHARE_RESULT)
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-      registerReceiver(shareResultReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+      registerReceiver(shareResultReceiver, filter, Context.RECEIVER_EXPORTED)
     } else {
       @Suppress("DEPRECATION")
       registerReceiver(shareResultReceiver, filter)
@@ -673,8 +673,8 @@ class MainActivity : TauriActivity() {
           val pendingIntent = PendingIntent.getBroadcast(
             this@MainActivity,
             0,
-            Intent(ACTION_SHARE_RESULT),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            Intent(ACTION_SHARE_RESULT).setPackage(packageName),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
           )
           
           // 使用 createChooser 并传入 PendingIntent
