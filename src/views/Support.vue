@@ -135,11 +135,21 @@ onUnmounted(() => {
     <div class="content">
       <div class="support-header">
         <!-- <div class="heart-icon">❤️</div> -->
-        <h2>为什么支持我?</h2>
-        <p>上一世, 我遭人背叛、含恨而终😭，<br>
-          老天让我重活一世，这一世😄,<br>
-          我定要卷土重来、报仇雪恨😠。<br>
-          v我5块，聆听我的复仇计划🥺。</p>
+        <h2>我叫红云</h2>
+        <p>
+          道祖鸿钧, 大会讲道<br>
+          西方二道, 接引准提<br>
+          道德绑架, 抢我蒲团<br>
+          妖师鲲鹏, 同遭绑架<br>
+          本末倒置, 迁怒于我<br>
+          设计偷袭, 大意没闪<br>
+          挚友未至, 含恨而终<br>
+          <br>
+          天不亡我, 又是一世<br>
+          格物致知, 悟道赛博<br>
+          证道在即, 将赴洪荒<br>
+          v我5块, 带你飞！<br>
+        </p>
       </div>
 
       <div class="payment-section">
