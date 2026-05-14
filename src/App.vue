@@ -255,9 +255,14 @@ function handleAndroidBack(event: any) {
     }
   }
   
-  // 7. 从设置页面返回首页
+  // 7. 从设置子页面返回设置页，从其他页面返回首页
   if (activeMenu.value !== 'home') {
-    activeMenu.value = 'home';
+    const settingsSubPages = ['user-agreement', 'privacy-policy', 'support'];
+    if (settingsSubPages.includes(activeMenu.value)) {
+      activeMenu.value = 'settings';
+    } else {
+      activeMenu.value = 'home';
+    }
     event.preventDefault?.();
     return true;
   }

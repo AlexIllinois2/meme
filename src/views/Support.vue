@@ -42,7 +42,7 @@ const paymentMethods = [
 ];
 
 function goBack() {
-  window.dispatchEvent(new CustomEvent('navigateHome'));
+  window.dispatchEvent(new CustomEvent('navigateToMenu', { detail: 'settings' }));
 }
 
 // function openLink(url: string) {
@@ -91,18 +91,10 @@ const isAndroidTauri = () => {
   return /Android/i.test(navigator.userAgent);
 };
 
-function handleAndroidBack(event: any) {
-  goBack();
-  event.preventDefault?.();
-  return true;
-}
-
 let unlistenSaveImage: (() => void) | null = null;
 
 onMounted(async () => {
   if (isAndroidTauri()) {
-    window.addEventListener('tauri-android-back', handleAndroidBack);
-
     unlistenSaveImage = await listen<{ path: string; displayName: string }>('saveImageToGallery', (event) => {
       const win = window as any;
       if (win.AndroidNative && win.AndroidNative.saveImageToGallery) {
@@ -114,7 +106,6 @@ onMounted(async () => {
 
 onUnmounted(() => {
   if (isAndroidTauri()) {
-    window.removeEventListener('tauri-android-back', handleAndroidBack);
     if (unlistenSaveImage) {
       unlistenSaveImage();
     }

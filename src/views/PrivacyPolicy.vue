@@ -2,7 +2,7 @@
 import Icon from "../components/Icon.vue";
 
 function goBack() {
-  window.dispatchEvent(new CustomEvent('navigateHome'));
+  window.dispatchEvent(new CustomEvent('navigateToMenu', { detail: 'settings' }));
 }
 </script>
 
@@ -105,7 +105,7 @@ function goBack() {
         </div>
         
         <div class="last-updated">
-          <p>最后更新日期：2026年5月13日</p>
+          <p>最后更新日期：2026年5月14日</p>
         </div>
       </div>
     </div>

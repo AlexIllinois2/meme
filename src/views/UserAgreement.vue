@@ -2,7 +2,7 @@
 import Icon from "../components/Icon.vue";
 
 function goBack() {
-  window.dispatchEvent(new CustomEvent('navigateHome'));
+  window.dispatchEvent(new CustomEvent('navigateToMenu', { detail: 'settings' }));
 }
 </script>
 
@@ -22,7 +22,7 @@ function goBack() {
         
         <div class="section">
           <h2>一、定义</h2>
-          <p>1.1 "本服务"：指由开发者提供的表情包管理工具，包括Web版本（开源）和Tauri版本（闭源）。</p>
+          <p>1.1 "本服务"：指由开发者提供的咪萌(表情包管理工具)，包括Web版本（开源）和Tauri版本（闭源）。</p>
           <p>1.2 "用户"：指安装、使用本服务的自然人、法人或其他组织。</p>
           <p>1.3 "内容"：指用户通过本服务上传、存储、管理的表情包图片及相关数据。</p>
         </div>
@@ -109,7 +109,7 @@ function goBack() {
         </div>
         
         <div class="last-updated">
-          <p>最后更新日期：2026年5月13日</p>
+          <p>最后更新日期：2026年5月14日</p>
         </div>
       </div>
     </div>
