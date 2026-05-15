@@ -242,7 +242,7 @@ class FloatingWindowService : Service() {
         val context = this
         
         // 主题色 - 浅蓝色 (与主页主题一致)
-        val themeColor = 0x994A90E2.toInt() // 半透明浅蓝色 (60% 不透明度)
+        val themeColor = 0x997DD3FC.toInt() // 半透明天蓝色 (与主题色一致)
         
         floatingView = android.widget.FrameLayout(context).apply {
             // 设置圆形背景 - 无白色边框
