@@ -2046,6 +2046,12 @@ async function handleModeMenuSelect(mode: Mode, action: string) {
         await invoke('delete_mode', { modeId: mode.id });
         Snackbar.success('模式已删除');
         await loadModes();
+        if (selectedModeId.value) {
+          await loadGroups(selectedModeId.value);
+        }
+        if (selectedGroupId.value) {
+          await loadImages(selectedGroupId.value);
+        }
       } catch (error) {
         console.error('Failed to delete mode:', error);
         Snackbar.error('删除模式失败');

@@ -1,7 +1,7 @@
 use rusqlite::params;
 use std::path::PathBuf;
 use std::fs;
-use crate::{db::init_db, models::Mode, trash::move_to_trash};
+use crate::{db::init_db, models::Mode};
 
 /// 非法文件名字符
 const INVALID_CHARS: &[char] = &['/', '\\', ':', '*', '?', '"', '<', '>', '|'];
@@ -198,9 +198,13 @@ fn delete_mode_internal(conn: &rusqlite::Connection, mode_id: i32) -> Result<(),
         |row| row.get(0)
     ).map_err(|e| e.to_string())?;
     
-    // 1. 先移动文件夹到回收站（文件优先）
+    // 1. 先删除文件夹（文件优先）
     if !folder_path.is_empty() {
-        let _ = move_to_trash(&folder_path);
+        let path = std::path::Path::new(&folder_path);
+        if path.exists() {
+            fs::remove_dir_all(path)
+                .map_err(|e| format!("删除模式文件夹失败 {}: {}", folder_path, e))?;
+        }
     }
     
     // 2. 删除数据库记录

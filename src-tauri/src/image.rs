@@ -363,8 +363,17 @@ pub fn delete_images(image_ids: Vec<i32>) -> Result<(), String> {
 			|row| Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?))
 		) {
 			let image_path = meme_fs::resolve_meme_path(&meme_dir, &raw_path);
-			let _ = std::fs::remove_file(&image_path);
-			if let Some(thumb) = thumb_path { let _ = std::fs::remove_file(&thumb); }
+			if image_path.exists() {
+				std::fs::remove_file(&image_path)
+					.map_err(|e| format!("删除图片文件失败 {}: {}", image_path.display(), e))?;
+			}
+			if let Some(thumb) = thumb_path {
+				let thumb_path = std::path::Path::new(&thumb);
+				if thumb_path.exists() {
+					std::fs::remove_file(thumb_path)
+						.map_err(|e| format!("删除缩略图失败 {}: {}", thumb, e))?;
+				}
+			}
 		}
 		conn.execute("DELETE FROM images WHERE id = ?", params![image_id]).map_err(|e| e.to_string())?;
 	}

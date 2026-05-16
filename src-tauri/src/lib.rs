@@ -9,7 +9,6 @@ mod mode;
 mod group;
 mod keyword;
 mod image;
-mod trash;
 mod custom_share;
 mod meme_fs;
 mod save_image;

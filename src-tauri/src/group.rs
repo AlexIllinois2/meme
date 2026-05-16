@@ -1,7 +1,7 @@
 use rusqlite::params;
 use std::path::PathBuf;
 use std::fs;
-use crate::{db::init_db, models::Group, trash::move_to_trash};
+use crate::{db::init_db, models::Group};
 use crate::keyword::{convert_to_pinyin, convert_to_acronym};
 
 /// 非法文件名字符
@@ -273,26 +273,29 @@ pub fn update_group(id: i32, name: String, mode_id: i32) -> Result<(), String> {
 
 /// 内部函数：删除单个分组
 fn delete_group_internal(conn: &rusqlite::Connection, group_id: i32) -> Result<(), String> {
-    // 获取分组信息（用于删除文件夹）
     let folder_path: String = conn.query_row(
         "SELECT folder_path FROM groups WHERE id = ?",
         params![group_id],
         |row| row.get(0)
     ).map_err(|e| e.to_string())?;
-    
-    // 1. 先移动文件夹到回收站（文件优先）
+
     if !folder_path.is_empty() {
-        let _ = move_to_trash(&folder_path);
+        let path = std::path::Path::new(&folder_path);
+        if path.exists() {
+            fs::remove_dir_all(path)
+                .map_err(|e| format!("删除分组文件夹失败 {}: {}", folder_path, e))?;
+        }
     }
-    
-    // 2. 删除关键词关联
+
+    conn.execute("DELETE FROM images WHERE group_id = ?", params![group_id])
+        .map_err(|e| e.to_string())?;
+
     conn.execute("DELETE FROM keyword_group_links WHERE group_id = ?", params![group_id])
         .map_err(|e| e.to_string())?;
-    
-    // 3. 删除分组
+
     conn.execute("DELETE FROM groups WHERE id = ?", params![group_id])
         .map_err(|e| e.to_string())?;
-    
+
     Ok(())
 }
 
