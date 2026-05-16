@@ -22,10 +22,12 @@ const config = ref<Config>({
 });
 
 const isSaving = ref(false);
-const appVersion = ref('0.0.0'); // ✅ 改为响应式变量
+const appVersion = ref('0.0.0');
 const showFolderPicker = ref(false);
 const showColorModePopup = ref(false);
 const showThemePopup = ref(false);
+const autoSendEnabled = ref(false);
+const accessibilityServiceEnabled = ref(false);
 
 const colorModeOptions: { value: 'system' | 'light' | 'dark'; label: string }[] = [
   { value: 'system', label: '系统' },
@@ -65,6 +67,9 @@ onMounted(async () => {
   } catch (error) {
     console.error('Failed to get version:', error);
   }
+  
+  // 检查无障碍服务状态
+  await checkAccessibilityStatus();
   
   // Android 返回键监听
   if (isAndroidTauri()) {
@@ -184,6 +189,50 @@ async function toggleGlobalFloatingWindow(enabled: boolean) {
         (window as any).AndroidNative.stopFloatingWindow();
       }
     }
+  }
+}
+
+async function checkAccessibilityStatus() {
+  if (!isAndroidTauri()) return
+  try {
+    const native = (window as any).AndroidNative
+    if (typeof native?.isAccessibilityServiceEnabled === 'function') {
+      accessibilityServiceEnabled.value = native.isAccessibilityServiceEnabled()
+    }
+    if (typeof native?.isAutoSendEnabled === 'function') {
+      autoSendEnabled.value = native.isAutoSendEnabled()
+    }
+  } catch (e) {
+    console.warn('Failed to check accessibility status:', e)
+  }
+}
+
+async function toggleAutoSend(enabled: boolean) {
+  autoSendEnabled.value = enabled
+  if (!isAndroidTauri()) return
+
+  const native = (window as any).AndroidNative
+  if (typeof native?.setAutoSendEnabled === 'function') {
+    native.setAutoSendEnabled(enabled)
+  }
+
+  if (enabled && !accessibilityServiceEnabled.value) {
+    if (typeof native?.openAccessibilitySettings === 'function') {
+      native.openAccessibilitySettings()
+    }
+    Snackbar.info('请开启无障碍服务以启用自动发送')
+  } else if (enabled) {
+    Snackbar.success('自动发送已开启')
+  } else {
+    Snackbar.info('自动发送已关闭')
+  }
+}
+
+function openAccessibilitySettings() {
+  if (!isAndroidTauri()) return
+  const native = (window as any).AndroidNative
+  if (typeof native?.openAccessibilitySettings === 'function') {
+    native.openAccessibilitySettings()
   }
 }
 
@@ -441,6 +490,34 @@ function openGitHubRepo() {
           </div>
           <div class="setting-control">
             <var-switch v-model="config.global_floating_window" @change="toggleGlobalFloatingWindow" />
+          </div>
+        </div>
+        
+        <!-- 自动发送开关 - 仅 Android 显示 -->
+        <div class="setting-row" v-if="isAndroidTauri()">
+          <div class="setting-label">
+            <label>自动发送</label>
+            <p class="setting-desc">分享图片到微信/QQ后自动点击发送按钮</p>
+            <p class="setting-hint" v-if="autoSendEnabled && !accessibilityServiceEnabled">
+              需要开启无障碍服务才能生效
+            </p>
+          </div>
+          <div class="setting-control">
+            <var-switch v-model="autoSendEnabled" @change="toggleAutoSend" />
+          </div>
+        </div>
+        
+        <!-- 无障碍服务状态 - 仅 Android 且自动发送开启时显示 -->
+        <div class="setting-row" v-if="isAndroidTauri() && autoSendEnabled" @click="openAccessibilitySettings">
+          <div class="setting-label">
+            <label>无障碍服务</label>
+            <p class="setting-desc">
+              <span v-if="accessibilityServiceEnabled" style="color: var(--color-success)">已开启</span>
+              <span v-else style="color: var(--color-warning)">未开启 - 点击前往设置</span>
+            </p>
+          </div>
+          <div class="setting-control">
+            <Icon name="chevron-right" :size="20" class="arrow-icon" />
           </div>
         </div>
         

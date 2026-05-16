@@ -22,6 +22,8 @@ import android.webkit.JavascriptInterface
 import android.view.ViewGroup
 import android.widget.Toast
 import android.util.Log
+import android.accessibilityservice.AccessibilityServiceInfo
+import android.view.accessibility.AccessibilityManager
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
@@ -966,6 +968,43 @@ class MainActivity : TauriActivity() {
       file.delete()
     } catch (e: Exception) {
       Log.e(TAG, "Failed to save image to gallery", e)
+    }
+  }
+
+  @JavascriptInterface
+  fun isAutoSendEnabled(): Boolean {
+    return AutoSendAccessibilityService.isEnabled(this)
+  }
+
+  @JavascriptInterface
+  fun setAutoSendEnabled(enabled: Boolean) {
+    Log.d(TAG, "setAutoSendEnabled: $enabled")
+    AutoSendAccessibilityService.setEnabled(this, enabled)
+  }
+
+  @JavascriptInterface
+  fun isAccessibilityServiceEnabled(): Boolean {
+    val am = getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
+    val enabledServices = am.getEnabledAccessibilityServiceList(
+      AccessibilityServiceInfo.FEEDBACK_ALL_MASK
+    )
+    for (service in enabledServices) {
+      if (service.resolveInfo.serviceInfo.packageName == packageName &&
+          service.resolveInfo.serviceInfo.name == AutoSendAccessibilityService::class.java.name) {
+        return true
+      }
+    }
+    return false
+  }
+
+  @JavascriptInterface
+  fun openAccessibilitySettings() {
+    Log.d(TAG, "openAccessibilitySettings called")
+    runOnUiThread {
+      val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+      intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      startActivity(intent)
+      Toast.makeText(this, "请在无障碍设置中找到「咪萌」并开启服务", Toast.LENGTH_LONG).show()
     }
   }
 
