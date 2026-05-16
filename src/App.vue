@@ -371,7 +371,7 @@ const newModeSortOrder = ref(1);
 // 显示新增模式弹窗
 function showAddModeDialog() {
   newModeName.value = '';
-  newModeSortOrder.value = modes.value.length + 1;
+  newModeSortOrder.value = Math.max(...modes.value.map(m => m.sort_order), 0) + 1;
   showAddModePopup.value = true;
 }
 
@@ -383,11 +383,25 @@ async function submitAddMode() {
     return;
   }
   
+  // 校验排序号：必须为正整数
+  const sortOrder = Math.floor(newModeSortOrder.value);
+  if (!Number.isFinite(sortOrder) || sortOrder < 1) {
+    Snackbar.warning('排序序号必须为正整数');
+    return;
+  }
+  newModeSortOrder.value = sortOrder;
+  
   // 检查是否已存在同名模式
   const existingMode = modes.value.find(m => m.name === trimmedName);
   if (existingMode) {
     Snackbar.error('已存在同名模式');
     return;
+  }
+  
+  // 检查是否与其他模式排序号冲突（仅警告，不阻止）
+  const conflictingMode = modes.value.find(m => m.sort_order === sortOrder && m.name !== 'phantom');
+  if (conflictingMode) {
+    Snackbar.warning(`排序序号 ${sortOrder} 已存在（${conflictingMode.name}），多个模式可使用相同序号`);
   }
   
   try {
@@ -2024,9 +2038,11 @@ async function handleModeMenuSelect(mode: Mode, action: string) {
   switch (action) {
     case 'rename':
       editingModeName.value = mode.name;
+      editingModeSortOrder.value = mode.sort_order;
       showModeEditPopup.value = true;
       break;
     case 'sort':
+      editingModeName.value = mode.name;
       editingModeSortOrder.value = mode.sort_order;
       showModeEditPopup.value = true;
       break;
@@ -2072,6 +2088,14 @@ async function submitModeEdit() {
     Snackbar.warning('模式名称不能为空');
     return;
   }
+  
+  // 校验排序号：必须为正整数
+  const sortOrder = Math.floor(editingModeSortOrder.value);
+  if (!Number.isFinite(sortOrder) || sortOrder < 1) {
+    Snackbar.warning('排序序号必须为正整数');
+    return;
+  }
+  editingModeSortOrder.value = sortOrder;
   
   try {
     await invoke('update_mode', {
@@ -2736,6 +2760,14 @@ async function handleImageMenuSelect(img: Image, action: string) {
                 placeholder="请输入模式名称"
                 class="edit-input"
                 @keydown.enter="submitAddMode"
+              />
+              <var-input
+                :model-value="String(newModeSortOrder)"
+                label="排序序号"
+                type="number"
+                placeholder="请输入排序序号"
+                class="edit-input"
+                @update:model-value="(val: string) => newModeSortOrder = Number(val)"
               />
               <div class="edit-popup-actions">
                 <var-button type="primary" block @click="submitAddMode">创建</var-button>

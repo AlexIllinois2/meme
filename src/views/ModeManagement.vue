@@ -81,7 +81,7 @@ function handleAndroidBack(event: any) {
 
 function startAddMode() {
   newModeName.value = '';
-  newModeSortOrder.value = modes.value.length + 1;
+  newModeSortOrder.value = Math.max(...modes.value.map(m => m.sort_order), 0) + 1;
   showAddPopup.value = true;
 }
 
@@ -97,11 +97,25 @@ async function submitAddMode() {
     return;
   }
   
+  // 校验排序号：必须为正整数
+  const sortOrder = Math.floor(newModeSortOrder.value);
+  if (!Number.isFinite(sortOrder) || sortOrder < 1) {
+    Snackbar.warning('排序序号必须为正整数');
+    return;
+  }
+  newModeSortOrder.value = sortOrder;
+  
   // 检查是否已存在同名模式
   const existingMode = modes.value.find(m => m.name === trimmedName);
   if (existingMode) {
     Snackbar.error('已存在同名模式');
     return;
+  }
+  
+  // 检查是否与其他模式排序号冲突（仅警告，不阻止）
+  const conflictingMode = modes.value.find(m => m.sort_order === sortOrder && m.name !== 'phantom');
+  if (conflictingMode) {
+    Snackbar.warning(`排序序号 ${sortOrder} 已存在（${conflictingMode.name}），多个模式可使用相同序号`);
   }
   
   try {
@@ -138,6 +152,14 @@ async function submitEditMode() {
     Snackbar.warning('模式名称不能为空');
     return;
   }
+  
+  // 校验排序号：必须为正整数
+  const sortOrder = Math.floor(editModeSortOrder.value);
+  if (!Number.isFinite(sortOrder) || sortOrder < 1) {
+    Snackbar.warning('排序序号必须为正整数');
+    return;
+  }
+  editModeSortOrder.value = sortOrder;
   
   // 检查是否与其他模式重名
   const existingMode = modes.value.find(m => 
