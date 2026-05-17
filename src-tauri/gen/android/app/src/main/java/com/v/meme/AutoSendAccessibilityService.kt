@@ -157,16 +157,34 @@ class AutoSendAccessibilityService : AccessibilityService() {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
                 val eventClassName = event.className?.toString() ?: ""
                 Log.d(TAG, "Event window state changed: $eventClassName, package: $packageName")
-                if (eventClassName.contains("Dialog") || eventClassName.contains("BottomSheet") ||
-                    eventClassName.contains("Popup")) {
+
+                val isDialogEvent = eventClassName.contains("Dialog") ||
+                    eventClassName.contains("BottomSheet") || eventClassName.contains("Popup")
+
+                val isWechatShareActivity = packageName == WECHAT_PACKAGE && (
+                    eventClassName.contains("ShareImgUI") ||
+                    eventClassName.contains("MsgRetransmitUI") ||
+                    eventClassName.contains("MvvmContactListUI") ||
+                    eventClassName.contains("HalfScreenTransparentActivity")
+                )
+
+                val isWechatMainChat = packageName == WECHAT_PACKAGE &&
+                    eventClassName.contains("LauncherUI")
+
+                if (isDialogEvent || isWechatShareActivity) {
                     if (!inDialogContext) {
                         inDialogContext = true
-                        Log.d(TAG, "inDialogContext set to true (dialog detected)")
+                        Log.d(TAG, "inDialogContext set to true")
                     }
-                } else {
+                } else if (isWechatMainChat) {
                     if (inDialogContext) {
                         inDialogContext = false
-                        Log.d(TAG, "inDialogContext set to false (dialog dismissed)")
+                        Log.d(TAG, "inDialogContext set to false (main chat)")
+                    }
+                } else if (packageName == QQ_PACKAGE && !isDialogEvent) {
+                    if (inDialogContext) {
+                        inDialogContext = false
+                        Log.d(TAG, "inDialogContext set to false")
                     }
                 }
             }
