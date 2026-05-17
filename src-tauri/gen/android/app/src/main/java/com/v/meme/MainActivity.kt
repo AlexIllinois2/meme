@@ -1008,6 +1008,23 @@ class MainActivity : TauriActivity() {
     }
   }
 
+  @JavascriptInterface
+  fun isSendFlowActive(): Boolean {
+    return AutoSendAccessibilityService.sendFlowActive
+  }
+
+  @JavascriptInterface
+  fun activateSendFlow() {
+    Log.d(TAG, "activateSendFlow called from JS")
+    AutoSendAccessibilityService.activateSendFlow()
+  }
+
+  @JavascriptInterface
+  fun deactivateSendFlow() {
+    Log.d(TAG, "deactivateSendFlow called from JS")
+    AutoSendAccessibilityService.deactivateSendFlow()
+  }
+
   private fun startFloatingWindowService() {
     Log.d(TAG, "Starting floating window service")
     val intent = Intent(this, FloatingWindowService::class.java)

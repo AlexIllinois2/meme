@@ -13,6 +13,13 @@ declare global {
       getApplicationName: (packageName: string) => string;
       requestAllPermissionsFromJS: () => void;
       resetPermissionDialogFlag: () => void;
+      isAutoSendEnabled: () => boolean;
+      setAutoSendEnabled: (enabled: boolean) => void;
+      isAccessibilityServiceEnabled: () => boolean;
+      openAccessibilitySettings: () => void;
+      isSendFlowActive: () => boolean;
+      activateSendFlow: () => void;
+      deactivateSendFlow: () => void;
     };
     triggerSearchFocus: () => void;
   }

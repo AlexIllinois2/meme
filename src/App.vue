@@ -184,6 +184,14 @@ function exitGlobalEditMode() {
 
 // Android 返回键处理
 function handleAndroidBack(event: any) {
+  // 0. 若自动发送流程进行中，按返回键即终止
+  if (isAndroidTauri()) {
+    const native = (window as any).AndroidNative;
+    if (native && native.deactivateSendFlow) {
+      native.deactivateSendFlow();
+    }
+  }
+
   // 1. 关闭所有弹窗（优先级从高到低）
   if (showCustomAppsPopup.value) {
     showCustomAppsPopup.value = false;
@@ -2242,6 +2250,10 @@ async function shareImageToApp(img: Image) {
       
       if (androidNative && androidNative.shareImageToApp) {
         console.log(`[Android] 调用原生分享接口:`, imagePath, targetApp);
+        // 激活自动发送流程：用户已点击图片，准备打开系统分享
+        if (androidNative.activateSendFlow) {
+          androidNative.activateSendFlow();
+        }
         androidNative.shareImageToApp(imagePath, targetApp);
         await invoke("share_image", { imageId: img.id });
         
