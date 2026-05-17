@@ -36,6 +36,10 @@ class AutoSendAccessibilityService : AccessibilityService() {
         var sendFlowActive = false
             private set
 
+        @Volatile
+        var inDialogContext = false
+            private set
+
         private var flowTimeoutHandler: Handler? = null
         private var flowTimeoutRunnable: Runnable? = null
 
@@ -59,6 +63,7 @@ class AutoSendAccessibilityService : AccessibilityService() {
 
         fun deactivateSendFlow() {
             sendFlowActive = false
+            inDialogContext = false
             Log.d(TAG, "deactivateSendFlow called, sendFlowActive = false")
             cancelFlowTimeout()
         }
@@ -71,6 +76,7 @@ class AutoSendAccessibilityService : AccessibilityService() {
             flowTimeoutRunnable = Runnable {
                 Log.d(TAG, "Send flow timeout (30s), deactivating")
                 sendFlowActive = false
+                inDialogContext = false
             }
             flowTimeoutHandler?.postDelayed(flowTimeoutRunnable!!, SEND_FLOW_TIMEOUT_MS)
         }
@@ -151,6 +157,18 @@ class AutoSendAccessibilityService : AccessibilityService() {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
                 val eventClassName = event.className?.toString() ?: ""
                 Log.d(TAG, "Event window state changed: $eventClassName, package: $packageName")
+                if (eventClassName.contains("Dialog") || eventClassName.contains("BottomSheet") ||
+                    eventClassName.contains("Popup")) {
+                    if (!inDialogContext) {
+                        inDialogContext = true
+                        Log.d(TAG, "inDialogContext set to true (dialog detected)")
+                    }
+                } else {
+                    if (inDialogContext) {
+                        inDialogContext = false
+                        Log.d(TAG, "inDialogContext set to false (dialog dismissed)")
+                    }
+                }
             }
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
                 Log.d(TAG, "Event content changed: ${event.className}")
@@ -159,6 +177,11 @@ class AutoSendAccessibilityService : AccessibilityService() {
     }
 
     private fun findAndClickSendButton(): Boolean {
+        if (!inDialogContext) {
+            Log.d(TAG, "Not in dialog context, skipping send button search")
+            return false
+        }
+
         val root = rootInActiveWindow
         if (root == null) {
             Log.d(TAG, "rootInActiveWindow is null, cannot search")
@@ -258,6 +281,7 @@ class AutoSendAccessibilityService : AccessibilityService() {
         super.onDestroy()
         isRunning = false
         sendFlowActive = false
+        inDialogContext = false
         cancelFlowTimeout()
         handler?.removeCallbacksAndMessages(null)
         handler = null
