@@ -40,6 +40,10 @@ class AutoSendAccessibilityService : AccessibilityService() {
         var inDialogContext = false
             private set
 
+        @Volatile
+        private var lastTargetWindowEvent = 0L
+        private const val STALE_EVENT_TIMEOUT_MS = 1500L
+
         private var flowTimeoutHandler: Handler? = null
         private var flowTimeoutRunnable: Runnable? = null
 
@@ -64,6 +68,7 @@ class AutoSendAccessibilityService : AccessibilityService() {
         fun deactivateSendFlow() {
             sendFlowActive = false
             inDialogContext = false
+            lastTargetWindowEvent = 0L
             Log.d(TAG, "deactivateSendFlow called, sendFlowActive = false")
             cancelFlowTimeout()
         }
@@ -77,6 +82,7 @@ class AutoSendAccessibilityService : AccessibilityService() {
                 Log.d(TAG, "Send flow timeout (30s), deactivating")
                 sendFlowActive = false
                 inDialogContext = false
+                lastTargetWindowEvent = 0L
             }
             flowTimeoutHandler?.postDelayed(flowTimeoutRunnable!!, SEND_FLOW_TIMEOUT_MS)
         }
@@ -158,6 +164,8 @@ class AutoSendAccessibilityService : AccessibilityService() {
                 val eventClassName = event.className?.toString() ?: ""
                 Log.d(TAG, "Event window state changed: $eventClassName, package: $packageName")
 
+                lastTargetWindowEvent = now
+
                 val isDialogEvent = eventClassName.contains("Dialog") ||
                     eventClassName.contains("BottomSheet") || eventClassName.contains("Popup")
 
@@ -197,6 +205,12 @@ class AutoSendAccessibilityService : AccessibilityService() {
     private fun findAndClickSendButton(): Boolean {
         if (!inDialogContext) {
             Log.d(TAG, "Not in dialog context, skipping send button search")
+            return false
+        }
+
+        if (System.currentTimeMillis() - lastTargetWindowEvent > STALE_EVENT_TIMEOUT_MS) {
+            Log.d(TAG, "No window events from target app for ${STALE_EVENT_TIMEOUT_MS}ms, treating context as stale, clearing inDialogContext")
+            inDialogContext = false
             return false
         }
 
@@ -300,6 +314,7 @@ class AutoSendAccessibilityService : AccessibilityService() {
         isRunning = false
         sendFlowActive = false
         inDialogContext = false
+        lastTargetWindowEvent = 0L
         cancelFlowTimeout()
         handler?.removeCallbacksAndMessages(null)
         handler = null
