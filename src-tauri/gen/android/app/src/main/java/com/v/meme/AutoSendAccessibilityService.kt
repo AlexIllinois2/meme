@@ -204,8 +204,10 @@ class AutoSendAccessibilityService : AccessibilityService() {
 
     private fun findAndClickSendButton(): Boolean {
         if (!inDialogContext) {
-            Log.d(TAG, "Not in dialog context, skipping send button search")
-            return false
+            if (!checkDialogFromEventFallback()) {
+                Log.d(TAG, "Not in dialog context, skipping send button search")
+                return false
+            }
         }
 
         if (System.currentTimeMillis() - lastTargetWindowEvent > STALE_EVENT_TIMEOUT_MS) {
@@ -226,6 +228,12 @@ class AutoSendAccessibilityService : AccessibilityService() {
 
             val sendButton = findSendButtonInTree(root)
             if (sendButton != null) {
+                val hasCancel = hasButtonWithTextInTree(root, "取消")
+                if (!hasCancel) {
+                    Log.d(TAG, "Found send button but no '取消' in tree, likely main chat, NOT clicking")
+                    sendButton.recycle()
+                    return false
+                }
                 lastProcessedTime = System.currentTimeMillis()
                 Log.d(TAG, "Found send button, performing click")
                 sendButton.performAction(AccessibilityNodeInfo.ACTION_CLICK)
@@ -241,6 +249,81 @@ class AutoSendAccessibilityService : AccessibilityService() {
         } finally {
             try { root.recycle() } catch (e: Exception) { Log.e(TAG, "Error recycling root: ${e.message}") }
         }
+    }
+
+    private fun checkDialogFromEventFallback(): Boolean {
+        val root = rootInActiveWindow ?: return false
+        try {
+            val hasCancel = hasButtonWithTextInTree(root, "取消")
+            val hasSend = hasButtonWithTextInTree(root, "发送")
+
+            if (hasCancel && hasSend) {
+                Log.d(TAG, "Fallback: tree has both '取消' and '发送', in share dialog context")
+                inDialogContext = true
+                return true
+            }
+
+            val hasDialogLike = hasDialogContainerInTree(root)
+            if (hasDialogLike) {
+                Log.d(TAG, "Fallback: tree contains dialog-like container, setting inDialogContext=true")
+                inDialogContext = true
+                return true
+            }
+
+            Log.d(TAG, "Fallback: no share dialog indicators found")
+            return false
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception in checkDialogFromEventFallback: ${e.message}")
+            return false
+        } finally {
+            try { root.recycle() } catch (e: Exception) { Log.e(TAG, "Error recycling root: ${e.message}") }
+        }
+    }
+
+    private fun hasButtonWithTextInTree(node: AccessibilityNodeInfo, targetText: String): Boolean {
+        try {
+            if (node.isVisibleToUser) {
+                val text = node.text?.toString()?.trim()
+                val contentDesc = node.contentDescription?.toString()?.trim()
+                if (text == targetText || contentDesc == targetText) {
+                    return true
+                }
+            }
+            for (i in 0 until node.childCount) {
+                val child = node.getChild(i) ?: continue
+                val result = hasButtonWithTextInTree(child, targetText)
+                if (result) {
+                    child.recycle()
+                    return true
+                }
+                child.recycle()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception in hasButtonWithTextInTree: ${e.message}")
+        }
+        return false
+    }
+
+    private fun hasDialogContainerInTree(node: AccessibilityNodeInfo): Boolean {
+        try {
+            val className = node.className?.toString() ?: ""
+            if (node.isVisibleToUser && (className.contains("Dialog") ||
+                    className.contains("BottomSheet") || className.contains("Popup"))) {
+                return true
+            }
+            for (i in 0 until node.childCount) {
+                val child = node.getChild(i) ?: continue
+                val result = hasDialogContainerInTree(child)
+                if (result) {
+                    child.recycle()
+                    return true
+                }
+                child.recycle()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception in hasDialogContainerInTree: ${e.message}")
+        }
+        return false
     }
 
     private fun findSendButtonInTree(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
