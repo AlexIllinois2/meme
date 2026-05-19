@@ -932,6 +932,7 @@ async function loadConfig() {
     const result = await invoke<Config>("get_config");
     if (result && result.meme_dir) {
       config.value = result;
+      await invoke<string>("full_refresh", { memeDir: config.value.meme_dir });
       selectedModeId.value = config.value.last_mode || null;
       selectedGroupId.value = config.value.last_group || null;
       

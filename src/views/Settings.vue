@@ -299,12 +299,12 @@ async function selectMemeDir() {
           
           config.value.meme_dir = selectedPath;
           await autoSaveConfig();
-          Snackbar.info('正在初始化数据...');
-          
+
+          // Snackbar.info('正在初始化数据...');
           // 执行全量刷新
           try {
-            const result = await invoke<string>("full_refresh", { memeDir: selectedPath });
-            console.log('[Settings] Auto refresh result:', result);
+            // const result = await invoke<string>("full_refresh", { memeDir: selectedPath });
+            // console.log('[Settings] Auto refresh result:', result);
             
             // 保存当前状态用于重启后恢复
             const savedPage = localStorage.getItem('meme_active_page') || 'home';
@@ -312,7 +312,7 @@ async function selectMemeDir() {
               page: savedPage,
             }));
             
-            Snackbar.success('数据初始化完成，应用将重启...');
+            Snackbar.success('目录已更新，应用将重启...');
             // 延迟重启，让 snackbar 显示一下
             setTimeout(() => location.reload(), 800);
           } catch (refreshError) {
