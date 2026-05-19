@@ -188,7 +188,7 @@ async function submitEditMode() {
 async function deleteSingleMode(modeId: number) {
   Dialog({
     title: '确认删除',
-    message: '确定要删除此模式吗？相关文件将移动到回收站。',
+    message: '确定要删除此模式吗？',
     confirmButton: true,
     cancelButton: true,
     confirmButtonText: '删除',
@@ -224,7 +224,7 @@ async function deleteSelectedModes() {
   
   Dialog({
     title: '确认批量删除',
-    message: `确定要删除选中的 ${selectedModes.value.length} 个模式吗？相关文件将移动到回收站。`,
+    message: `确定要删除选中的 ${selectedModes.value.length} 个模式吗？`,
     confirmButton: true,
     cancelButton: true,
     confirmButtonText: '删除',

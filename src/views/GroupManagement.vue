@@ -189,7 +189,7 @@ async function submitEditGroup() {
 async function deleteSingleGroup(groupId: number) {
   Dialog({
     title: '确认删除',
-    message: '确定要删除此分组吗？相关文件将移动到回收站。',
+    message: '确定要删除此分组吗？',
     confirmButton: true,
     cancelButton: true,
     confirmButtonText: '删除',
@@ -226,7 +226,7 @@ async function deleteSelectedGroups() {
   
   Dialog({
     title: '确认批量删除',
-    message: `确定要删除选中的 ${selectedGroups.value.length} 个分组吗？相关文件将移动到回收站。`,
+    message: `确定要删除选中的 ${selectedGroups.value.length} 个分组吗？`,
     confirmButton: true,
     cancelButton: true,
     confirmButtonText: '删除',

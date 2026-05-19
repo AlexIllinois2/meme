@@ -2058,7 +2058,7 @@ async function handleModeMenuSelect(mode: Mode, action: string) {
     case 'delete': {
       const result = await Dialog({
         title: '确认删除',
-        message: `确定要删除模式 "${mode.name}" 吗？相关文件将移动到回收站。`,
+        message: `确定要删除模式 "${mode.name}" 吗？`,
         confirmButton: true,
         cancelButton: true,
         confirmButtonText: '删除',
@@ -2073,9 +2073,16 @@ async function handleModeMenuSelect(mode: Mode, action: string) {
         await loadModes();
         if (selectedModeId.value) {
           await loadGroups(selectedModeId.value);
+        } else {
+          groups.value = [];
+          images.value = [];
+          return;
         }
         if (selectedGroupId.value) {
           await loadImages(selectedGroupId.value);
+        } else {
+          images.value = [];
+          return;
         }
       } catch (error) {
         console.error('Failed to delete mode:', error);
@@ -2136,7 +2143,7 @@ async function handleGroupMenuSelect(group: Group, action: string) {
     case 'delete': {
       const result = await Dialog({
         title: '确认删除',
-        message: `确定要删除分组 "${group.name}" 吗？相关文件将移动到回收站。`,
+        message: `确定要删除分组 "${group.name}" 吗？`,
         confirmButton: true,
         cancelButton: true,
         confirmButtonText: '删除',
