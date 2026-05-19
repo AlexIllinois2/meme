@@ -56,12 +56,24 @@ let colorSchemeQuery: MediaQueryList | null = null;
 // 记录进入设置页时的原始目录，用于返回时判断是否变化
 const originalMemeDir = ref('');
 
+const handleAccessibilityStatusChanged = async () => {
+  console.log('[Settings] accessibility-status-changed event received');
+  await checkAccessibilityStatus();
+};
+
+const handleVisibilityChange = async () => {
+  if (document.visibilityState === 'visible') {
+    console.log('[Settings] page became visible, checking accessibility status');
+    await checkAccessibilityStatus();
+  }
+};
+
 onMounted(async () => {
   await loadConfig();
   // 保存原始目录
   originalMemeDir.value = config.value.meme_dir || '';
   
-  // ✅ 异步获取版本号
+  // ========== 异步获取版本号 ==========
   try {
     appVersion.value = await getVersion();
   } catch (error) {
@@ -74,7 +86,12 @@ onMounted(async () => {
   // Android 返回键监听
   if (isAndroidTauri()) {
     window.addEventListener('tauri-android-back', handleAndroidBack);
+    // 监听无障碍服务状态变化事件
+    window.addEventListener('accessibility-status-changed', handleAccessibilityStatusChanged);
   }
+  
+  // 监听页面可见性变化（用户从设置页面返回时触发）
+  document.addEventListener('visibilitychange', handleVisibilityChange);
 });
 
 onUnmounted(() => {
@@ -88,7 +105,11 @@ onUnmounted(() => {
   // 移除 Android 返回键监听
   if (isAndroidTauri()) {
     window.removeEventListener('tauri-android-back', handleAndroidBack);
+    window.removeEventListener('accessibility-status-changed', handleAccessibilityStatusChanged);
   }
+  
+  // 移除页面可见性监听
+  document.removeEventListener('visibilitychange', handleVisibilityChange);
 });
 
 async function loadConfig() {

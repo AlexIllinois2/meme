@@ -2,7 +2,11 @@ package com.v.meme
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Context
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -24,6 +28,11 @@ class AutoSendAccessibilityService : AccessibilityService() {
         private const val KEY_ENABLED = "auto_send_enabled"
         private const val SEND_FLOW_TIMEOUT_MS = 30000L
         private const val POLL_INTERVAL_MS = 800L
+        
+        // 通知相关常量
+        private const val NOTIFICATION_CHANNEL_ID = "auto_send_service_channel"
+        private const val NOTIFICATION_CHANNEL_NAME = "自动发送辅助服务"
+        private const val NOTIFICATION_ID = 1001
 
         private const val WECHAT_PACKAGE = "com.tencent.mm"
         private const val QQ_PACKAGE = "com.tencent.mobileqq"
@@ -108,7 +117,41 @@ class AutoSendAccessibilityService : AccessibilityService() {
         }
         serviceInfo = info
 
+        // 启动前台服务，显示常驻通知
+        startForegroundService()
+        
         startContinuousPolling()
+    }
+    
+    private fun startForegroundService() {
+        createNotificationChannel()
+        
+        val notification = Notification.Builder(this, NOTIFICATION_CHANNEL_ID)
+            .setContentTitle(getString(R.string.app_name))
+            .setContentText("辅助自动发送服务当前可用")
+            .setSmallIcon(android.R.drawable.ic_notification_overlay)
+            .setOngoing(true) // 常驻通知，用户无法手动清除
+            .setPriority(Notification.PRIORITY_LOW)
+            .build()
+        
+        startForeground(NOTIFICATION_ID, notification)
+        Log.d(TAG, "Foreground service started with notification")
+    }
+    
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                NOTIFICATION_CHANNEL_ID,
+                NOTIFICATION_CHANNEL_NAME,
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "咪萌无障碍服务"
+                setShowBadge(false)
+            }
+            
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+        }
     }
 
     private fun startContinuousPolling() {
@@ -403,6 +446,9 @@ class AutoSendAccessibilityService : AccessibilityService() {
         handler = null
         servicePollRunnable = null
         retryCount = 0
+        
+        // 停止前台服务
+        stopForeground(true)
         Log.d(TAG, "Service destroyed")
     }
 }

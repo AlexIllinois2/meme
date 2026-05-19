@@ -231,6 +231,9 @@ class MainActivity : TauriActivity() {
     
     // 处理待保存的分享应用（在 onResume 中处理，确保 WebView 已就绪）
     processPendingShare()
+    
+    // 通知前端刷新无障碍服务状态
+    notifyAccessibilityStatusChanged()
   }
 
   private fun processPendingShare() {
@@ -982,8 +985,28 @@ class MainActivity : TauriActivity() {
     AutoSendAccessibilityService.setEnabled(this, enabled)
   }
 
+  private fun notifyAccessibilityStatusChanged() {
+    Log.d(TAG, "notifyAccessibilityStatusChanged called")
+    val webView = findWebView()
+    if (webView != null) {
+      webView.evaluateJavascript("""
+          (function() {
+              var event = new CustomEvent('accessibility-status-changed', {});
+              window.dispatchEvent(event);
+          })();
+      """.trimIndent(), null)
+    }
+  }
+
   @JavascriptInterface
   fun isAccessibilityServiceEnabled(): Boolean {
+    // 首先检查 AccessibilityService.isRunning 标志，这是最直接的状态
+    if (AutoSendAccessibilityService.isRunning) {
+      Log.d(TAG, "isAccessibilityServiceEnabled: isRunning=true, returning true")
+      return true
+    }
+    
+    // 然后检查系统的无障碍服务列表
     val am = getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
     val enabledServices = am.getEnabledAccessibilityServiceList(
       AccessibilityServiceInfo.FEEDBACK_ALL_MASK
@@ -991,9 +1014,11 @@ class MainActivity : TauriActivity() {
     for (service in enabledServices) {
       if (service.resolveInfo.serviceInfo.packageName == packageName &&
           service.resolveInfo.serviceInfo.name == AutoSendAccessibilityService::class.java.name) {
+        Log.d(TAG, "isAccessibilityServiceEnabled: found in enabled list, returning true")
         return true
       }
     }
+    Log.d(TAG, "isAccessibilityServiceEnabled: returning false")
     return false
   }
 
