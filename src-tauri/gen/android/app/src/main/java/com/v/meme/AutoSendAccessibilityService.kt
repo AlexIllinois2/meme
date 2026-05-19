@@ -103,54 +103,77 @@ class AutoSendAccessibilityService : AccessibilityService() {
     }
 
     override fun onServiceConnected() {
-        super.onServiceConnected()
-        isRunning = true
-        Log.d(TAG, "Service connected, starting continuous polling")
+        try {
+            super.onServiceConnected()
+            isRunning = true
+            Log.d(TAG, "Service connected, starting continuous polling")
 
-        val info = AccessibilityServiceInfo().apply {
-            eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or
-                    AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
-            feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
-            flags = AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
-                    AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
-            notificationTimeout = 100
+            val info = AccessibilityServiceInfo().apply {
+                eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or
+                        AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+                feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
+                flags = AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
+                        AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
+                notificationTimeout = 100
+            }
+            serviceInfo = info
+
+            // 延迟启动前台服务，确保服务完全初始化
+            Handler(Looper.getMainLooper()).postDelayed({
+                // 启动前台服务，显示常驻通知
+                startForegroundService()
+            }, 200)
+            
+            startContinuousPolling()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in onServiceConnected: ${e.message}", e)
+            isRunning = false
         }
-        serviceInfo = info
-
-        // 启动前台服务，显示常驻通知
-        startForegroundService()
-        
-        startContinuousPolling()
     }
     
     private fun startForegroundService() {
-        createNotificationChannel()
-        
-        val notification = Notification.Builder(this, NOTIFICATION_CHANNEL_ID)
-            .setContentTitle(getString(R.string.app_name))
-            .setContentText("辅助自动发送服务当前可用")
-            .setSmallIcon(android.R.drawable.ic_notification_overlay)
-            .setOngoing(true) // 常驻通知，用户无法手动清除
-            .setPriority(Notification.PRIORITY_LOW)
-            .build()
-        
-        startForeground(NOTIFICATION_ID, notification)
-        Log.d(TAG, "Foreground service started with notification")
+        try {
+            createNotificationChannel()
+            
+            val appName = try {
+                getString(R.string.app_name)
+            } catch (e: Exception) {
+                "咪萌"
+            }
+            
+            val notification = Notification.Builder(this, NOTIFICATION_CHANNEL_ID)
+                .setContentTitle(appName)
+                .setContentText("辅助自动发送服务当前可用")
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setOngoing(true) // 常驻通知，用户无法手动清除
+                .setPriority(Notification.PRIORITY_LOW)
+                .build()
+            
+            startForeground(NOTIFICATION_ID, notification)
+            Log.d(TAG, "Foreground service started with notification")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start foreground service: ${e.message}", e)
+            // 如果前台服务启动失败，至少保证服务能继续运行
+        }
     }
     
     private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                NOTIFICATION_CHANNEL_ID,
-                NOTIFICATION_CHANNEL_NAME,
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "咪萌无障碍服务"
-                setShowBadge(false)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val channel = NotificationChannel(
+                    NOTIFICATION_CHANNEL_ID,
+                    NOTIFICATION_CHANNEL_NAME,
+                    NotificationManager.IMPORTANCE_LOW
+                ).apply {
+                    description = "咪萌无障碍服务"
+                    setShowBadge(false)
+                }
+                
+                val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                notificationManager.createNotificationChannel(channel)
             }
-            
-            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            notificationManager.createNotificationChannel(channel)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to create notification channel: ${e.message}", e)
         }
     }
 
@@ -189,59 +212,63 @@ class AutoSendAccessibilityService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event == null) return
+        try {
+            if (event == null) return
 
-        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        if (!prefs.getBoolean(KEY_ENABLED, false)) return
+            val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            if (!prefs.getBoolean(KEY_ENABLED, false)) return
 
-        if (!sendFlowActive) return
+            if (!sendFlowActive) return
 
-        val packageName = event.packageName?.toString() ?: return
-        if (packageName != WECHAT_PACKAGE && packageName != QQ_PACKAGE) return
+            val packageName = event.packageName?.toString() ?: return
+            if (packageName != WECHAT_PACKAGE && packageName != QQ_PACKAGE) return
 
-        val now = System.currentTimeMillis()
-        if (now - lastProcessedTime < debounceMs) return
+            val now = System.currentTimeMillis()
+            if (now - lastProcessedTime < debounceMs) return
 
-        when (event.eventType) {
-            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
-                val eventClassName = event.className?.toString() ?: ""
-                Log.d(TAG, "Event window state changed: $eventClassName, package: $packageName")
+            when (event.eventType) {
+                AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
+                    val eventClassName = event.className?.toString() ?: ""
+                    Log.d(TAG, "Event window state changed: $eventClassName, package: $packageName")
 
-                lastTargetWindowEvent = now
+                    lastTargetWindowEvent = now
 
-                val isDialogEvent = eventClassName.contains("Dialog") ||
-                    eventClassName.contains("BottomSheet") || eventClassName.contains("Popup")
+                    val isDialogEvent = eventClassName.contains("Dialog") ||
+                        eventClassName.contains("BottomSheet") || eventClassName.contains("Popup")
 
-                val isWechatShareActivity = packageName == WECHAT_PACKAGE && (
-                    eventClassName.contains("ShareImgUI") ||
-                    eventClassName.contains("MsgRetransmitUI") ||
-                    eventClassName.contains("MvvmContactListUI") ||
-                    eventClassName.contains("HalfScreenTransparentActivity")
-                )
+                    val isWechatShareActivity = packageName == WECHAT_PACKAGE && (
+                        eventClassName.contains("ShareImgUI") ||
+                        eventClassName.contains("MsgRetransmitUI") ||
+                        eventClassName.contains("MvvmContactListUI") ||
+                        eventClassName.contains("HalfScreenTransparentActivity")
+                    )
 
-                val isWechatMainChat = packageName == WECHAT_PACKAGE &&
-                    eventClassName.contains("LauncherUI")
+                    val isWechatMainChat = packageName == WECHAT_PACKAGE &&
+                        eventClassName.contains("LauncherUI")
 
-                if (isDialogEvent || isWechatShareActivity) {
-                    if (!inDialogContext) {
-                        inDialogContext = true
-                        Log.d(TAG, "inDialogContext set to true")
-                    }
-                } else if (isWechatMainChat) {
-                    if (inDialogContext) {
-                        inDialogContext = false
-                        Log.d(TAG, "inDialogContext set to false (main chat)")
-                    }
-                } else if (packageName == QQ_PACKAGE && !isDialogEvent) {
-                    if (inDialogContext) {
-                        inDialogContext = false
-                        Log.d(TAG, "inDialogContext set to false")
+                    if (isDialogEvent || isWechatShareActivity) {
+                        if (!inDialogContext) {
+                            inDialogContext = true
+                            Log.d(TAG, "inDialogContext set to true")
+                        }
+                    } else if (isWechatMainChat) {
+                        if (inDialogContext) {
+                            inDialogContext = false
+                            Log.d(TAG, "inDialogContext set to false (main chat)")
+                        }
+                    } else if (packageName == QQ_PACKAGE && !isDialogEvent) {
+                        if (inDialogContext) {
+                            inDialogContext = false
+                            Log.d(TAG, "inDialogContext set to false")
+                        }
                     }
                 }
+                AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
+                    Log.d(TAG, "Event content changed: ${event.className}")
+                }
             }
-            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
-                Log.d(TAG, "Event content changed: ${event.className}")
-            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in onAccessibilityEvent: ${e.message}", e)
         }
     }
 
@@ -436,19 +463,27 @@ class AutoSendAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
-        super.onDestroy()
-        isRunning = false
-        sendFlowActive = false
-        inDialogContext = false
-        lastTargetWindowEvent = 0L
-        cancelFlowTimeout()
-        handler?.removeCallbacksAndMessages(null)
-        handler = null
-        servicePollRunnable = null
-        retryCount = 0
-        
-        // 停止前台服务
-        stopForeground(true)
-        Log.d(TAG, "Service destroyed")
+        try {
+            super.onDestroy()
+            isRunning = false
+            sendFlowActive = false
+            inDialogContext = false
+            lastTargetWindowEvent = 0L
+            cancelFlowTimeout()
+            handler?.removeCallbacksAndMessages(null)
+            handler = null
+            servicePollRunnable = null
+            retryCount = 0
+            
+            // 停止前台服务
+            try {
+                stopForeground(true)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error stopping foreground: ${e.message}", e)
+            }
+            Log.d(TAG, "Service destroyed")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in onDestroy: ${e.message}", e)
+        }
     }
 }
