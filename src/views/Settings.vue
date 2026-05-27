@@ -25,7 +25,6 @@ const isSaving = ref(false);
 const appVersion = ref('0.0.0');
 const showFolderPicker = ref(false);
 const showColorModePopup = ref(false);
-const showThemePopup = ref(false);
 const autoSendEnabled = ref(false);
 const accessibilityServiceEnabled = ref(false);
 
@@ -278,11 +277,6 @@ function handleAndroidBack(event: any) {
     event.preventDefault?.();
     return true;
   }
-  if (showThemePopup.value) {
-    showThemePopup.value = false;
-    event.preventDefault?.();
-    return true;
-  }
   if (showFolderPicker.value) {
     showFolderPicker.value = false;
     event.preventDefault?.();
@@ -445,13 +439,6 @@ async function autoSaveConfig() {
   }
 }
 
-// 重置为默认设置 - 预留功能
-// function resetToDefaults() {
-//   Dialog({
-//     title: '确认重置',
-//     message: '确定要重置为默认设置吗？',
-//     confirmButton: true,
-// 
 function openUserAgreement() {
   window.dispatchEvent(new CustomEvent('navigateToMenu', { detail: 'user-agreement' }));
 }
@@ -541,29 +528,6 @@ function openGitHubRepo() {
             <Icon name="chevron-right" :size="20" class="arrow-icon" />
           </div>
         </div>
-        
-        <!-- 使用情况访问权限授权 - 仅 Android 显示 -->
-        <!-- <div class="setting-row" v-if="isAndroidTauri()" @click="requestUsageStatsPermission">
-          <div class="setting-label">
-            <label>授权使用情况访问</label>
-            <p class="setting-desc">允许悬浮窗根据当前应用自动显示/隐藏</p>
-            <p class="setting-hint">点击后将跳转到系统设置页面，请找到“咪萌”并开启权限</p>
-          </div>
-          <div class="setting-control">
-            <Icon name="chevron-right" :size="20" class="arrow-icon" />
-          </div>
-        </div> -->
-        
-        <!-- <div class="setting-row" @click="showThemePopup = true">
-          <div class="setting-label">
-            <label>主题</label>
-            <p class="setting-desc">界面风格</p>
-          </div>
-          <div class="setting-control">
-            <span class="selected-value">{{ themeStyleLabel }}</span>
-            <Icon name="chevron-right" :size="20" class="arrow-icon" />
-          </div>
-        </div> -->
         
       </div>
       

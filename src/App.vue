@@ -68,7 +68,6 @@ const selectedModeId = ref<number | null>(null);
 const selectedGroupId = ref<number | null>(null);
 const searchKeyword = ref("");
 const searchInputRef = ref<any>(null);  // 搜索框组件引用
-const isEditMode = ref(false);
 const selectedImages = ref<number[]>([]);
 
 // 全局编辑模式状态
@@ -965,7 +964,6 @@ async function loadConfig() {
       await loadCustomApps();
       
       applyTheme();
-      applyTheme();
     } else {
       // 首次启动，需要选择目录
       await setupInitialConfig();
@@ -1321,11 +1319,6 @@ async function switchGroup(active: string | number) {
   }
 }
 
-function toggleEditMode() {
-  isEditMode.value = !isEditMode.value;
-  selectedImages.value = [];
-}
-
 function toggleImageSelection(imageId: number) {
   const index = selectedImages.value.indexOf(imageId);
   if (index > -1) {
@@ -1334,11 +1327,6 @@ function toggleImageSelection(imageId: number) {
     selectedImages.value.push(imageId);
   }
 }
-
-// 预览功能已移除，点击图片直接复制
-// function openImagePreview(_index: number) {
-//   console.log('Preview disabled, click to copy instead');
-// }
 
 async function uploadImages() {
   if (!config.value) return;
@@ -1487,128 +1475,6 @@ function arrayBufferToBase64(buffer: Uint8Array): string {
 		binary += String.fromCharCode(buffer[i]);
 	}
 	return btoa(binary);
-}
-
-async function deleteSelectedImages() {
-  if (selectedImages.value.length === 0) return;
-  
-  const result = await Dialog({
-    title: '确认删除',
-    message: `确定要删除选中的 ${selectedImages.value.length} 张表情包吗？`,
-    confirmButton: true,
-    cancelButton: true,
-    confirmButtonText: '确定',
-    cancelButtonText: '取消'
-  });
-  
-  if (result !== 'confirm') return;
-  
-  try {
-    await invoke("delete_images", { imageIds: selectedImages.value });
-    if (selectedGroupId.value) {
-      await loadImages(selectedGroupId.value);
-    }
-    selectedImages.value = [];
-    isEditMode.value = false;
-    Snackbar.success('删除成功');
-  } catch (error) {
-    console.error("Failed to delete images:", error);
-    Snackbar.error('删除失败');
-  }
-}
-
-async function copySelectedImages() {
-  if (selectedImages.value.length === 0) return;
-  
-  try {
-    await invoke("copy_images", { imageIds: selectedImages.value });
-    Snackbar.success('已复制到剪贴板');
-  } catch (error) {
-    console.error("Failed to copy images:", error);
-    Snackbar.error('复制失败');
-  }
-}
-
-async function moveSelectedImages() {
-  if (selectedImages.value.length === 0) return;
-  
-  try {
-    const { open } = await import("@tauri-apps/plugin-dialog");
-    const selected = await open({
-      directory: true,
-      multiple: false,
-      title: "选择目标分组文件夹"
-    });
-    
-    if (selected && selectedGroupId.value) {
-      const targetPath = Array.isArray(selected) ? selected[0] : selected;
-      await invoke("move_images", { 
-        imageIds: selectedImages.value, 
-        targetGroupId: selectedGroupId.value,
-        targetPath 
-      });
-      await loadImages(selectedGroupId.value);
-      selectedImages.value = [];
-      isEditMode.value = false;
-      Snackbar.success('移动成功');
-    }
-  } catch (error) {
-    console.error("Failed to move images:", error);
-    Snackbar.error('移动失败');
-  }
-}
-
-async function addNewGroup() {
-  if (!config.value) return;
-  
-  const mode = modes.value.find(m => m.id === selectedModeId.value);
-  if (!mode) return;
-  
-  // 先检查该模式下是否已有分组，用于提示默认名称
-  const existingGroups = groups.value.filter(g => g.mode_id === selectedModeId.value);
-  const defaultName = existingGroups.length > 0 ? `新分组${existingGroups.length + 1}` : '新分组';
-  
-  // 使用浏览器原生 prompt 获取分组名
-  const groupName = window.prompt('请输入分组名称', defaultName)?.trim();
-  
-  // 用户点击取消
-  if (groupName === undefined) return;
-  
-  if (!groupName) {
-    Snackbar.warning('分组名称不能为空');
-    return;
-  }
-  
-  // 检查该模式下是否已存在同名分组
-  const existingGroup = groups.value.find(g => 
-    g.mode_id === selectedModeId.value && g.name === groupName
-  );
-  if (existingGroup) {
-    Snackbar.error(`该模式下已存在名为 "${groupName}" 的分组`);
-    return;
-  }
-  
-  try {
-    const newGroupId = await invoke<number>("add_group", { 
-      name: groupName,
-      modeId: selectedModeId.value
-    });
-    
-    // 重新加载分组列表
-    if (selectedModeId.value) {
-      await loadGroups(selectedModeId.value);
-    }
-    
-    // 自动选中新创建的分组
-    if (newGroupId) {
-      selectedGroupId.value = newGroupId;
-      await loadImages(newGroupId);
-      Snackbar.success('分组创建成功');
-    }
-  } catch (error) {
-    console.error("Failed to add group:", error);
-    Snackbar.error('创建分组失败');
-  }
 }
 
 function handleShareAppChange(app: string) {
@@ -1859,14 +1725,8 @@ function handleMenuAction(action: string) {
   isMenuPopupOpen.value = false;
   
   switch (action) {
-    case 'edit':
-      toggleEditMode();
-      break;
     case 'editGroup':
       openGroupEditDialog();
-      break;
-    case 'addGroup':
-      addNewGroup();
       break;
     case 'refresh':
       fullRefresh();
@@ -2009,11 +1869,6 @@ async function handleModeMenuSelect(mode: Mode, action: string) {
   
   switch (action) {
     case 'rename':
-      editingModeName.value = mode.name;
-      editingModeSortOrder.value = mode.sort_order;
-      showModeEditPopup.value = true;
-      break;
-    case 'sort':
       editingModeName.value = mode.name;
       editingModeSortOrder.value = mode.sort_order;
       showModeEditPopup.value = true;
@@ -2798,13 +2653,6 @@ async function handleImageMenuSelect(img: Image, action: string) {
             </div>
             
             <div class="keyword-manager-body">
-              <!-- 添加应用按钮 -->
-              <!-- <div class="add-app-section">
-                <var-button type="primary" block @click="handlePickShareApp">
-                  <Icon name="add" :size="18" /> 选择新应用
-                </var-button>
-              </div> -->
-              
               <!-- 应用列表 -->
               <div class="keywords-list">
                 <div v-if="customShareApps.length === 0" class="empty-state">
@@ -2842,23 +2690,6 @@ async function handleImageMenuSelect(img: Image, action: string) {
           title="暂无表情包"
           class="empty-state"
         />
-
-        <var-card v-if="isEditMode" class="edit-actions">
-          <div class="edit-buttons">
-            <var-button type="danger" @click="deleteSelectedImages" block>
-              <var-icon name="delete" /> 删除 ({{ selectedImages.length }})
-            </var-button>
-            <var-button type="primary" @click="copySelectedImages" block>
-              <var-icon name="content-copy" /> 复制
-            </var-button>
-            <var-button type="warning" @click="moveSelectedImages" block>
-              <var-icon name="arrow-right-bold" /> 移动
-            </var-button>
-            <var-button type="default" @click="toggleEditMode" block>
-              <var-icon name="close" /> 取消
-            </var-button>
-          </div>
-        </var-card>
       </div>
 
       <Settings v-else-if="activeMenu === 'settings'" />
@@ -2878,7 +2709,6 @@ async function handleImageMenuSelect(img: Image, action: string) {
     <div v-if="showFirstUseMask" class="first-use-popup" @click.stop="handleUserInteraction">
       <div class="first-use-popup-arrow"></div>
       <div class="first-use-popup-card">
-        <!-- <Icon name="arrow-up-circle" color="#fff" :size="22" /> -->
         <span>Σ(っ °Д °;)っ!!! 你不要过来啊!!!</span>
       </div>
     </div>
@@ -3142,18 +2972,6 @@ async function handleImageMenuSelect(img: Image, action: string) {
 }
 
 /* 当前模式/分组显示 */
-.current-mode-display,
-.current-group-display {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  background-color: var(--color-surface-variant);
-  border-radius: 8px;
-  margin-bottom: 16px;
-  font-size: 14px;
-  color: var(--color-text-secondary);
-}
 .current-mode-display,
 .current-group-display {
   display: flex;
