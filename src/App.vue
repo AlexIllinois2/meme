@@ -3,10 +3,6 @@ import { ref, onMounted, computed, nextTick, onUnmounted } from "vue";
 import * as tauri from "@tauri-apps/api/core";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { Snackbar, Dialog } from '@varlet/ui';
-import SideMenu from "./components/SideMenu.vue";
-import ModeManagement from "./views/ModeManagement.vue";
-import GroupManagement from "./views/GroupManagement.vue";
-import KeywordManagement from "./views/KeywordManagement.vue";
 import Settings from "./views/Settings.vue";
 import Support from "./views/Support.vue";
 import UserAgreement from "./views/UserAgreement.vue";
@@ -238,14 +234,7 @@ function handleAndroidBack(event: any) {
     return true;
   }
   
-  // 4. 关闭侧边栏
-  if (isSideMenuOpen.value) {
-    isSideMenuOpen.value = false;
-    event.preventDefault?.();
-    return true;
-  }
-  
-  // 5. 退出编辑模式
+  // 4. 退出编辑模式
   if (isGlobalEditMode.value) {
     exitGlobalEditMode();
     event.preventDefault?.();
@@ -486,7 +475,6 @@ const currentColorMode = ref<'system' | 'light' | 'dark'>('system');
 const shareApp = ref<string>('all');  // 支持自定义包名
 const gridColumns = ref<number>(5);
 const activeMenu = ref('home');
-const isSideMenuOpen = ref(false);
 const isMenuPopupOpen = ref(false);
 const menuAnchor = ref<HTMLElement | { $el: HTMLElement } | null>(null);
 const showGroupActionMenu = ref(false);
@@ -542,7 +530,6 @@ if (typeof window !== 'undefined') {
 }
 
 const isMobile = computed(() => window.innerWidth < 768);
-const isSidebarMode = computed(() => !isMobile.value);
 
 /**
  * 创建类型安全的配置对象
@@ -736,10 +723,6 @@ onMounted(async () => {
       activeMenu.value = detail;
     } else if (detail && detail.menu) {
       activeMenu.value = detail.menu;
-      // 如果有 groupId，存储在全局变量中
-      if (detail.groupId) {
-        (window as any).currentKeywordGroupId = detail.groupId;
-      }
     }
   });
 
@@ -1638,11 +1621,6 @@ function handleShareAppChange(app: string) {
   }
 }
 
-function handleMenuChange(menu: string) {
-  activeMenu.value = menu;
-  isSideMenuOpen.value = false;
-}
-
 function handleWheel(event: WheelEvent) {
   if (!isMobile.value && event.ctrlKey) {
     event.preventDefault();
@@ -1887,9 +1865,6 @@ function handleMenuAction(action: string) {
     case 'editGroup':
       openGroupEditDialog();
       break;
-    case 'addMode':
-      activeMenu.value = 'mode';
-      break;
     case 'addGroup':
       addNewGroup();
       break;
@@ -1990,18 +1965,6 @@ async function handleDeleteGroup() {
     console.error('Failed to delete group:', error);
     Snackbar.error('删除分组失败');
   }
-}
-
-function handleManageKeywords() {
-  const group = currentEditingGroup.value;
-  if (!group) return;
-  
-  closeGroupActionMenu();
-  
-  // 跳转到关键词管理页面
-  window.dispatchEvent(new CustomEvent('navigateToMenu', { 
-    detail: { menu: 'keyword', groupId: group.id }
-  }));
 }
 
 function togglePinyinSearch() {
@@ -2368,16 +2331,8 @@ async function handleImageMenuSelect(img: Image, action: string) {
     :theme-style="config?.theme_style || 'modern'"
     :color-mode="currentColorMode"
   >
-    <div class="app-container" :class="{ 'sidebar-open': isSidebarMode && isSideMenuOpen }">
-      <SideMenu 
-      :is-open="isSideMenuOpen" 
-      :active-menu="activeMenu"
-      :is-sidebar="isSidebarMode"
-      @update:is-open="isSideMenuOpen = $event"
-      @menu-change="handleMenuChange"
-    />
-    
-    <main class="main-content">
+    <div class="app-container">
+      <main class="main-content">
       <div v-if="activeMenu === 'home'" class="view-home">
         <div class="top-search-bar">
           <div class="search-container">
@@ -2479,7 +2434,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
                   <var-icon name="pencil" size="20" />
                   <span>重命名分组</span>
                 </div>
-                <div class="group-action-item" @click="handleManageKeywords">
+                <div class="group-action-item" @click="selectedGroupForMenu = currentEditingGroup; showKeywordManager = true; closeGroupActionMenu()">
                   <var-icon name="label" size="20" />
                   <span>关键词</span>
                 </div>
@@ -2906,9 +2861,6 @@ async function handleImageMenuSelect(img: Image, action: string) {
         </var-card>
       </div>
 
-      <ModeManagement v-else-if="activeMenu === 'mode'" />
-      <GroupManagement v-else-if="activeMenu === 'group'" />
-      <KeywordManagement v-else-if="activeMenu === 'keyword'" />
       <Settings v-else-if="activeMenu === 'settings'" />
       <Support v-else-if="activeMenu === 'support'" />
       <UserAgreement v-else-if="activeMenu === 'user-agreement'" @open-privacy-policy="activeMenu = 'privacy-policy'" />
@@ -2960,16 +2912,11 @@ async function handleImageMenuSelect(img: Image, action: string) {
   position: relative;
 }
 
-.app-container.sidebar-open .main-content {
-  margin-left: 280px;
-}
-
 .main-content {
   flex: 1;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  transition: margin-left 0.3s ease;
 }
 
 .view-home {

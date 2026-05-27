@@ -21,18 +21,6 @@ pub struct Group {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Keyword {
-    pub id: i32,
-    pub keyword: String,
-    pub pinyin: Option<String>,
-    pub acronym: Option<String>,
-    pub group_count: Option<i32>,
-    pub mode_count: Option<i32>,
-    pub group_ids: Option<Vec<i32>>,
-    pub mode_ids: Option<Vec<i32>>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Image {
     pub id: i32,
     pub image_path: String,

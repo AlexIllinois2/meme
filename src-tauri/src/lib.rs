@@ -75,11 +75,6 @@ pub fn run() {
             group::delete_groups,
             group::search_groups,
             // 关键词
-            keyword::get_all_keywords,
-            keyword::add_keyword,
-            keyword::update_keyword,
-            keyword::delete_keyword,
-            keyword::delete_keywords,
             keyword::generate_keywords_file,
             keyword::sync_keywords_to_file,
             // 分组名关键词管理（跨所有模式）
@@ -148,11 +143,6 @@ pub fn run() {
             group::delete_groups,
             group::search_groups,
             // 关键词
-            keyword::get_all_keywords,
-            keyword::add_keyword,
-            keyword::update_keyword,
-            keyword::delete_keyword,
-            keyword::delete_keywords,
             keyword::generate_keywords_file,
             keyword::sync_keywords_to_file,
             // 分组名关键词管理（跨所有模式）

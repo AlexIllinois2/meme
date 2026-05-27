@@ -16,17 +16,6 @@ export interface Group {
   mode_name?: string;
 }
 
-export interface Keyword {
-  id: number;
-  keyword: string;
-  pinyin?: string;
-  acronym?: string;
-  group_ids?: number[];
-  mode_ids?: number[];
-  group_count?: number;
-  mode_count?: number;
-}
-
 export interface Image {
   id: number;
   image_path: string;
@@ -49,11 +38,4 @@ export interface Config {
   global_floating_window: boolean;
 }
 
-export interface ExportData {
-  modes: Mode[];
-  groups: Group[];
-  keywords: Keyword[];
-  images: Image[];
-  keyword_group_links: [number, number][];
-  keyword_mode_links: [number, number][];
-}
+
