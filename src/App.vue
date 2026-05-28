@@ -2504,219 +2504,45 @@ async function handleImageMenuSelect(img: Image, action: string) {
 
 
 /* 图片选择复选框 */
-.image-select-checkbox {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  background-color: rgba(255, 255, 255, 0.9);
-  border-radius: 50%;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-}
 
-.image-select-checkbox:hover {
-  transform: scale(1.1);
-  background-color: white;
-}
 
-.image-select-checkbox.is-checked {
-  background-color: var(--color-primary-light);
-}
 
-.image-item.is-selectable {
-  cursor: default;
-}
 
-.image-item.is-selectable .image-content {
-  cursor: pointer;
-}
 
 
 /* 图片选择复选框 */
-.image-select-checkbox {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  background-color: rgba(255, 255, 255, 0.9);
-  border-radius: 50%;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-}
 
-.image-select-checkbox:hover {
-  transform: scale(1.1);
-  background-color: white;
-}
 
-.image-select-checkbox.is-checked {
-  background-color: var(--color-primary-light);
-}
 
-.image-item.is-selectable {
-  cursor: default;
-}
 
-.image-item.is-selectable .image-content {
-  cursor: pointer;
-}
 
 
 /* 图片选择复选框 */
-.image-select-checkbox {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  background-color: rgba(255, 255, 255, 0.9);
-  border-radius: 50%;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-}
 
-.image-select-checkbox:hover {
-  transform: scale(1.1);
-  background-color: white;
-}
 
-.image-select-checkbox.is-checked {
-  background-color: var(--color-primary-light);
-}
 
-.image-item.is-selectable {
-  cursor: default;
-}
 
-.image-item.is-selectable .image-content {
-  cursor: pointer;
-}
 
 
 /* 图片选择复选框 */
-.image-select-checkbox {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  background-color: rgba(255, 255, 255, 0.9);
-  border-radius: 50%;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-}
 
-.image-select-checkbox:hover {
-  transform: scale(1.1);
-  background-color: white;
-}
 
-.image-select-checkbox.is-checked {
-  background-color: var(--color-primary-light);
-}
 
-.image-item.is-selectable {
-  cursor: default;
-}
 
-.image-item.is-selectable .image-content {
-  cursor: pointer;
-}
 
 
 /* 图片选择复选框 */
-.image-select-checkbox {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  background-color: rgba(255, 255, 255, 0.9);
-  border-radius: 50%;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-}
 
-.image-select-checkbox:hover {
-  transform: scale(1.1);
-  background-color: white;
-}
 
-.image-select-checkbox.is-checked {
-  background-color: var(--color-primary-light);
-}
 
-.image-item.is-selectable {
-  cursor: default;
-}
 
-.image-item.is-selectable .image-content {
-  cursor: pointer;
-}
 
 
 /* 图片选择复选框 */
-.image-select-checkbox {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  background-color: rgba(255, 255, 255, 0.9);
-  border-radius: 50%;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-}
 
-.image-select-checkbox:hover {
-  transform: scale(1.1);
-  background-color: white;
-}
 
-.image-select-checkbox.is-checked {
-  background-color: var(--color-primary-light);
-}
 
-.image-item.is-selectable {
-  cursor: default;
-}
 
-.image-item.is-selectable .image-content {
-  cursor: pointer;
-}
 
 .image-error {
   width: 100%;
@@ -2751,12 +2577,6 @@ async function handleImageMenuSelect(img: Image, action: string) {
   color: var(--color-text-tertiary);
 }
 
-.edit-actions {
-  padding: 12px;
-  border-top: 1px solid var(--color-border);
-  background-color: var(--color-surface);
-  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.08);
-}
 .edit-actions {
   padding: 12px;
   border-top: 1px solid var(--color-border);
@@ -2801,10 +2621,6 @@ async function handleImageMenuSelect(img: Image, action: string) {
   width: 6px;
 }
 
-.image-grid::-webkit-scrollbar-track {
-  background: var(--color-surface-variant);
-  border-radius: 3px;
-}
 .image-grid::-webkit-scrollbar-track {
   background: var(--color-surface-variant);
   border-radius: 3px;
@@ -2899,17 +2715,6 @@ async function handleImageMenuSelect(img: Image, action: string) {
   overflow: hidden;
   animation: menuAppear 0.2s ease;
 }
-.group-action-menu {
-  position: relative;
-  z-index: 10000;
-  width: 280px;
-  max-width: 90vw;
-  background-color: var(--color-surface);
-  border-radius: 20px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-  overflow: hidden;
-  animation: menuAppear 0.2s ease;
-}
 
 @keyframes menuAppear {
   from {
@@ -2922,14 +2727,6 @@ async function handleImageMenuSelect(img: Image, action: string) {
   }
 }
 
-.group-action-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--color-border);
-  background-color: var(--color-surface-variant);
-}
 .group-action-header {
   display: flex;
   align-items: center;
@@ -2963,9 +2760,6 @@ async function handleImageMenuSelect(img: Image, action: string) {
   margin: 4px 0;
 }
 
-.group-action-item:hover {
-  background-color: var(--color-surface-variant);
-}
 .group-action-item:hover {
   background-color: var(--color-surface-variant);
 }
@@ -3275,9 +3069,6 @@ async function handleImageMenuSelect(img: Image, action: string) {
   -webkit-tap-highlight-color: transparent;
 }
 
-.image-item.add-image-item:hover .add-image-content span {
-  color: white;
-}
 
 /* 自定义分享应用弹窗样式 */
 .custom-apps-popup :deep(.var-popup) {
