@@ -1,19 +1,13 @@
-# 代码拆分计划
+# 继续拆分 App.vue — 提取顺序
 
-## 1. image.rs (1008 行) → image.rs + clipboard.rs
-拆分策略: 将剪贴板相关函数抽到独立模块 clipboard.rs
-- paste_image_from_clipboard
-- paste_image_from_clipboard_raw (desktop + android)
-- read_clipboard_with_system_command
-- ClipboardImage struct
+1. **useSearch** (~80 行) — 最简单独立
+   - searchKeyword, searchInputRef, searchImages(), handleFloatingSearchClick()
 
-## 2. App.vue (4360 行) → App.vue + composables/
-拆分策略: 提取 3 个 composable：
-- useMemeData.ts — modes/groups/images 加载管理、搜索
-- useAndroidBack.ts — Android 返回键处理、全局编辑模式
-- useAppConfig.ts — 配置加载/更新、主题同步
+2. **useEditMode** (~200 行) — 依赖较少
+   - 编辑模式开关、选中状态、批量删除、首次使用引导
 
-## 3. Settings.vue (976 行) → Settings.vue + Settings*.vue
-拆分策略: 提取子视图组件
-- 分享设置 → SettingsShare.vue
-- 权限设置 → SettingsPermissions.vue
+3. **useShare** (~250 行) — 中等复杂度
+   - 分享目标、分享到应用/复制、onCustomAppSelected 全局回调
+
+4. **CRUD 对话框** (~500 行) — 最大最复杂
+   - 所有的弹窗、菜单、增删改逻辑

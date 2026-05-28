@@ -19,19 +19,36 @@ import { debug } from './utils/debug';
 const { config, currentColorMode, gridColumns, pinyinSearchEnabled, acronymSearchEnabled, globalFloatingWindowEnabled, themeKey, safeUpdateConfig, loadConfig, applyTheme, syncSystemTheme, handleResize, handleWheel, handleTouchStart, handleTouchMove, isMobile } = useConfig(invoke);
 
 const { modes, groups, images, selectedModeId, selectedGroupId, loadModes, loadGroups, loadImages, switchMode, switchGroup, fullRefresh } = useMemeData(config, safeUpdateConfig);
-const searchKeyword = ref("");
-const searchInputRef = ref<any>(null);  // 搜索框组件引用
-const selectedImages = ref<number[]>([]);
+
+import { useSearch } from './composables/useSearch';
+
+const { searchKeyword, searchInputRef, searchImages, handleFloatingSearchClick } = useSearch(invoke, {
+  selectedModeId,
+  pinyinSearchEnabled,
+  acronymSearchEnabled,
+  groups,
+  images,
+  selectedGroupId,
+  loadImages,
+});
+
+import { useEditMode } from './composables/useEditMode';
+
+const { selectedImages, isGlobalEditMode, selectedModeIds, selectedGroupIds, showFirstUseMask, hasSelectedItems, toggleGlobalEditMode, exitGlobalEditMode, handleUserInteraction, showFirstUsePrompt, handleAppResume, toggleModeSelection, toggleGroupSelection, toggleImageSelection, handleBatchDelete } = useEditMode(invoke, {
+  modes,
+  groups,
+  images,
+  selectedModeId,
+  selectedGroupId,
+  loadModes,
+  loadGroups,
+  loadImages,
+});
 
 // 全局编辑模式状态
-const isGlobalEditMode = ref(false);
 // 全局悬浮窗状态
-const selectedModeIds = ref<number[]>([]);
-const selectedGroupIds = ref<number[]>([]);
 
 // 首次使用提示弹窗
-const showFirstUseMask = ref(false);
-const hasUserInteracted = ref(false);
 // 协议确认弹窗
 const showAgreementConfirm = ref(false);
 const hasAcceptedAgreement = ref(false);
@@ -64,70 +81,17 @@ const openPrivacyPolicyFromPopup = () => {
 };
 
 // 监听用户交互
-function handleUserInteraction(_e: Event) {
-  if (!hasUserInteracted.value) {
-    hasUserInteracted.value = true;
-    showFirstUseMask.value = false;
-    // 自动聚焦输入框
-    nextTick(() => {
-      setTimeout(() => {
-        // 直接查找并聚焦原生 input
-        const nativeInput = document.querySelector('.search-input input, .search-input [role="textbox"]') as HTMLInputElement;
-        if (nativeInput) {
-          debug.log('[Floating] Directly focusing native input');
-          nativeInput.focus({ preventScroll: false });
-        } else {
-          console.warn('[Floating] Native input not found, falling back to triggerSearchFocus');
-          window.triggerSearchFocus();
-        }
-      }, 300);
-    });
-  }
-}
 
 // 显示首次使用提示
-function showFirstUsePrompt() {
-  debug.log('[Floating] showFirstUsePrompt');
-  if (!hasUserInteracted.value) {
-    showFirstUseMask.value = true;
-  }
-}
 // selectedImages 已存在，复用它
 
 // 是否有选中项
-const hasSelectedItems = computed(() => {
-  return selectedModeIds.value.length > 0 || 
-         selectedGroupIds.value.length > 0 || 
-         selectedImages.value.length > 0;
-});
 
 // 切换全局编辑模式
-function toggleGlobalEditMode() {
-  isGlobalEditMode.value = !isGlobalEditMode.value;
-  // 清空所有选中
-  selectedModeIds.value = [];
-  selectedGroupIds.value = [];
-  selectedImages.value = [];
-}
 
 // 监听应用恢复前台事件
-function handleAppResume() {
-  if (document.visibilityState === 'visible') {
-    debug.log('[App] App resumed to foreground');
-    // 桌面端恢复前台后调用triggerSearchFocus
-    if (!isAndroidTauri()) {
-      window.triggerSearchFocus();
-    }
-  }
-}
 
 // 退出全局编辑模式
-function exitGlobalEditMode() {
-  isGlobalEditMode.value = false;
-  selectedModeIds.value = [];
-  selectedGroupIds.value = [];
-  selectedImages.value = [];
-}
 
 // Android 返回键处理
 function handleAndroidBack(event: any) {
@@ -227,89 +191,10 @@ function handleAndroidBack(event: any) {
 }
 
 // 切换模式选中
-function toggleModeSelection(modeId: number) {
-  const index = selectedModeIds.value.indexOf(modeId);
-  if (index > -1) {
-    selectedModeIds.value.splice(index, 1);
-  } else {
-    selectedModeIds.value.push(modeId);
-  }
-}
 
 // 切换分组选中
-function toggleGroupSelection(groupId: number) {
-  const index = selectedGroupIds.value.indexOf(groupId);
-  if (index > -1) {
-    selectedGroupIds.value.splice(index, 1);
-  } else {
-    selectedGroupIds.value.push(groupId);
-  }
-}
 
 // 批量删除
-async function handleBatchDelete() {
-  if (!hasSelectedItems.value) return;
-  
-  const modeCount = selectedModeIds.value.length;
-  const groupCount = selectedGroupIds.value.length;
-  const imageCount = selectedImages.value.length;
-  
-  let message = '确定要删除选中的内容吗？\n';
-  if (modeCount > 0) message += `• ${modeCount} 个模式\n`;
-  if (groupCount > 0) message += `• ${groupCount} 个分组\n`;
-  if (imageCount > 0) message += `• ${imageCount} 张图片\n`;
-  message += '\n注意：删除分组会同时删除其下所有图片！';
-  
-  const result = await Dialog({
-    title: '确认批量删除',
-    message,
-    confirmButton: true,
-    cancelButton: true,
-    confirmButtonText: '删除',
-    cancelButtonText: '取消'
-  });
-  
-  if (result !== 'confirm') return;
-  
-  try {
-    // 1. 删除选中的模式
-    if (selectedModeIds.value.length > 0) {
-      await invoke('delete_modes', { modeIds: selectedModeIds.value });
-    }
-    
-    // 2. 删除选中的分组
-    if (selectedGroupIds.value.length > 0) {
-      await invoke('delete_groups', { groupIds: selectedGroupIds.value });
-    }
-    
-    // 3. 删除选中的图片（只删除未被分组删除覆盖的）
-    // 过滤掉属于已删除分组的图片
-    const remainingImageIds = selectedImages.value.filter(imgId => {
-      const img = images.value.find(i => i.id === imgId);
-      // 如果图片所在的分组没有被删除，才删除这张图片
-      return img && !selectedGroupIds.value.includes(img.group_id);
-    });
-    
-    if (remainingImageIds.length > 0) {
-      await invoke('delete_images', { imageIds: remainingImageIds });
-    }
-    
-    Snackbar.success('批量删除成功');
-    exitGlobalEditMode();
-    
-    // 刷新数据
-    await loadModes();
-    if (selectedModeId.value) {
-      await loadGroups(selectedModeId.value);
-    }
-    if (selectedGroupId.value) {
-      await loadImages(selectedGroupId.value);
-    }
-  } catch (error) {
-    console.error('Failed to batch delete:', error);
-    Snackbar.error('批量删除失败');
-  }
-}
 
 // 新增模式弹窗状态
 const showAddModePopup = ref(false);
@@ -892,74 +777,7 @@ async function removeCustomApp(id: number) {
   }
 }
 
-async function searchImages() {
-  if (!searchKeyword.value.trim()) {
-    // 搜索框为空，获取当前模式下所有分组
-    try {
-      const allGroups = await invoke("get_groups_by_mode", { 
-        modeId: selectedModeId.value
-      }) as Group[];
-      
-      if (allGroups && allGroups.length > 0) {
-        groups.value = allGroups;
-        // 自动选择第一个分组并加载图片
-        selectedGroupId.value = allGroups[0].id;
-        await loadImages(allGroups[0].id);
-      } else {
-        groups.value = [];
-        images.value = [];
-      }
-    } catch (error) {
-      console.error("Failed to load groups:", error);
-    }
-    return;
-  }
-  
-  try {
-    // 首先搜索匹配的分组，带上拼音搜索设置
-    const matchedGroups = await invoke("search_groups", { 
-      keyword: searchKeyword.value,
-      modeId: selectedModeId.value,
-      pinyinSearch: pinyinSearchEnabled.value,
-      acronymSearch: acronymSearchEnabled.value
-    }) as Group[];
-    
-    if (matchedGroups && matchedGroups.length > 0) {
-      // 找到匹配的分组，更新分组列表
-      groups.value = matchedGroups;
-      
-      // 自动选择第一个匹配的分组
-      selectedGroupId.value = matchedGroups[0].id;
-      await loadImages(matchedGroups[0].id);
-    } else {
-      // 没有找到匹配的分组，清空图片
-      groups.value = [];
-      images.value = [];
-    }
-  } catch (error) {
-    console.error("Failed to search:", error);
-    // 如果搜索分组失败，尝试原来的搜索图片方式
-    try {
-      const result = await invoke("search_images", { 
-        keyword: searchKeyword.value,
-        pinyin: pinyinSearchEnabled.value,
-        acronym: acronymSearchEnabled.value
-      }) as Image[];
-      images.value = result || [];
-    } catch (err) {
-      console.error("Failed to search images:", err);
-    }
-  }
-}
 
-function toggleImageSelection(imageId: number) {
-  const index = selectedImages.value.indexOf(imageId);
-  if (index > -1) {
-    selectedImages.value.splice(index, 1);
-  } else {
-    selectedImages.value.push(imageId);
-  }
-}
 
 async function uploadImages() {
   if (!config.value) return;
@@ -1658,14 +1476,6 @@ async function shareImageToApp(img: Image) {
 }
 
 // 处理浮动搜索按钮点击
-function handleFloatingSearchClick() {
-  searchKeyword.value = '';
-  // 聚焦搜索框
-  const searchInput = document.querySelector('.search-input input') as HTMLInputElement;
-  if (searchInput) {
-    searchInput.focus();
-  }
-}
 
 // 处理图片菜单选择
 async function handleImageMenuSelect(img: Image, action: string) {
