@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, nextTick, onUnmounted } from "vue";
-import * as tauri from "@tauri-apps/api/core";
-import { convertFileSrc } from "@tauri-apps/api/core";
 import { Snackbar, Dialog } from '@varlet/ui';
+import { isTauri, isAndroidTauri, toAssetPath, invoke } from './utils/tauri';
+import { useConfig } from './composables/useConfig';
+import { useMemeData } from './composables/useMemeData';
 import Settings from "./views/Settings.vue";
 import Support from "./views/Support.vue";
 import UserAgreement from "./views/UserAgreement.vue";
@@ -12,61 +13,12 @@ import KeywordManager from "./components/KeywordManager.vue";
 import ThemeProvider from "./components/ThemeProvider.vue";
 import FloatingSearchButton from "./components/FloatingSearchButton.vue";
 import Icon from "./components/Icon.vue";
-import type { Mode, Group, Image, Config } from "./types";
+import type { Mode, Group, Image } from "./types";
 import { debug } from './utils/debug';
 
-const isTauri = typeof window !== 'undefined' && window.__TAURI__;
-const invoke = isTauri ? tauri.invoke : async () => {
-  console.warn("Tauri is not available, running in browser mode");
-  return null;
-};
+const { config, currentColorMode, gridColumns, pinyinSearchEnabled, acronymSearchEnabled, globalFloatingWindowEnabled, themeKey, safeUpdateConfig, loadConfig, applyTheme, syncSystemTheme, handleResize, handleWheel, handleTouchStart, handleTouchMove, isMobile } = useConfig(invoke);
 
-// 检测是否为 Android Tauri 环境
-function isAndroidTauri() {
-  return isTauri && /android/i.test(navigator.userAgent);
-}
-
-function toAssetPath(filePath: string | null | undefined): string {
-  if (!filePath) return '';
-  if (!isTauri) return filePath;
-  try {
-    return convertFileSrc(filePath);
-  } catch (e) {
-    console.error('Failed to convert file path:', filePath, e);
-    return filePath;
-  }
-}
-
-async function selectDirectory() {
-  if (isTauri) {
-    try {
-      const { open } = await import("@tauri-apps/plugin-dialog");
-      const selected = await open({
-        directory: true,
-        multiple: false,
-        title: "选择表情包存储目录"
-      });
-      if (selected) {
-        const dirPath = Array.isArray(selected) ? selected[0] : selected;
-        if (config.value) {
-          config.value.meme_dir = dirPath;
-          await safeUpdateConfig(config.value);
-        }
-        return dirPath;
-      }
-    } catch (error) {
-      console.error("选择目录失败:", error);
-    }
-  }
-  return null;
-};
-
-const modes = ref<Mode[]>([]);
-const groups = ref<Group[]>([]);
-const images = ref<Image[]>([]);
-const config = ref<Config | null>(null);
-const selectedModeId = ref<number | null>(null);
-const selectedGroupId = ref<number | null>(null);
+const { modes, groups, images, selectedModeId, selectedGroupId, loadModes, loadGroups, loadImages, switchMode, switchGroup, fullRefresh } = useMemeData(config, safeUpdateConfig);
 const searchKeyword = ref("");
 const searchInputRef = ref<any>(null);  // 搜索框组件引用
 const selectedImages = ref<number[]>([]);
@@ -74,7 +26,6 @@ const selectedImages = ref<number[]>([]);
 // 全局编辑模式状态
 const isGlobalEditMode = ref(false);
 // 全局悬浮窗状态
-const globalFloatingWindowEnabled = ref(true);
 const selectedModeIds = ref<number[]>([]);
 const selectedGroupIds = ref<number[]>([]);
 
@@ -471,21 +422,15 @@ async function submitAddGroup() {
   }
 }
 
-const currentColorMode = ref<'system' | 'light' | 'dark'>('system');
 const shareApp = ref<string>('all');  // 支持自定义包名
-const gridColumns = ref<number>(5);
 const activeMenu = ref('home');
 const isMenuPopupOpen = ref(false);
 const menuAnchor = ref<HTMLElement | { $el: HTMLElement } | null>(null);
 const showGroupActionMenu = ref(false);
 const currentEditingGroup = ref<Group | null>(null);
-const pinyinSearchEnabled = ref(true);
-const acronymSearchEnabled = ref(true);
 // 预览功能已移除，相关变量保留以备后续需要
 // const isImagePreviewOpen = ref(false);
 // const previewImageIndex = ref(0);
-const initialPinchScale = ref(1);
-const lastPinchDistance = ref(0);
 
 const swipeStartX = ref(0);
 const swipeStartY = ref(0);
@@ -508,7 +453,6 @@ const showCustomAppsPopup = ref(false);
 const customShareApps = ref<{ id: number; package_name: string; app_name: string | null }[]>([]);
 
 // 用于强制 ThemeProvider 重新渲染的 key
-const themeKey = ref(0);
 
 // 全局分享应用选择回调
 if (typeof window !== 'undefined') {
@@ -530,35 +474,15 @@ if (typeof window !== 'undefined') {
   };
 }
 
-const isMobile = computed(() => window.innerWidth < 768);
 
 /**
  * 创建类型安全的配置对象
  * 确保 Config 中所有字段类型正确，防止 UI 组件返回非预期类型
  */
-function createSafeConfig(cfg: Config): Config {
-  return {
-    meme_dir: String(cfg.meme_dir || ''),
-    color_mode: typeof cfg.color_mode === 'string' ? cfg.color_mode : 'system',
-    theme_style: typeof cfg.theme_style === 'string' ? cfg.theme_style : 'modern',
-    last_mode: Number(cfg.last_mode) || 1,
-    last_group: Number(cfg.last_group) || 1,
-    share_app: typeof cfg.share_app === 'string' ? cfg.share_app : '',
-    grid_size: Number(cfg.grid_size) || 4,
-    pinyin_search: Boolean(cfg.pinyin_search),
-    acronym_search: Boolean(cfg.acronym_search),
-    global_floating_window: Boolean(cfg.global_floating_window),
-  };
-}
 
 /**
  * 安全更新配置到后端
  */
-async function safeUpdateConfig(cfg: Config | null) {
-  if (!cfg) return;
-  const safeConfig = createSafeConfig(cfg);
-  await invoke("update_config", { config: safeConfig });
-}
 
 const menuPopupStyle = computed(() => {
   if (menuAnchor.value) {
@@ -869,24 +793,6 @@ window.addEventListener('globalFloatingWindowChanged', ((e: CustomEvent) => {
   debug.log('[Floating] Global floating window state changed:', e.detail);
 }) as EventListener);
 
-async function syncSystemTheme() {
-  // 只有当前是【跟随系统模式】才执行同步
-  if (currentColorMode.value !== 'system' || !config.value) return;
-
-  // 判断系统当前是否深色
-  const isSystemDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
-  // 判断当前页面是否深色
-  const isCurrentlyDark = document.documentElement.classList.contains('var-dark');
-
-  // 不一致 → 重新同步
-  if (isSystemDark !== isCurrentlyDark) {
-    debug.log('[Theme] 系统主题变化，正在同步...');
-    
-    applyTheme();          // 应用主题到 DOM
-    themeKey.value++;      // 强制 ThemeProvider 更新
-    debug.log('[Theme] 主题同步完成');
-  }
-}
 
 // 检查 AndroidNative 接口是否可用
 if (isAndroidTauri()) {
@@ -907,86 +813,7 @@ if (isAndroidTauri()) {
   }, 1000);
 }
 
-function handleResize() {
-  if (window.innerWidth < 768) {
-    gridColumns.value = 3;
-  } else if (window.innerWidth < 1024) {
-    gridColumns.value = 4;
-  } else {
-    gridColumns.value = 6;
-  }
-}
 
-async function loadConfig() {
-  try {
-    const result = await invoke<Config>("get_config");
-    if (result && result.meme_dir) {
-      config.value = result;
-      await invoke<string>("full_refresh", { memeDir: config.value.meme_dir });
-      selectedModeId.value = config.value.last_mode || null;
-      selectedGroupId.value = config.value.last_group || null;
-      
-      // 分享目标app：只在配置为空字符串（首次启动）时默认所有应用，其他情况使用用户的选择
-      // null/undefined 视为首次启动，空字符串也视为首次启动
-      const savedShareApp = config.value.share_app;
-      if (!savedShareApp) {
-        // 首次启动，默认为"所有应用"(显示系统分享菜单)并保存
-        shareApp.value = 'all';
-        config.value.share_app = '';  // 保存到配置时为空字符串
-        await safeUpdateConfig(config.value);
-      } else {
-        // 使用用户之前的选择（可能是 wechat、qq 或自定义包名）
-        shareApp.value = savedShareApp;
-      }
-      
-      gridColumns.value = config.value.grid_size || 4;
-      currentColorMode.value = config.value.color_mode as 'system' | 'light' | 'dark';
-      pinyinSearchEnabled.value = config.value.pinyin_search || true;
-      acronymSearchEnabled.value = config.value.acronym_search || true;
-      
-      // Android 平台：从原生服务同步悬浮窗实际状态，并在需要时自动启动服务
-      if (/Android/i.test(navigator.userAgent)) {
-        try {
-          const nativeEnabled = window.AndroidNative?.isFloatingWindowEnabled?.();
-          const shouldBeEnabled = config.value.global_floating_window === true;
-          
-          if (shouldBeEnabled && nativeEnabled !== true) {
-            // 配置中开启了但服务未运行，自动启动
-            debug.log('[Floating] Config says enabled but service not running, starting...');
-            window.AndroidNative?.startFloatingWindow?.();
-            globalFloatingWindowEnabled.value = true;
-          } else {
-            globalFloatingWindowEnabled.value = nativeEnabled === true;
-          }
-          debug.log('[Floating] Synced from native service:', nativeEnabled, 'config:', shouldBeEnabled);
-        } catch (e) {
-          // 如果无法获取原生状态，使用配置中的值
-          globalFloatingWindowEnabled.value = config.value.global_floating_window || true;
-          console.warn('[Floating] Failed to get native status, using config value:', e);
-        }
-      } else {
-        globalFloatingWindowEnabled.value = config.value.global_floating_window || true;
-      }
-      
-      // 加载自定义分享应用
-      await loadCustomApps();
-      
-      applyTheme();
-    } else {
-      // 首次启动，需要选择目录
-      await setupInitialConfig();
-      // 注意：setupInitialConfig 已经完成了自动刷新和数据加载
-      // 所以这里直接返回，不再执行后续的 loadModes 等
-      return;
-    }
-  } catch (error) {
-    console.error("Failed to load config:", error);
-    await setupInitialConfig();
-    // 注意：setupInitialConfig 已经完成了自动刷新和数据加载
-    // 所以这里直接返回，不再执行后续的 loadModes 等
-    return;
-  }
-}
 
 async function loadCustomApps() {
   try {
@@ -1065,164 +892,13 @@ async function removeCustomApp(id: number) {
   }
 }
 
-async function setupInitialConfig() {
-  const selectedDir = await selectDirectory();
-  if (selectedDir) {
-    const newConfig: Config = {
-      meme_dir: selectedDir,
-      color_mode: "system",
-      theme_style: "modern",
-      last_mode: 1,
-      last_group: 1,
-      share_app: "",
-      grid_size: 4,
-      pinyin_search: true,
-      acronym_search: true,
-      global_floating_window: true
-    };
-    config.value = newConfig;
-    await safeUpdateConfig(config.value);
-    applyTheme();
-    
-    // 首次启动，自动刷新数据到数据库并加载
-    await autoRefreshAfterDirChange(selectedDir);
-  } else {
-    // 用户取消了选择，使用默认目录
-    const defaultMemeDir = isAndroidTauri()
-      ? '/storage/emulated/0/meme'
-      : '/home/' + (navigator.userAgent.includes('Linux') ? 'user' : '') + '/meme';
-    const defaultConfig: Config = {
-      meme_dir: defaultMemeDir,
-      color_mode: "system",
-      theme_style: "modern",
-      last_mode: 1,
-      last_group: 1,
-      share_app: "",
-      grid_size: 4,
-      pinyin_search: true,
-      acronym_search: true,
-      global_floating_window: true
-    };
-    config.value = defaultConfig;
-    await safeUpdateConfig(config.value);
-    applyTheme();
-    
-    // 使用默认目录时，也尝试刷新数据并加载
-    await autoRefreshAfterDirChange(defaultMemeDir);
-  }
-}
-
-function applyTheme() {
-  if (currentColorMode.value === 'dark') {
-    document.documentElement.classList.add('var-dark');
-  } else if (currentColorMode.value === 'light') {
-    document.documentElement.classList.remove('var-dark');
-  } else {
-    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      document.documentElement.classList.add('var-dark');
-    } else {
-      document.documentElement.classList.remove('var-dark');
-    }
-  }
-}
-
-async function loadModes() {
-  try {
-    const result = await invoke<Mode[]>("get_modes");
-    if (result) {
-      modes.value = result.sort((a, b) => a.sort_order - b.sort_order);
-      
-      if (selectedModeId.value && !modes.value.find(m => m.id === selectedModeId.value)) {
-        selectedModeId.value = null;
-      }
-      
-      if (modes.value.length > 0 && !selectedModeId.value) {
-        selectedModeId.value = modes.value[0].id;
-      }
-    } else {
-      modes.value = [{
-        id: 1,
-        name: "默认模式",
-        sort_order: 1,
-        folder_path: "/tmp/memes/default"
-      }];
-      selectedModeId.value = 1;
-    }
-  } catch (error) {
-    console.error("Failed to load modes:", error);
-    modes.value = [{
-      id: 1,
-      name: "默认模式",
-      sort_order: 1,
-      folder_path: "/tmp/memes/default"
-    }];
-    selectedModeId.value = 1;
-  }
-}
-
-async function loadGroups(modeId: number) {
-  try {
-    const result = await invoke<Group[]>("get_groups_by_mode", { modeId });
-    if (result) {
-      groups.value = result.sort((a, b) => b.share_count - a.share_count);
-      
-      if (selectedGroupId.value && !groups.value.find(g => g.id === selectedGroupId.value)) {
-        selectedGroupId.value = null;
-      }
-      
-      if (groups.value.length > 0 && !selectedGroupId.value) {
-        selectedGroupId.value = groups.value[0].id;
-        await loadImages(selectedGroupId.value);
-      } else if (groups.value.length === 0) {
-        images.value = [];
-        selectedGroupId.value = null;
-      }
-    } else {
-      groups.value = [{
-        id: 1,
-        name: "默认分组",
-        folder_path: "/tmp/memes/default/group1",
-        share_count: 0,
-        mode_id: modeId
-      }];
-      selectedGroupId.value = 1;
-      await loadImages(1);
-    }
-  } catch (error) {
-    console.error("Failed to load groups:", error);
-    groups.value = [{
-      id: 1,
-      name: "默认分组",
-      folder_path: "/tmp/memes/default/group1",
-      share_count: 0,
-      mode_id: modeId
-    }];
-    selectedGroupId.value = 1;
-    await loadImages(1);
-  }
-}
-
-async function loadImages(groupId: number) {
-  try {
-    const result = await invoke<Image[]>("get_images_by_group", { groupId });
-    if (result) {
-      images.value = result.sort((a, b) => b.share_count - a.share_count);
-    } else {
-      images.value = [];
-    }
-  } catch (error) {
-    console.error("Failed to load images:", error);
-    images.value = [];
-  }
-}
-
 async function searchImages() {
   if (!searchKeyword.value.trim()) {
     // 搜索框为空，获取当前模式下所有分组
     try {
-      const allGroups = await invoke<Group[]>("get_groups_by_mode", { 
+      const allGroups = await invoke("get_groups_by_mode", { 
         modeId: selectedModeId.value
-      });
+      }) as Group[];
       
       if (allGroups && allGroups.length > 0) {
         groups.value = allGroups;
@@ -1241,12 +917,12 @@ async function searchImages() {
   
   try {
     // 首先搜索匹配的分组，带上拼音搜索设置
-    const matchedGroups = await invoke<Group[]>("search_groups", { 
+    const matchedGroups = await invoke("search_groups", { 
       keyword: searchKeyword.value,
       modeId: selectedModeId.value,
       pinyinSearch: pinyinSearchEnabled.value,
       acronymSearch: acronymSearchEnabled.value
-    });
+    }) as Group[];
     
     if (matchedGroups && matchedGroups.length > 0) {
       // 找到匹配的分组，更新分组列表
@@ -1264,66 +940,15 @@ async function searchImages() {
     console.error("Failed to search:", error);
     // 如果搜索分组失败，尝试原来的搜索图片方式
     try {
-      const result = await invoke<Image[]>("search_images", { 
+      const result = await invoke("search_images", { 
         keyword: searchKeyword.value,
         pinyin: pinyinSearchEnabled.value,
         acronym: acronymSearchEnabled.value
-      });
+      }) as Image[];
       images.value = result || [];
     } catch (err) {
       console.error("Failed to search images:", err);
     }
-  }
-}
-
-async function switchMode(active: string | number) {
-  const modeId = Number(active);
-  selectedModeId.value = modeId;
-  await loadGroups(modeId);
-  if (config.value) {
-    config.value.last_mode = modeId;
-    await safeUpdateConfig(config.value);
-  }
-  
-  await nextTick();
-  
-  const activeTab = document.querySelector('.modern-tabs-container:not(.secondary) .modern-tab.active');
-  const scrollContainer = document.querySelector('.modern-tabs-container:not(.secondary) .modern-tabs-scroll');
-  
-  if (activeTab && scrollContainer) {
-    activeTab.scrollIntoView({ 
-      behavior: 'smooth', 
-      block: 'nearest',
-      inline: 'center'
-    });
-  }
-  
-  // 切换模式后，如果搜索栏有内容，自动进行搜索
-  if (searchKeyword.value.trim()) {
-    await searchImages();
-  }
-}
-
-async function switchGroup(active: string | number) {
-  const groupId = Number(active);
-  selectedGroupId.value = groupId;
-  await loadImages(groupId);
-  if (config.value) {
-    config.value.last_group = groupId;
-    await safeUpdateConfig(config.value);
-  }
-  
-  await nextTick();
-  
-  const activeTab = document.querySelector('.modern-tabs-container.secondary .modern-tab.active');
-  const scrollContainer = document.querySelector('.modern-tabs-container.secondary .modern-tabs-scroll');
-  
-  if (activeTab && scrollContainer) {
-    activeTab.scrollIntoView({ 
-      behavior: 'smooth', 
-      block: 'nearest',
-      inline: 'center'
-    });
   }
 }
 
@@ -1495,46 +1120,6 @@ function handleShareAppChange(app: string) {
   }
 }
 
-function handleWheel(event: WheelEvent) {
-  if (!isMobile.value && event.ctrlKey) {
-    event.preventDefault();
-    if (event.deltaY < 0 && gridColumns.value < 8) {
-      gridColumns.value++;
-    } else if (event.deltaY > 0 && gridColumns.value > 2) {
-      gridColumns.value--;
-    }
-    if (config.value) {
-      config.value.grid_size = gridColumns.value;
-      safeUpdateConfig(config.value);
-    }
-  }
-}
-
-function handleTouchStart(event: TouchEvent) {
-  if (event.touches.length === 2) {
-    const dx = event.touches[0].clientX - event.touches[1].clientX;
-    const dy = event.touches[0].clientY - event.touches[1].clientY;
-    lastPinchDistance.value = Math.sqrt(dx * dx + dy * dy);
-    initialPinchScale.value = gridColumns.value;
-  }
-}
-
-function handleTouchMove(event: TouchEvent) {
-  if (event.touches.length === 2) {
-    event.preventDefault();
-    const dx = event.touches[0].clientX - event.touches[1].clientX;
-    const dy = event.touches[0].clientY - event.touches[1].clientY;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    const scale = distance / lastPinchDistance.value;
-    const newColumns = Math.round(initialPinchScale.value / scale);
-    gridColumns.value = Math.max(2, Math.min(8, newColumns));
-    if (config.value) {
-      config.value.grid_size = gridColumns.value;
-      safeUpdateConfig(config.value);
-    }
-  }
-}
-
 function handleSwipeStart(event: TouchEvent) {
   if (isGlobalEditMode.value || event.touches.length !== 1) return;
   swipeStartX.value = event.touches[0].clientX;
@@ -1644,79 +1229,6 @@ async function handlePasteImage() {
   } catch (error) {
     console.error("Failed to paste image:", error);
     Snackbar.warning('粘贴图片失败: ' + error);
-  }
-}
-
-async function fullRefresh() {
-  try {
-    const memeDir = config.value?.meme_dir;
-    if (!memeDir) {
-      Snackbar.warning('请先在设置中配置表情包目录');
-      return;
-    }
-
-    const accessible = await invoke<boolean>('check_storage_accessible', { memeDir });
-    if (!accessible) {
-      if (typeof window.AndroidNative?.requestStoragePermission === 'function') {
-        window.AndroidNative.requestStoragePermission();
-      }
-      Snackbar.warning('请授予存储权限后重试');
-      return;
-    }
-
-    Snackbar.info('正在刷新数据...');
-    const result = await invoke<string>("full_refresh", { memeDir });
-    debug.log('Full refresh result:', result);
-    await reloadPageState();
-    Snackbar.success('数据刷新完成');
-  } catch (error) {
-    console.error("Failed to refresh:", error);
-    try { await reloadPageState(); } catch (e) { /* ignore */ }
-    Snackbar.error('数据刷新失败: ' + error);
-  }
-}
-
-async function reloadPageState() {
-  await loadModes();
-  if (selectedModeId.value) {
-    await loadGroups(selectedModeId.value);
-  }
-  if (selectedGroupId.value) {
-    await loadImages(selectedGroupId.value);
-  }
-}
-
-/**
- * 目录变更后自动刷新数据到数据库
- * @param newDir 新的表情包目录路径
- */
-async function autoRefreshAfterDirChange(newDir: string) {
-  try {
-    debug.log('[Auto Refresh] Checking directory:', newDir);
-    
-    // 检查存储是否可访问
-    const accessible = await invoke<boolean>('check_storage_accessible', { memeDir: newDir });
-    if (!accessible) {
-      debug.log('[Auto Refresh] Storage not accessible, skipping');
-      return;
-    }
-    
-    // 执行全量刷新，将文件系统数据同步到数据库
-    Snackbar.info('正在初始化数据...');
-    const result = await invoke<string>("full_refresh", { memeDir: newDir });
-    debug.log('[Auto Refresh] Result:', result);
-    
-    // 刷新完成后重新加载页面状态
-    await reloadPageState();
-    Snackbar.success('数据初始化完成');
-  } catch (error) {
-    console.error('[Auto Refresh] Failed:', error);
-    // 即使刷新失败，也尝试加载已有数据
-    try {
-      await reloadPageState();
-    } catch (e) {
-      console.error('[Auto Refresh] Reload also failed:', e);
-    }
   }
 }
 

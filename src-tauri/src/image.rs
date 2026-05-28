@@ -1,60 +1,18 @@
 //! 图片处理模块
-//! 
-//! 提供图片上传、复制、删除、搜索等功能
+//!
+//! 提供图片上传、复制、删除、搜索、索引刷新等功能
+//!
+//! 剪贴板相关功能已提取到 [`clipboard`] 模块，通过 `pub use` 重新导出。
 
 use rusqlite::params;
 use std::path::PathBuf;
 use crate::{db::init_db, models::Image, meme_fs};
-use tauri_plugin_clipboard_manager::ClipboardExt;
-use image::ImageEncoder;
 
 #[cfg(not(target_os = "android"))]
 use clipboard_rs::{Clipboard, ClipboardContext};
 
-/// 剪贴板图片数据结构
-#[derive(serde::Serialize)]
-pub struct ClipboardImage {
-	/// 图片二进制数据
-	pub data: Vec<u8>,
-	/// 图片格式
-	pub format: String,
-}
-
-/// 从剪贴板读取图片
-#[tauri::command]
-pub fn paste_image_from_clipboard<R: tauri::Runtime>(
-	_app: tauri::AppHandle<R>,
-) -> Result<ClipboardImage, String> {
-	let clipboard = _app.clipboard();
-	
-	match clipboard.read_image() {
-		Ok(image) => {
-			let rgba_data: Vec<u8> = image.rgba().into();
-			let width = image.width();
-			let height = image.height();
-			
-			match image::ImageBuffer::<image::Rgba<u8>, Vec<u8>>::from_raw(
-				width, height, rgba_data
-			) {
-				Some(buffer) => {
-					let mut png_bytes: Vec<u8> = Vec::new();
-					let encoder = image::codecs::png::PngEncoder::new(&mut png_bytes);
-					match encoder.write_image(
-						&buffer, width, height, image::ColorType::Rgba8
-					) {
-						Ok(_) => Ok(ClipboardImage {
-							data: png_bytes,
-							format: "png".to_string(),
-						}),
-						Err(e) => Err(format!("Failed to encode PNG: {}", e)),
-					}
-				}
-				None => Err("Failed to create image buffer".to_string()),
-			}
-		}
-		Err(e) => Err(format!("Failed to read clipboard image: {}", e)),
-	}
-}
+// 重新导出剪贴板模块的所有公共项，保持向后兼容
+pub use crate::clipboard::*;
 
 /// 检测图片格式
 fn detect_image_format(data: &[u8]) -> Option<&'static str> {
@@ -75,135 +33,6 @@ fn detect_image_format(data: &[u8]) -> Option<&'static str> {
 	} else {
 		None
 	}
-}
-
-/// 使用系统命令读取剪贴板图片（桌面端）
-#[cfg(not(target_os = "android"))]
-fn read_clipboard_with_system_command(temp_dir: &str) -> Result<String, String> {
-	let timestamp = std::time::SystemTime::now()
-		.duration_since(std::time::UNIX_EPOCH)
-		.unwrap_or_default()
-		.as_millis();
-	
-	#[cfg(target_os = "linux")]
-	{
-		let session_type = std::env::var("XDG_SESSION_TYPE").unwrap_or_default();
-		
-		if session_type == "wayland" {
-			let output = std::process::Command::new("wl-paste")
-				.args(&["--type", "image/png"])
-				.output();
-			
-			if let Ok(output) = output {
-				if output.status.success() && !output.stdout.is_empty() {
-					let temp_file_name = format!("pasted-{}.png", timestamp);
-					let temp_path = std::path::Path::new(temp_dir).join(&temp_file_name);
-					if let Some(parent) = temp_path.parent() {
-						std::fs::create_dir_all(parent)
-							.map_err(|e| format!("Failed to create temp dir: {}", e))?;
-					}
-					std::fs::write(&temp_path, &output.stdout)
-						.map_err(|e| format!("Failed to write image: {}", e))?;
-					return Ok(temp_path.to_string_lossy().to_string());
-				}
-			}
-		}
-	}
-	
-	Err("System clipboard command failed".to_string())
-}
-
-/// 从剪贴板读取图片（桌面端）
-#[cfg(not(target_os = "android"))]
-#[tauri::command]
-pub fn paste_image_from_clipboard_raw<R: tauri::Runtime>(
-	_app: tauri::AppHandle<R>,
-	temp_dir: String,
-) -> Result<String, String> {
-	let ctx = ClipboardContext::new().map_err(|e| {
-		format!("Failed to create clipboard context: {}", e)
-	})?;
-	
-	let files = ctx.get_files().map_err(|e| {
-		format!("Failed to read files from clipboard: {}", e)
-	})?;
-	
-	if !files.is_empty() {
-		let src_path = std::path::Path::new(&files[0]);
-		if !src_path.exists() {
-			return Err("剪贴板中的文件不存在".to_string());
-		}
-		
-		let extension = src_path.extension()
-			.and_then(|e| e.to_str())
-			.unwrap_or("png")
-			.to_lowercase();
-		
-		let timestamp = std::time::SystemTime::now()
-			.duration_since(std::time::UNIX_EPOCH)
-			.unwrap_or_default()
-			.as_millis();
-		
-		let temp_file_name = format!("pasted-{}.{}", timestamp, extension);
-		let temp_path = std::path::Path::new(&temp_dir).join(&temp_file_name);
-		
-		if let Some(parent) = temp_path.parent() {
-			std::fs::create_dir_all(parent)
-				.map_err(|e| format!("Failed to create temp dir: {}", e))?;
-		}
-		
-		std::fs::copy(src_path, &temp_path).map_err(|e| {
-			format!("Failed to copy file: {}", e)
-		})?;
-		
-		return Ok(temp_path.to_string_lossy().to_string());
-	}
-	
-	match read_clipboard_with_system_command(&temp_dir) {
-		Ok(path) => return Ok(path),
-		Err(_) => {
-			let clipboard = _app.clipboard();
-			match clipboard.read_image() {
-				Ok(image) => {
-					let rgba_data: Vec<u8> = image.rgba().into();
-					let width = image.width();
-					let height = image.height();
-					
-					let timestamp = std::time::SystemTime::now()
-						.duration_since(std::time::UNIX_EPOCH)
-						.unwrap_or_default()
-						.as_millis();
-					let temp_file_name = format!("pasted-{}.png", timestamp);
-					let temp_path = std::path::Path::new(&temp_dir).join(&temp_file_name);
-					
-					if let Some(parent) = temp_path.parent() {
-						std::fs::create_dir_all(parent)
-							.map_err(|e| format!("Failed to create temp dir: {}", e))?;
-					}
-					
-					let buffer = image::ImageBuffer::<image::Rgba<u8>, Vec<u8>>::from_raw(
-						width, height, rgba_data
-					).ok_or("Failed to create image buffer")?;
-					
-					buffer.save(&temp_path)
-						.map_err(|e| format!("Failed to save image: {}", e))?;
-					
-					Ok(temp_path.to_string_lossy().to_string())
-				}
-				Err(e) => Err(format!("剪贴板中没有图片或读取失败: {}", e)),
-			}
-		}
-	}
-}
-
-/// 从剪贴板读取图片（Android 端 - 不支持）
-#[cfg(target_os = "android")]
-#[tauri::command]
-pub fn paste_image_from_clipboard_raw<R: tauri::Runtime>(
-	_app: tauri::AppHandle<R>,
-	_temp_dir: String,
-) -> Result<String, String> {
-	Err("剪贴板粘贴功能在 Android 端暂不支持".to_string())
 }
 
 /// 获取分组下的所有图片
