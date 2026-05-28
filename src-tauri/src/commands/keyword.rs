@@ -9,10 +9,8 @@ use serde::{Deserialize, Serialize};
 /// 使用 pinyin crate 转换拼音
 pub fn convert_to_pinyin(text: &str) -> String {
     let mut result = String::new();
-    for pinyin_opt in text.to_pinyin() {
-        if let Some(py) = pinyin_opt {
-            result.push_str(py.plain());
-        }
+    for py in text.to_pinyin().flatten() {
+        result.push_str(py.plain());
     }
     result
 }
@@ -20,12 +18,10 @@ pub fn convert_to_pinyin(text: &str) -> String {
 /// 生成首字母缩写
 pub fn convert_to_acronym(text: &str) -> String {
     let mut result = String::new();
-    for pinyin_opt in text.to_pinyin() {
-        if let Some(py) = pinyin_opt {
-            let plain = py.plain();
-            if let Some(first_char) = plain.chars().next() {
-                result.push(first_char);
-            }
+    for py in text.to_pinyin().flatten() {
+        let plain = py.plain();
+        if let Some(first_char) = plain.chars().next() {
+            result.push(first_char);
         }
     }
     result
@@ -184,7 +180,7 @@ pub fn generate_keywords_file(meme_dir: String, generate_pinyin: bool, generate_
     let mut groups_to_remove: Vec<String> = Vec::new();
 
     // 计算需要删除的分组
-    for (group_name, _) in &existing_groups_keywords {
+    for group_name in existing_groups_keywords.keys() {
         if !target_groups_keywords.contains_key(group_name) {
             groups_to_remove.push(group_name.clone());
         }
@@ -217,7 +213,7 @@ pub fn generate_keywords_file(meme_dir: String, generate_pinyin: bool, generate_
         .collect();
 
     // 计算需要删除的拼音条目
-    for (keyword, _) in &existing_keywords_pinyin {
+    for keyword in existing_keywords_pinyin.keys() {
         if !all_target_keywords.contains(&keyword) {
             pinyin_to_remove.push(keyword.clone());
         }
@@ -331,7 +327,7 @@ pub fn generate_keywords_file(meme_dir: String, generate_pinyin: bool, generate_
         // 创建新文件，添加注释头
         format!(
             "# Keywords Configuration\n# Auto-generated file\n# Format:\n# [groups_keywords] - 分组关键词映射\n# [keywords_pinyin] - 关键词拼音信息（仅中文需要）\n\n{}",
-            doc.to_string()
+            doc
         )
     };
 
@@ -589,7 +585,7 @@ pub(crate) fn write_keywords_toml_snapshot(
 
     let content = format!(
         "# Keywords Configuration\n# Auto-generated file\n# Format:\n# [groups_keywords] - 分组关键词映射\n# [keywords_pinyin] - 关键词拼音信息（仅中文需要）\n\n{}",
-        doc.to_string()
+        doc
     );
 
     std::fs::write(&keywords_file, content)

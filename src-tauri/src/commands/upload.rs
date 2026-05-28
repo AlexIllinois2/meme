@@ -3,7 +3,7 @@
 //! 处理桌面端和 Android 端的图片上传逻辑
 
 use rusqlite::params;
-use crate::core::{db_state::DbState, error::AppError, meme_fs};
+use crate::core::{db_state::DbState, meme_fs};
 
 /// Android 图片数据结构
 #[derive(serde::Deserialize)]

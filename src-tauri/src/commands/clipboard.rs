@@ -70,7 +70,7 @@ fn read_clipboard_with_system_command(temp_dir: &str) -> Result<String, AppError
         let session_type = std::env::var("XDG_SESSION_TYPE").unwrap_or_default();
         if session_type == "wayland" {
             let output = std::process::Command::new("wl-paste")
-                .args(&["--type", "image/png"])
+                .args(["--type", "image/png"])
                 .output();
 
             if let Ok(output) = output {
@@ -141,7 +141,7 @@ pub fn paste_image_from_clipboard_raw<R: tauri::Runtime>(
     }
 
     match read_clipboard_with_system_command(&temp_dir) {
-        Ok(path) => return Ok(path),
+        Ok(path) => Ok(path),
         Err(_) => {
             let clipboard = _app.clipboard();
             match clipboard.read_image() {

@@ -29,6 +29,11 @@ dist-ssr
 .trae
 .hermes
 
+# Dev plan artifacts
+audit_report.md
+refactor-plan.md
+split-plan.md
+
 src-tauri/target
 
 keystore.properties

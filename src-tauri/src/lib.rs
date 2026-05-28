@@ -10,8 +10,9 @@ pub use core::models::*;
 pub use core::error::AppError;
 pub use core::db_state::DbState;
 
-// 导入 Emitter trait 以使用 emit 方法
+#[cfg(target_os = "android")]
 use tauri::Emitter;
+
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

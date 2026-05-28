@@ -12,10 +12,6 @@ use crate::core::error::AppError;
 #[cfg(not(target_os = "android"))]
 use clipboard_rs::{Clipboard, ClipboardContext};
 
-// 重新导出剪贴板模块的所有公共项，保持向后兼容
-
-/// 检测图片格式
-
 /// 获取分组下的所有图片
 #[tauri::command]
 pub fn get_images_by_group(state: tauri::State<'_, DbState>, group_id: i32) -> Result<Vec<Image>, AppError> {
@@ -146,41 +142,55 @@ pub fn increment_share_count(state: tauri::State<'_, DbState>, image_id: i32, gr
 
 /// 批量复制图片
 #[tauri::command]
+#[allow(unused_variables)]
 pub fn copy_images(state: tauri::State<'_, DbState>, image_ids: Vec<i32>) -> Result<(), AppError> {
 	if image_ids.is_empty() {
 		return Ok(());
 	}
-	
-	let mut errors: Vec<String> = Vec::new();
-	for image_id in &image_ids {
-		let result = (|| -> Result<(), AppError> {
-			let conn = state.lock().map_err(|e| AppError(e.to_string()))?;
-			let raw_path: String = conn.query_row(
+
+	// 先持锁收集所有图片路径并更新分享次数，尽快释放锁
+	let collected: Vec<(i32, String)> = {
+		let conn = state.lock().map_err(|e| AppError(e.to_string()))?;
+		let meme_dir: String = conn.query_row(
+			"SELECT meme_dir FROM config WHERE id = 1", [], |row| row.get(0)
+		).unwrap_or_default();
+		let mut items = Vec::with_capacity(image_ids.len());
+		for &image_id in &image_ids {
+			if let Ok(raw_path) = conn.query_row::<String, _, _>(
 				"SELECT image_path FROM images WHERE id = ?", params![image_id], |row| row.get(0)
-			)?;
-			let meme_dir: String = conn.query_row(
-				"SELECT meme_dir FROM config WHERE id = 1", [], |row| row.get(0)
-			).unwrap_or_default();
-			let image_path = meme_fs::resolve_meme_path(&meme_dir, &raw_path).to_string_lossy().to_string();
-			increment_share_count_internal(&conn, *image_id, None)?;
-			#[cfg(not(target_os = "android"))]
-			{
-				let ctx = ClipboardContext::new().map_err(|e| AppError(format!("Failed to create clipboard context: {}", e)))?;
-				let abs_path = std::fs::canonicalize(&image_path).map_err(|e| AppError(format!("Failed to get absolute path: {}", e)))?;
-				ctx.set_files(vec![abs_path.to_string_lossy().to_string()]).map_err(|e| AppError(format!("Failed to copy file to clipboard: {}", e)))?;
+			) {
+				let full_path = meme_fs::resolve_meme_path(&meme_dir, &raw_path).to_string_lossy().to_string();
+				let _ = increment_share_count_internal(&conn, image_id, None);
+				items.push((image_id, full_path));
 			}
+		}
+		items
+	};
+
+	// 释放锁后再执行剪贴板操作（阻塞操作，不应持锁）
+	#[allow(unused_mut)]
+	let mut errors: Vec<String> = Vec::new();
+	for (image_id, image_path) in &collected {
+		#[cfg(not(target_os = "android"))]
+		let result = (|| -> Result<(), AppError> {
+			let ctx = ClipboardContext::new().map_err(|e| AppError(format!("Failed to create clipboard context: {}", e)))?;
+			let abs_path = std::fs::canonicalize(image_path)
+				.map_err(|e| AppError(format!("Failed to get absolute path: {}", e)))?;
+			ctx.set_files(vec![abs_path.to_string_lossy().to_string()])
+				.map_err(|e| AppError(format!("Failed to copy file to clipboard: {}", e)))?;
 			Ok(())
 		})();
+		#[cfg(not(target_os = "android"))]
 		if let Err(e) = result {
 			log::warn!("复制图片 {} 失败: {}", image_id, e);
 			errors.push(e.to_string());
 		}
 	}
-	
+
 	if errors.len() == image_ids.len() {
 		return Err(format!("所有 {} 张图片复制失败: {}", errors.len(), errors.join("; ")).into());
 	}
-	
+
 	Ok(())
 }
 
@@ -707,9 +717,8 @@ pub fn full_refresh(state: tauri::State<'_, DbState>, meme_dir: String) -> Resul
 	conn.execute_batch("BEGIN")?;
 	match refresh_everything(&conn, &meme_dir) {
 		Ok(msg) => {
-			conn.execute_batch("COMMIT").map_err(|e| {
+			conn.execute_batch("COMMIT").inspect_err(|_| {
 				let _ = conn.execute_batch("ROLLBACK");
-				e
 			})?;
 			Ok(msg)
 		}

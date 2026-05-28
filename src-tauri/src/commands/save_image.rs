@@ -1,4 +1,5 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+#[cfg(target_os = "android")]
 use tauri::Emitter;
 use tauri::Manager;
 use crate::core::error::AppError;

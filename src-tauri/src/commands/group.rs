@@ -298,177 +298,63 @@ pub fn search_groups(
             return get_all_groups(state);
         }
     }
-    
+
     let conn = state.lock().map_err(|e| AppError(e.to_string()))?;
     let search_pattern = format!("%{}%", keyword);
-    
-    // 根据搜索选项构建查询和参数
-    let groups = if let Some(mid) = mode_id {
-        let query = match (pinyin_search, acronym_search) {
-            (false, false) => {
-                // 只按关键词搜索
-                "SELECT DISTINCT g.id, g.name, g.folder_path, g.share_count, g.mode_id, m.name 
-                 FROM groups g
-                 LEFT JOIN modes m ON g.mode_id = m.id
-                 JOIN keyword_group_links kgl ON g.id = kgl.group_id
-                 JOIN keywords k ON kgl.keyword_id = k.id
-                 WHERE g.mode_id = ? AND k.keyword LIKE ?
-                 ORDER BY g.share_count DESC, g.id ASC"
-            }
-            (true, false) => {
-                // 关键词 + 拼音
-                "SELECT DISTINCT g.id, g.name, g.folder_path, g.share_count, g.mode_id, m.name 
-                 FROM groups g
-                 LEFT JOIN modes m ON g.mode_id = m.id
-                 JOIN keyword_group_links kgl ON g.id = kgl.group_id
-                 JOIN keywords k ON kgl.keyword_id = k.id
-                 WHERE g.mode_id = ? AND (k.keyword LIKE ? OR k.pinyin LIKE ?)
-                 ORDER BY g.share_count DESC, g.id ASC"
-            }
-            (false, true) => {
-                // 关键词 + 缩写
-                "SELECT DISTINCT g.id, g.name, g.folder_path, g.share_count, g.mode_id, m.name 
-                 FROM groups g
-                 LEFT JOIN modes m ON g.mode_id = m.id
-                 JOIN keyword_group_links kgl ON g.id = kgl.group_id
-                 JOIN keywords k ON kgl.keyword_id = k.id
-                 WHERE g.mode_id = ? AND (k.keyword LIKE ? OR k.acronym LIKE ?)
-                 ORDER BY g.share_count DESC, g.id ASC"
-            }
-            (true, true) => {
-                // 关键词 + 拼音 + 缩写
-                "SELECT DISTINCT g.id, g.name, g.folder_path, g.share_count, g.mode_id, m.name 
-                 FROM groups g
-                 LEFT JOIN modes m ON g.mode_id = m.id
-                 JOIN keyword_group_links kgl ON g.id = kgl.group_id
-                 JOIN keywords k ON kgl.keyword_id = k.id
-                 WHERE g.mode_id = ? AND (k.keyword LIKE ? OR k.pinyin LIKE ? OR k.acronym LIKE ?)
-                 ORDER BY g.share_count DESC, g.id ASC"
-            }
-        };
-        
-        let mut stmt = conn.prepare(query)?;
-        
-        match (pinyin_search, acronym_search) {
-            (false, false) => {
-                stmt.query_map(params![mid, search_pattern], |row| {
-                    Ok(Group {
-                        id: row.get(0)?,
-                        name: row.get(1)?,
-                        folder_path: row.get(2)?,
-                        share_count: row.get(3)?,
-                        mode_id: row.get(4)?,
-                        mode_name: row.get(5)?,
-                    })
-                })?.collect::<Result<Vec<_>, _>>()?
-            }
-            (true, false) | (false, true) => {
-                stmt.query_map(params![mid, search_pattern, search_pattern], |row| {
-                    Ok(Group {
-                        id: row.get(0)?,
-                        name: row.get(1)?,
-                        folder_path: row.get(2)?,
-                        share_count: row.get(3)?,
-                        mode_id: row.get(4)?,
-                        mode_name: row.get(5)?,
-                    })
-                })?.collect::<Result<Vec<_>, _>>()?
-            }
-            (true, true) => {
-                stmt.query_map(params![mid, search_pattern, search_pattern, search_pattern], |row| {
-                    Ok(Group {
-                        id: row.get(0)?,
-                        name: row.get(1)?,
-                        folder_path: row.get(2)?,
-                        share_count: row.get(3)?,
-                        mode_id: row.get(4)?,
-                        mode_name: row.get(5)?,
-                    })
-                })?.collect::<Result<Vec<_>, _>>()?
-            }
-        }
-    } else {
-        let query = match (pinyin_search, acronym_search) {
-            (false, false) => {
-                "SELECT DISTINCT g.id, g.name, g.folder_path, g.share_count, g.mode_id, m.name 
-                 FROM groups g
-                 LEFT JOIN modes m ON g.mode_id = m.id
-                 JOIN keyword_group_links kgl ON g.id = kgl.group_id
-                 JOIN keywords k ON kgl.keyword_id = k.id
-                 WHERE k.keyword LIKE ?
-                 ORDER BY g.share_count DESC, g.id ASC"
-            }
-            (true, false) => {
-                "SELECT DISTINCT g.id, g.name, g.folder_path, g.share_count, g.mode_id, m.name 
-                 FROM groups g
-                 LEFT JOIN modes m ON g.mode_id = m.id
-                 JOIN keyword_group_links kgl ON g.id = kgl.group_id
-                 JOIN keywords k ON kgl.keyword_id = k.id
-                 WHERE k.keyword LIKE ? OR k.pinyin LIKE ?
-                 ORDER BY g.share_count DESC, g.id ASC"
-            }
-            (false, true) => {
-                "SELECT DISTINCT g.id, g.name, g.folder_path, g.share_count, g.mode_id, m.name 
-                 FROM groups g
-                 LEFT JOIN modes m ON g.mode_id = m.id
-                 JOIN keyword_group_links kgl ON g.id = kgl.group_id
-                 JOIN keywords k ON kgl.keyword_id = k.id
-                 WHERE k.keyword LIKE ? OR k.acronym LIKE ?
-                 ORDER BY g.share_count DESC, g.id ASC"
-            }
-            (true, true) => {
-                "SELECT DISTINCT g.id, g.name, g.folder_path, g.share_count, g.mode_id, m.name 
-                 FROM groups g
-                 LEFT JOIN modes m ON g.mode_id = m.id
-                 JOIN keyword_group_links kgl ON g.id = kgl.group_id
-                 JOIN keywords k ON kgl.keyword_id = k.id
-                 WHERE k.keyword LIKE ? OR k.pinyin LIKE ? OR k.acronym LIKE ?
-                 ORDER BY g.share_count DESC, g.id ASC"
-            }
-        };
-        
-        let mut stmt = conn.prepare(query)?;
-        
-        match (pinyin_search, acronym_search) {
-            (false, false) => {
-                stmt.query_map(params![search_pattern], |row| {
-                    Ok(Group {
-                        id: row.get(0)?,
-                        name: row.get(1)?,
-                        folder_path: row.get(2)?,
-                        share_count: row.get(3)?,
-                        mode_id: row.get(4)?,
-                        mode_name: row.get(5)?,
-                    })
-                })?.collect::<Result<Vec<_>, _>>()?
-            }
-            (true, false) | (false, true) => {
-                stmt.query_map(params![search_pattern, search_pattern], |row| {
-                    Ok(Group {
-                        id: row.get(0)?,
-                        name: row.get(1)?,
-                        folder_path: row.get(2)?,
-                        share_count: row.get(3)?,
-                        mode_id: row.get(4)?,
-                        mode_name: row.get(5)?,
-                    })
-                })?.collect::<Result<Vec<_>, _>>()?
-            }
-            (true, true) => {
-                stmt.query_map(params![search_pattern, search_pattern, search_pattern], |row| {
-                    Ok(Group {
-                        id: row.get(0)?,
-                        name: row.get(1)?,
-                        folder_path: row.get(2)?,
-                        share_count: row.get(3)?,
-                        mode_id: row.get(4)?,
-                        mode_name: row.get(5)?,
-                    })
-                })?.collect::<Result<Vec<_>, _>>()?
-            }
-        }
-    };
-    
+
+    // 动态构建 SQL：避免 8 路 match 代码重复
+    use rusqlite::types::ToSql;
+
+    let base_query = "SELECT DISTINCT g.id, g.name, g.folder_path, g.share_count, g.mode_id, m.name
+         FROM groups g
+         LEFT JOIN modes m ON g.mode_id = m.id
+         JOIN keyword_group_links kgl ON g.id = kgl.group_id
+         JOIN keywords k ON kgl.keyword_id = k.id";
+
+    let mut conditions: Vec<String> = Vec::new();
+    // 使用 rusqlite::types::Value 以便在运行时动态拼参数
+    let mut sql_params: Vec<Box<dyn ToSql>> = Vec::new();
+
+    if let Some(mid) = mode_id {
+        conditions.push(format!("g.mode_id = ?{}", sql_params.len() + 1));
+        sql_params.push(Box::new(mid));
+    }
+
+    // 关键词条件
+    let mut keyword_conds: Vec<String> = Vec::new();
+    keyword_conds.push(format!("k.keyword LIKE ?{}", sql_params.len() + 1));
+    sql_params.push(Box::new(search_pattern.clone()));
+
+    if pinyin_search {
+        keyword_conds.push(format!("k.pinyin LIKE ?{}", sql_params.len() + 1));
+        sql_params.push(Box::new(search_pattern.clone()));
+    }
+    if acronym_search {
+        keyword_conds.push(format!("k.acronym LIKE ?{}", sql_params.len() + 1));
+        sql_params.push(Box::new(search_pattern.clone()));
+    }
+
+    conditions.push(format!("({})", keyword_conds.join(" OR ")));
+
+    let full_query = format!(
+        "{} WHERE {} ORDER BY g.share_count DESC, g.id ASC",
+        base_query,
+        conditions.join(" AND ")
+    );
+
+    let mut stmt = conn.prepare(&full_query)?;
+    let param_refs: Vec<&dyn ToSql> = sql_params.iter().map(|b| b.as_ref()).collect();
+    let groups = stmt.query_map(param_refs.as_slice(), |row| {
+        Ok(Group {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            folder_path: row.get(2)?,
+            share_count: row.get(3)?,
+            mode_id: row.get(4)?,
+            mode_name: row.get(5)?,
+        })
+    })?.collect::<Result<Vec<_>, _>>()?;
+
     Ok(groups)
 }
 

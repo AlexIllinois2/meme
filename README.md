@@ -1,145 +1,154 @@
 # 咪萌 - 本地表情包管理工具
 
-一个本地表情包分享和管理工具。
+一个本地表情包分享和管理工具，基于 Tauri 2、Vue 3 和 Rust 打造，支持 Linux 桌面端和 Android 移动端。
 
-咪萌是一款基于 Tauri 2、Vue 3 和 Rust 打造的跨平台本地表情包管理与分享工具，支持 Linux 桌面端和 Android 移动端。
-
-应用采用创新的"模式-分组"二级分类体系，帮助用户高效组织海量表情包。内置智能关键词系统，支持中文、拼音及首字母缩写多维度搜索，让你秒速定位心仪表情。独特的分享次数排序功能，自动将常用表情置顶，提升使用效率。
-
-核心亮点包括：一键复制（PC端）或直接分享至微信/QQ（移动端）、批量导入导出、自定义主题切换（浅色/深色/跟随系统）、灵活的宫格布局调节（滚轮或双指缩放）。所有数据本地存储，隐私安全有保障，数据库与文件系统实时同步，确保数据一致性。
-
-界面设计遵循现代极简美学，大圆角卡片、柔和投影、流畅动效，带来清爽通透的视觉体验。无论是日常聊天还是工作沟通，本应用都能让你的表情包管理变得轻松有序，成为你的专属表情管家。
+应用采用 **"模式-分组"** 二级分类体系，帮助用户高效组织海量表情包。内置智能关键词系统，支持中文、拼音及首字母缩写多维度搜索。独特的分享次数排序功能，自动将常用表情置顶。
 
 ## 功能特性
 
-- ✅ **模式管理**：支持创建多个表情包模式（分类）
-- ✅ **分组管理**：在每个模式下创建多个分组
-- ✅ **关键词管理**：为分组添加关键词，支持拼音和首字母缩写搜索
-- ✅ **智能搜索**：通过关键词、拼音或首字母缩写快速查找表情包
-- ✅ **批量操作**：支持批量删除、移动表情包
-- ✅ **导入导出**：支持配置和数据的导入导出
-- ✅ **主题切换**：支持浅色/深色/跟随系统三种主题模式
-- ✅ **跨平台**：支持 Linux (x86_64) 和 Android (aarch64)
+- ✅ **模式管理** — 一级分类（如"工作"、"闲聊"）
+- ✅ **分组管理** — 二级分类，基于文件夹的自动同步
+- ✅ **关键词管理** — 为分组添加关键词，支持拼音和首字母缩写搜索
+- ✅ **智能搜索** — 关键词、拼音、首字母缩写即时检索
+- ✅ **批量操作** — 批量删除、移动表情包
+- ✅ **主题切换** — 浅色 / 深色 / 跟随系统
+- ✅ **跨平台** — Linux (x86_64) + Android (aarch64)
+- ✅ **剪贴板粘贴** — 桌面端一键粘贴图片
+- ✅ **自定义分享** — Android 自定义分享到指定 App
 
 ## 技术栈
 
-- **前端**: Vue 3 + TypeScript + Vite
-- **后端**: Rust + Tauri 2
-- **数据库**: SQLite (rusqlite)
-- **状态管理**: Vue Composition API
+| 层 | 技术 |
+|---|---|
+| 前端 | Vue 3 + TypeScript + Vite + Varlet UI |
+| 后端 | Rust + Tauri 2 |
+| 数据库 | SQLite (rusqlite, bundled) |
+| 图片处理 | image-rs |
+| 拼音 | pinyin-rs |
 
-## 开发环境要求
+## 开发环境
 
-- Node.js 18+ 
-- Rust 1.70+
-- 操作系统特定的依赖：
-  - **Linux**: webkit2gtk, libappindicator3, librsvg2-dev
-  - **Android**: Android SDK & NDK
+### 前置要求
 
-## 安装依赖
+- **Node.js** 18+（通过 mise 管理）
+- **Rust** 1.70+
+- **Bun**（包管理器，不要用 npm）
+- **Linux**: webkit2gtk, libappindicator3, librsvg2-dev
+- **Android**: Android SDK & NDK（可选，仅构建 Android 时需要）
 
-```bash
-npm install
-```
-
-## 开发运行
-
-```bash
-npm run tauri dev
-```
-
-这将同时启动 Vite 开发服务器和 Tauri 应用。
-
-## 构建生产版本
+### 安装与运行
 
 ```bash
-npm run tauri build
+# 安装前端依赖
+bun install
+
+# 开发模式
+bun run tauri dev
+
+# 构建生产版本
+bun run tauri build
+
+# 构建 Android apk
+bun run android:build
 ```
 
-构建后的应用将位于 `src-tauri/target/release/bundle/` 目录下。
+### 代码检查
+
+```bash
+cargo clippy        # Rust lint
+vue-tsc --noEmit    # TypeScript 类型检查
+```
 
 ## 项目结构
 
 ```
 meme/
-├── src/                      # 前端源码
-│   ├── components/          # Vue 组件
-│   │   └── SideMenu.vue    # 侧边菜单组件
-│   ├── views/              # 页面视图
-│   │   ├── ModeManagement.vue      # 模式管理
-│   │   ├── GroupManagement.vue     # 分组管理
-│   │   ├── KeywordManagement.vue   # 关键词管理
-│   │   └── Settings.vue           # 设置页面
-│   ├── App.vue             # 主应用组件
-│   └── main.ts             # 入口文件
-├── src-tauri/              # Rust 后端
+├── src/                        # 前端源码 (Vue 3 + TS)
+│   ├── components/             # 公共组件
+│   │   ├── ContextMenu.vue     # 右键/长按菜单
+│   │   ├── FloatingSearchButton.vue  # 悬浮搜索按钮
+│   │   ├── FolderPicker.vue    # 目录选择器
+│   │   ├── Icon.vue            # 图标组件
+│   │   ├── KeywordManager.vue  # 关键词管理器
+│   │   └── ThemeProvider.vue   # 主题提供者
+│   ├── composables/            # Vue 组合式函数
+│   │   ├── useConfig.ts        # 配置与主题
+│   │   ├── useEditMode.ts      # 编辑模式
+│   │   ├── useMemeData.ts      # 数据加载/切换
+│   │   ├── useSearch.ts        # 搜索逻辑
+│   │   └── useSwipe.ts         # 手势滑动
+│   ├── views/                  # 页面视图
+│   │   ├── Settings.vue        # 设置
+│   │   ├── SettingsAbout.vue   # 关于
+│   │   ├── Support.vue         # 支持
+│   │   ├── UserAgreement.vue   # 用户协议
+│   │   └── PrivacyPolicy.vue   # 隐私政策
+│   ├── types/                  # TypeScript 类型定义
+│   ├── utils/                  # 工具函数
+│   ├── App.vue                 # 主应用组件
+│   └── main.ts                 # 入口
+├── src-tauri/                  # Rust 后端
 │   ├── src/
-│   │   ├── lib.rs         # 主要业务逻辑
-│   │   └── main.rs        # 应用入口
-│   ├── Cargo.toml         # Rust 依赖配置
-│   └── tauri.conf.json    # Tauri 配置
-└── package.json           # Node.js 依赖配置
+│   │   ├── lib.rs              # Tauri 入口 (invoke_handler)
+│   │   ├── main.rs             # 系统入口
+│   │   ├── core/               # 核心基础设施
+│   │   │   ├── db.rs           # 数据库初始化与迁移
+│   │   │   ├── config.rs       # 配置读写
+│   │   │   ├── db_state.rs     # 全局连接状态
+│   │   │   ├── error.rs        # 统一错误类型
+│   │   │   ├── models.rs       # 数据结构
+│   │   │   └── meme_fs.rs      # 文件系统路径解析
+│   │   └── commands/           # Tauri 命令
+│   │       ├── mode.rs         # 模式 CRUD
+│   │       ├── group.rs        # 分组 CRUD + 搜索
+│   │       ├── image.rs        # 图片查询/搜索/管理
+│   │       ├── keyword.rs      # 关键词生成/同步
+│   │       ├── clipboard.rs    # 剪贴板操作
+│   │       ├── upload.rs       # 图片上传
+│   │       ├── save_image.rs   # 保存到相册
+│   │       ├── custom_share.rs # 自定义分享 App
+│   │       └── android_picker.rs # Android 目录选择
+│   ├── Cargo.toml
+│   └── tauri.conf.json
+├── package.json                # 前端依赖 (bun)
+├── AGENTS.md                   # 项目级 AI 助手指令
+└── README.md
 ```
 
-## 数据库结构
+## 数据库
 
-应用使用 SQLite 数据库存储以下数据：
+SQLite 数据库存储在：
 
-- **modes**: 模式表（表情包的顶级分类）
-- **groups**: 分组表（模式下的子分类）
-- **keywords**: 关键词表（用于搜索）
-- **images**: 图片表（表情包文件信息）
-- **keyword_group_links**: 关键词-分组关联表
-- **keyword_mode_links**: 关键词-模式关联表
-- **config**: 配置表（用户设置）
-
-## 配置文件
-
-应用的配置文件位于：
 - **Linux**: `~/.local/share/meme/meme.db`
-- **Android**: `<应用数据目录>/meme.db`
+- **Android**: `/data/data/com.v.meme/files/meme.db`
 
-用户可以通过设置页面导出/导入配置文件（JSON 格式）。
+### 表结构
+
+| 表 | 说明 |
+|---|---|
+| `modes` | 模式（一级分类） |
+| `groups` | 分组（二级分类，关联 mode） |
+| `images` | 图片记录（相对路径存储） |
+| `keywords` | 关键词（含拼音/首字母缩写） |
+| `keyword_group_links` | 关键词-分组多对多关联 |
+| `config` | 用户配置（单行表） |
 
 ## 使用说明
 
-### 首次启动
+首次启动应用会提示选择表情包存储目录。目录结构约定：
 
-1. 应用会提示选择表情包存储目录
-2. 如果目录为空，会自动创建初始结构
-3. 如果目录已有数据，会尝试导入现有数据
+```
+<meme_dir>/
+├── <模式名>/
+│   ├── <分组名>/          ← 分组名支持逗号/顿号分隔关键词
+│   │   ├── image1.png
+│   │   └── image2.jpg
+│   └── <另一个分组名>/
+└── <另一个模式名>/
+```
 
-### 主界面
-
-- **顶部 Tab**: 切换不同的模式
-- **中部 Tab**: 切换当前模式下的分组
-- **网格区域**: 显示表情包缩略图
-- **底部搜索栏**: 搜索表情包
-
-### 编辑模式
-
-- 长按图片或点击编辑按钮进入编辑模式
-- 可以选择多张图片进行批量删除或移动
-- 可以新增分组或导入表情包
-
-### 侧边菜单
-
-- **模式管理**: 创建、编辑、删除模式
-- **分组管理**: 管理所有分组，支持搜索和过滤
-- **关键词管理**: 管理搜索关键词及其关联
-- **设置**: 修改应用配置和数据管理
-
-## 注意事项
-
-1. **图片格式**: 支持 JPG、PNG、GIF、WebP 等常见格式
-2. **缩略图**: 应用会自动生成缩略图以加快加载速度
-3. **分享统计**: 每次分享或复制图片都会自动更新分享次数
-4. **数据安全**: 建议定期备份数据以防丢失
+支持格式：PNG, JPG, JPEG, GIF, WebP, BMP
 
 ## 许可证
 
-MIT License
-
-## 贡献
-
-欢迎提交 Issue 和 Pull Request！
+MIT License — 详见 [LICENSE](./LICENSE)
