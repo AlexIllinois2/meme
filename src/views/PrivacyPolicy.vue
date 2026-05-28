@@ -135,13 +135,13 @@ function goBack() {
   text-align: center;
   font-size: 24px;
   margin-bottom: 32px;
-  color: var(--text-color);
+  color: var(--color-text);
 }
 
 .section {
   margin-bottom: 24px;
   padding-bottom: 16px;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .section:last-child {
@@ -151,13 +151,13 @@ function goBack() {
 .section h2 {
   font-size: 18px;
   margin-bottom: 12px;
-  color: var(--text-color);
+  color: var(--color-text);
 }
 
 .section p {
   font-size: 14px;
   margin-bottom: 8px;
-  color: var(--text-secondary);
+  color: var(--color-text-2);
 }
 
 .link {
@@ -173,6 +173,6 @@ function goBack() {
   margin-top: 32px;
   text-align: center;
   font-size: 12px;
-  color: var(--text-tertiary);
+  color: var(--color-text-3);
 }
 </style>

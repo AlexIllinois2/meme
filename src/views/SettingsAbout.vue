@@ -86,14 +86,67 @@ function goSupport() {
 </script>
 
 <style scoped>
+.settings-section h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  color: var(--color-text);
+}
+
+.setting-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  margin-bottom: 8px;
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.setting-row:hover {
+  background: var(--color-surface-variant);
+  box-shadow: var(--shadow-md);
+}
+
 .setting-icon {
   flex-shrink: 0;
+  margin-right: 12px;
+  color: var(--color-text-secondary);
+}
+
+.setting-label {
+  flex: 1;
+  min-width: 200px;
+}
+
+.setting-label label {
+  display: block;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--color-text);
+  margin-bottom: 4px;
 }
 
 .setting-desc {
   font-size: 12px;
   color: var(--color-text-3);
   margin: 0;
+}
+
+.arrow-icon {
+  color: var(--color-text-secondary);
+}
+
+.card {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
 }
 
 .about-card {
@@ -113,11 +166,13 @@ function goSupport() {
 .app-logo {
   font-size: 48px;
   line-height: 1;
+  color: var(--color-text);
 }
 
 .version {
   font-size: 16px;
   font-weight: 600;
+  color: var(--color-text);
 }
 
 .description {
