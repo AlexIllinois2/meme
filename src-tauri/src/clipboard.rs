@@ -5,6 +5,7 @@
 
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use image::ImageEncoder;
+use crate::error::AppError;
 
 #[cfg(not(target_os = "android"))]
 use clipboard_rs::{Clipboard, ClipboardContext};
@@ -22,7 +23,7 @@ pub struct ClipboardImage {
 #[tauri::command]
 pub fn paste_image_from_clipboard<R: tauri::Runtime>(
     _app: tauri::AppHandle<R>,
-) -> Result<ClipboardImage, String> {
+) -> Result<ClipboardImage, AppError> {
     let clipboard = _app.clipboard();
 
     match clipboard.read_image() {
@@ -44,13 +45,13 @@ pub fn paste_image_from_clipboard<R: tauri::Runtime>(
                             data: png_bytes,
                             format: "png".to_string(),
                         }),
-                        Err(e) => Err(format!("Failed to encode PNG: {}", e)),
+                        Err(e) => Err(AppError(format!("Failed to encode PNG: {}", e))),
                     }
                 }
-                None => Err("Failed to create image buffer".to_string()),
+                None => Err("Failed to create image buffer".into()),
             }
         }
-        Err(e) => Err(format!("Failed to read clipboard image: {}", e)),
+        Err(e) => Err(AppError(format!("Failed to read clipboard image: {}", e))),
     }
 }
 
@@ -58,7 +59,7 @@ pub fn paste_image_from_clipboard<R: tauri::Runtime>(
 ///
 /// 主要用于 Wayland 环境，作为 clipboard-rs 的补充方案。
 #[cfg(not(target_os = "android"))]
-fn read_clipboard_with_system_command(temp_dir: &str) -> Result<String, String> {
+fn read_clipboard_with_system_command(temp_dir: &str) -> Result<String, AppError> {
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
@@ -78,17 +79,17 @@ fn read_clipboard_with_system_command(temp_dir: &str) -> Result<String, String> 
                     let temp_path = std::path::Path::new(temp_dir).join(&temp_file_name);
                     if let Some(parent) = temp_path.parent() {
                         std::fs::create_dir_all(parent)
-                            .map_err(|e| format!("Failed to create temp dir: {}", e))?;
+                            .map_err(|e| AppError(format!("Failed to create temp dir: {}", e)))?;
                     }
                     std::fs::write(&temp_path, &output.stdout)
-                        .map_err(|e| format!("Failed to write image: {}", e))?;
+                        .map_err(|e| AppError(format!("Failed to write image: {}", e)))?;
                     return Ok(temp_path.to_string_lossy().to_string());
                 }
             }
         }
     }
 
-    Err("System clipboard command failed".to_string())
+    Err("System clipboard command failed".into())
 }
 
 /// 从剪贴板读取图片（桌面端）
@@ -99,19 +100,19 @@ fn read_clipboard_with_system_command(temp_dir: &str) -> Result<String, String> 
 pub fn paste_image_from_clipboard_raw<R: tauri::Runtime>(
     _app: tauri::AppHandle<R>,
     temp_dir: String,
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     let ctx = ClipboardContext::new().map_err(|e| {
-        format!("Failed to create clipboard context: {}", e)
+        AppError(format!("Failed to create clipboard context: {}", e))
     })?;
 
     let files = ctx.get_files().map_err(|e| {
-        format!("Failed to read files from clipboard: {}", e)
+        AppError(format!("Failed to read files from clipboard: {}", e))
     })?;
 
     if !files.is_empty() {
         let src_path = std::path::Path::new(&files[0]);
         if !src_path.exists() {
-            return Err("剪贴板中的文件不存在".to_string());
+            return Err("剪贴板中的文件不存在".into());
         }
 
         let extension = src_path.extension()
@@ -129,11 +130,11 @@ pub fn paste_image_from_clipboard_raw<R: tauri::Runtime>(
 
         if let Some(parent) = temp_path.parent() {
             std::fs::create_dir_all(parent)
-                .map_err(|e| format!("Failed to create temp dir: {}", e))?;
+                .map_err(|e| AppError(format!("Failed to create temp dir: {}", e)))?;
         }
 
         std::fs::copy(src_path, &temp_path).map_err(|e| {
-            format!("Failed to copy file: {}", e)
+            AppError(format!("Failed to copy file: {}", e))
         })?;
 
         return Ok(temp_path.to_string_lossy().to_string());
@@ -158,7 +159,7 @@ pub fn paste_image_from_clipboard_raw<R: tauri::Runtime>(
 
                     if let Some(parent) = temp_path.parent() {
                         std::fs::create_dir_all(parent)
-                            .map_err(|e| format!("Failed to create temp dir: {}", e))?;
+                            .map_err(|e| AppError(format!("Failed to create temp dir: {}", e)))?;
                     }
 
                     let buffer = image::ImageBuffer::<image::Rgba<u8>, Vec<u8>>::from_raw(
@@ -166,11 +167,11 @@ pub fn paste_image_from_clipboard_raw<R: tauri::Runtime>(
                     ).ok_or("Failed to create image buffer")?;
 
                     buffer.save(&temp_path)
-                        .map_err(|e| format!("Failed to save image: {}", e))?;
+                        .map_err(|e| AppError(format!("Failed to save image: {}", e)))?;
 
                     Ok(temp_path.to_string_lossy().to_string())
                 }
-                Err(e) => Err(format!("剪贴板中没有图片或读取失败: {}", e)),
+                Err(e) => Err(AppError(format!("剪贴板中没有图片或读取失败: {}", e))),
             }
         }
     }
@@ -182,6 +183,6 @@ pub fn paste_image_from_clipboard_raw<R: tauri::Runtime>(
 pub fn paste_image_from_clipboard_raw<R: tauri::Runtime>(
     _app: tauri::AppHandle<R>,
     _temp_dir: String,
-) -> Result<String, String> {
-    Err("剪贴板粘贴功能在 Android 端暂不支持".to_string())
+) -> Result<String, AppError> {
+    Err("剪贴板粘贴功能在 Android 端暂不支持".into())
 }

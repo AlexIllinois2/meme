@@ -9,16 +9,19 @@ mod mode;
 mod group;
 mod keyword;
 mod image;
+mod upload;
 mod clipboard;
 mod custom_share;
 mod meme_fs;
 mod save_image;
+mod error;
 #[cfg(target_os = "android")]
 mod android_picker;
 
 // 导出必要的类型和函数供其他模块使用
 pub use db::init_db;
 pub use models::*;
+pub use error::AppError;
 
 // 导入 Emitter trait 以使用 emit 方法
 use tauri::Emitter;
@@ -94,21 +97,21 @@ pub fn run() {
         image::copy_image,
         image::delete_images,
         image::move_images,
-        image::upload_images,
+        upload::upload_images,
         image::get_image_full_path,
         image::share_image_to_app,
         image::increment_share_count,
         image::copy_images,
         // 剪贴板粘贴（桌面端支持，Android 返回错误）
-        image::paste_image_from_clipboard,
-        image::paste_image_from_clipboard_raw,
+        clipboard::paste_image_from_clipboard,
+        clipboard::paste_image_from_clipboard_raw,
         // 应用控制
         exit_app,
         // 索引刷新
         image::refresh_index,
         image::full_refresh,
         // Android 图片上传（Base64）
-        image::upload_images_android,
+        upload::upload_images_android,
         // 存储权限检查
         meme_fs::check_storage_accessible,
         // 自定义分享应用

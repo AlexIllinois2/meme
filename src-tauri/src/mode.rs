@@ -1,20 +1,20 @@
 use rusqlite::params;
 use std::path::PathBuf;
 use std::fs;
-use crate::{db::init_db, models::Mode};
+use crate::{db::init_db, models::Mode, error::AppError};
 use crate::meme_fs::{validate_name, sanitize_folder_name};
 
 /// 获取 meme 基础目录
-fn get_meme_base_dir() -> Result<String, String> {
-    let conn = init_db().map_err(|e| e.to_string())?;
+fn get_meme_base_dir() -> Result<String, AppError> {
+    let conn = init_db()?;
     let meme_dir: String = conn.query_row(
         "SELECT meme_dir FROM config WHERE id = 1",
         [],
         |row| row.get(0)
-    ).map_err(|e| format!("获取配置失败: {}", e))?;
+    ).map_err(|e| AppError(format!("获取配置失败: {}", e)))?;
     
     if meme_dir.is_empty() {
-        return Err("未设置表情包目录，请先在设置中配置".to_string());
+        return Err(AppError("未设置表情包目录，请先在设置中配置".to_string()));
     }
     
     Ok(meme_dir)
@@ -22,18 +22,18 @@ fn get_meme_base_dir() -> Result<String, String> {
 
 /// 构建模式的完整文件夹路径
 /// 模式文件夹直接放在 meme_dir 下
-fn build_mode_folder_path(name: &str) -> Result<String, String> {
+fn build_mode_folder_path(name: &str) -> Result<String, AppError> {
     let base_dir = get_meme_base_dir()?;
     let safe_name = sanitize_folder_name(name);
     Ok(PathBuf::from(base_dir).join(safe_name).to_string_lossy().to_string())
 }
 
 #[tauri::command]
-pub fn get_modes() -> Result<Vec<Mode>, String> {
-    let conn = init_db().map_err(|e| e.to_string())?;
+pub fn get_modes() -> Result<Vec<Mode>, AppError> {
+    let conn = init_db()?;
     let mut stmt = conn.prepare(
         "SELECT id, name, sort_order, folder_path FROM modes ORDER BY sort_order ASC, id ASC"
-    ).map_err(|e| e.to_string())?;
+    )?;
     
     let modes = stmt.query_map([], |row| {
         Ok(Mode {
@@ -42,13 +42,13 @@ pub fn get_modes() -> Result<Vec<Mode>, String> {
             sort_order: row.get(2)?,
             folder_path: row.get(3)?,
         })
-    }).map_err(|e| e.to_string())?.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
+    })?.collect::<Result<Vec<_>, _>>()?;
     
     Ok(modes)
 }
 
 #[tauri::command]
-pub fn add_mode(name: String, sort_order: i32) -> Result<i32, String> {
+pub fn add_mode(name: String, sort_order: i32) -> Result<i32, AppError> {
     // 验证名称
     validate_name(&name)?;
     
@@ -56,11 +56,10 @@ pub fn add_mode(name: String, sort_order: i32) -> Result<i32, String> {
     let folder_path = build_mode_folder_path(&name)?;
     
     // 1. 先创建文件夹（文件优先）
-    fs::create_dir_all(&folder_path)
-        .map_err(|e| format!("创建模式文件夹失败: {}", e))?;
+    fs::create_dir_all(&folder_path)?;
     
     // 2. 再插入数据库
-    let conn = init_db().map_err(|e| e.to_string())?;
+    let conn = init_db()?;
     
     let result = conn.execute(
         "INSERT INTO modes (name, sort_order, folder_path) VALUES (?, ?, ?)",
@@ -70,7 +69,7 @@ pub fn add_mode(name: String, sort_order: i32) -> Result<i32, String> {
     if let Err(e) = result {
         // 数据库插入失败，回滚：删除已创建的文件夹
         let _ = fs::remove_dir_all(&folder_path);
-        return Err(format!("保存到数据库失败: {}", e));
+        return Err(AppError(format!("保存到数据库失败: {}", e)));
     }
     
     // 获取新插入的模式ID
@@ -78,19 +77,19 @@ pub fn add_mode(name: String, sort_order: i32) -> Result<i32, String> {
         "SELECT last_insert_rowid()",
         [],
         |row| row.get(0)
-    ).map_err(|e| e.to_string())?;
+    )?;
     
     Ok(mode_id)
 }
 
 #[tauri::command]
-pub fn update_mode(id: i32, name: String, sort_order: i32) -> Result<(), String> {
+pub fn update_mode(id: i32, name: String, sort_order: i32) -> Result<(), AppError> {
     log::info!("Updating mode: id={}, name={}", id, name);
     
     // 验证名称
     validate_name(&name)?;
     
-    let conn = init_db().map_err(|e| e.to_string())?;
+    let conn = init_db()?;
     
     // 获取旧的模式信息（用于文件夹重命名）
     let old_mode: Option<(String, String)> = conn.query_row(
@@ -108,11 +107,11 @@ pub fn update_mode(id: i32, name: String, sort_order: i32) -> Result<(), String>
             // 1. 先重命名文件夹（文件优先）
             if PathBuf::from(old_folder_path).exists() {
                 fs::rename(old_folder_path, &new_folder_path)
-                    .map_err(|e| format!("重命名文件夹失败: {}", e))?;
+                    .map_err(|e| AppError(format!("重命名文件夹失败: {}", e)))?;
             } else {
                 // 旧文件夹不存在，创建新文件夹
                 fs::create_dir_all(&new_folder_path)
-                    .map_err(|e| format!("创建新文件夹失败: {}", e))?;
+                    .map_err(|e| AppError(format!("创建新文件夹失败: {}", e)))?;
             }
         }
     }
@@ -128,28 +127,28 @@ pub fn update_mode(id: i32, name: String, sort_order: i32) -> Result<(), String>
                 let _ = fs::rename(&new_folder_path, old_folder_path);
             }
         }
-        format!("更新数据库失败: {}", e)
+        AppError(format!("更新数据库失败: {}", e))
     })?;
     
     log::info!("Updated {} rows", rows);
     if rows == 0 {
-        return Err(format!("Mode with id {} not found", id));
+        return Err(AppError(format!("Mode with id {} not found", id)));
     }
     
     Ok(())
 }
 
 /// 内部函数：删除单个模式及其相关数据
-fn delete_mode_internal(conn: &rusqlite::Connection, mode_id: i32) -> Result<(), String> {
+fn delete_mode_internal(conn: &rusqlite::Connection, mode_id: i32) -> Result<(), AppError> {
     // 检查模式是否存在
     let exists: bool = conn.query_row(
         "SELECT COUNT(*) FROM modes WHERE id = ?",
         params![mode_id],
         |row| Ok(row.get::<_, i32>(0)? > 0)
-    ).map_err(|e| e.to_string())?;
+    )?;
     
     if !exists {
-        return Err(format!("模式 ID {} 不存在", mode_id));
+        return Err(AppError(format!("模式 ID {} 不存在", mode_id)));
     }
     
     log::info!("Deleting mode {} and all related data...", mode_id);
@@ -159,14 +158,14 @@ fn delete_mode_internal(conn: &rusqlite::Connection, mode_id: i32) -> Result<(),
         "SELECT folder_path FROM modes WHERE id = ?",
         params![mode_id],
         |row| row.get(0)
-    ).map_err(|e| e.to_string())?;
+    )?;
     
     // 1. 先删除文件夹（文件优先）
     if !folder_path.is_empty() {
         let path = std::path::Path::new(&folder_path);
         if path.exists() {
             fs::remove_dir_all(path)
-                .map_err(|e| format!("删除模式文件夹失败 {}: {}", folder_path, e))?;
+                .map_err(|e| AppError(format!("删除模式文件夹失败 {}: {}", folder_path, e)))?;
         }
     }
     
@@ -177,21 +176,21 @@ fn delete_mode_internal(conn: &rusqlite::Connection, mode_id: i32) -> Result<(),
     let images_deleted = conn.execute(
         "DELETE FROM images WHERE group_id IN (SELECT id FROM groups WHERE mode_id = ?)",
         params![mode_id]
-    ).map_err(|e| format!("删除图片失败: {}", e))?;
+    ).map_err(|e| AppError(format!("删除图片失败: {}", e)))?;
     log::info!("Deleted {} images", images_deleted);
     
     // 2.2 删除关键词-分组关联
     let kg_deleted = conn.execute(
         "DELETE FROM keyword_group_links WHERE group_id IN (SELECT id FROM groups WHERE mode_id = ?)",
         params![mode_id]
-    ).map_err(|e| format!("删除关键词关联失败: {}", e))?;
+    ).map_err(|e| AppError(format!("删除关键词关联失败: {}", e)))?;
     log::info!("Deleted {} keyword-group links", kg_deleted);
     
     // 2.3 删除该模式下的所有分组
     let groups_deleted = conn.execute(
         "DELETE FROM groups WHERE mode_id = ?",
         params![mode_id]
-    ).map_err(|e| format!("删除分组失败: {}", e))?;
+    ).map_err(|e| AppError(format!("删除分组失败: {}", e)))?;
     log::info!("Deleted {} groups", groups_deleted);
     
     // 2.4 最后删除模式本身
@@ -203,25 +202,25 @@ fn delete_mode_internal(conn: &rusqlite::Connection, mode_id: i32) -> Result<(),
                 log::info!("Mode {} deleted successfully", mode_id);
                 Ok(())
             } else {
-                Err(format!("Failed to delete mode {}", mode_id))
+                Err(AppError(format!("Failed to delete mode {}", mode_id)))
             }
         }
         Err(e) => {
             log::error!("Database error deleting mode: {}", e);
-            Err(format!("删除模式失败: {}", e))
+            Err(AppError(format!("删除模式失败: {}", e)))
         }
     }
 }
 
 #[tauri::command]
-pub fn delete_mode(mode_id: i32) -> Result<(), String> {
-    let conn = init_db().map_err(|e| e.to_string())?;
+pub fn delete_mode(mode_id: i32) -> Result<(), AppError> {
+    let conn = init_db()?;
     delete_mode_internal(&conn, mode_id)
 }
 
 #[tauri::command]
-pub fn delete_modes(mode_ids: Vec<i32>) -> Result<(), String> {
-    let conn = init_db().map_err(|e| e.to_string())?;
+pub fn delete_modes(mode_ids: Vec<i32>) -> Result<(), AppError> {
+    let conn = init_db()?;
     
     let count = mode_ids.len();
     for id in mode_ids {

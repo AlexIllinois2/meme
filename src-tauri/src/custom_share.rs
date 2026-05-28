@@ -1,9 +1,9 @@
 use rusqlite::params;
-use crate::{db::init_db, models::CustomShareApp};
+use crate::{db::init_db, models::CustomShareApp, error::AppError};
 
 #[tauri::command]
-pub fn get_custom_share_apps() -> Result<Vec<CustomShareApp>, String> {
-    let conn = init_db().map_err(|e| e.to_string())?;
+pub fn get_custom_share_apps() -> Result<Vec<CustomShareApp>, AppError> {
+    let conn = init_db()?;
     
     // 确保表存在
     conn.execute(
@@ -13,16 +13,16 @@ pub fn get_custom_share_apps() -> Result<Vec<CustomShareApp>, String> {
             app_name TEXT
         )",
         [],
-    ).map_err(|e| e.to_string())?;
+    )?;
 
-    let mut stmt = conn.prepare("SELECT id, package_name, app_name FROM custom_share_apps ORDER BY id").map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare("SELECT id, package_name, app_name FROM custom_share_apps ORDER BY id")?;
     let apps = stmt.query_map([], |row| {
         Ok(CustomShareApp {
             id: row.get(0)?,
             package_name: row.get(1)?,
             app_name: row.get(2)?,
         })
-    }).map_err(|e| e.to_string())?
+    })?
     .filter_map(|r| r.ok())
     .collect();
 
@@ -30,25 +30,25 @@ pub fn get_custom_share_apps() -> Result<Vec<CustomShareApp>, String> {
 }
 
 #[tauri::command]
-pub fn add_custom_share_app(package_name: String, app_name: Option<String>) -> Result<(), String> {
-    let conn = init_db().map_err(|e| e.to_string())?;
+pub fn add_custom_share_app(package_name: String, app_name: Option<String>) -> Result<(), AppError> {
+    let conn = init_db()?;
     
     conn.execute(
         "INSERT INTO custom_share_apps (package_name, app_name) VALUES (?, ?) ON CONFLICT(package_name) DO UPDATE SET app_name = excluded.app_name",
         params![package_name, app_name],
-    ).map_err(|e| e.to_string())?;
+    )?;
 
     Ok(())
 }
 
 #[tauri::command]
-pub fn remove_custom_share_app(id: i32) -> Result<(), String> {
-    let conn = init_db().map_err(|e| e.to_string())?;
+pub fn remove_custom_share_app(id: i32) -> Result<(), AppError> {
+    let conn = init_db()?;
     
     conn.execute(
         "DELETE FROM custom_share_apps WHERE id = ?",
         params![id],
-    ).map_err(|e| e.to_string())?;
+    )?;
 
     Ok(())
 }

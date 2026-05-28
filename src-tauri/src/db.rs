@@ -1,4 +1,5 @@
-use rusqlite::{Connection, Result, params};
+use crate::error::AppError;
+use rusqlite::{Connection, params};
 use std::path::PathBuf;
 
 
@@ -25,17 +26,12 @@ pub fn get_db_path() -> PathBuf {
 }
 
 /// 初始化数据库连接并创建表结构
-pub fn init_db() -> Result<Connection> {
+pub fn init_db() -> Result<Connection, AppError> {
     let db_path = get_db_path();
     
     // 确保目录存在（静默创建，不打印日志）
     if let Some(parent) = db_path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| {
-            rusqlite::Error::SqliteFailure(
-                rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_ERROR),
-                Some(e.to_string())
-            )
-        })?;
+        std::fs::create_dir_all(parent)?;
     }
     
     let conn = Connection::open(&db_path)?;
@@ -302,7 +298,7 @@ pub fn init_db() -> Result<Connection> {
 }
 
 /// 数据库迁移管理
-fn migrate_db(conn: &Connection) -> Result<()> {
+fn migrate_db(conn: &Connection) -> Result<(), AppError> {
     let version: i32 = conn.pragma_query_value(None, "user_version", |row| row.get(0))
         .unwrap_or(0);
 
@@ -314,7 +310,7 @@ fn migrate_db(conn: &Connection) -> Result<()> {
 }
 
 /// v1 → v2: image_path 从绝对路径迁移为相对路径
-fn migrate_to_v2(conn: &Connection) -> Result<()> {
+fn migrate_to_v2(conn: &Connection) -> Result<(), AppError> {
     log::info!("Running DB migration: v1 -> v2 (relative image paths)");
 
     let meme_dir: String = conn.query_row(
@@ -334,7 +330,7 @@ fn migrate_to_v2(conn: &Connection) -> Result<()> {
         let mut stmt = conn.prepare("SELECT id, image_path FROM images")?;
         let rows: Vec<(i32, String)> = stmt
             .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
-            .collect::<Result<Vec<_>>>()?;
+            .collect::<Result<Vec<_>, _>>()?;
 
         let mut update = conn.prepare("UPDATE images SET image_path = ? WHERE id = ?")?;
         for (id, path) in rows {

@@ -4,23 +4,24 @@
 //! 所有实际文件操作前通过本模块将相对路径解析为绝对路径。
 
 use std::path::PathBuf;
+use crate::error::AppError;
 
 /// 非法文件名字符
 pub const INVALID_CHARS: &[char] = &['/', '\\', ':', '*', '?', '"', '<', '>', '|'];
 
 /// 验证名称是否合法（不包含非法字符）
-pub fn validate_name(name: &str) -> Result<(), String> {
+pub fn validate_name(name: &str) -> Result<(), AppError> {
     if name.trim().is_empty() {
-        return Err("名称不能为空".to_string());
+        return Err(AppError("名称不能为空".to_string()));
     }
 
     if name.trim() != name {
-        return Err("名称首尾不能有空格".to_string());
+        return Err(AppError("名称首尾不能有空格".to_string()));
     }
 
     for c in name.chars() {
         if INVALID_CHARS.contains(&c) {
-            return Err(format!("名称包含非法字符: '{}'", c));
+            return Err(AppError(format!("名称包含非法字符: '{}'", c)));
         }
     }
 
@@ -67,7 +68,7 @@ pub fn relative_path(meme_dir: &str, absolute: &str) -> String {
 /// 使用 `read_dir` 而非 `metadata`，因为某些 Android 版本上
 /// `metadata` 可能成功但 `read_dir` 失败。
 #[tauri::command]
-pub fn check_storage_accessible(meme_dir: String) -> Result<bool, String> {
+pub fn check_storage_accessible(meme_dir: String) -> Result<bool, AppError> {
     let path = resolve_meme_path(&meme_dir, "");
     match std::fs::read_dir(&path) {
         Ok(_) => Ok(true),

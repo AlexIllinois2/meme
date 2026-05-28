@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import { getVersion } from '@tauri-apps/api/app';
 import { open } from '@tauri-apps/plugin-dialog';
 import { Snackbar } from '@varlet/ui';
 import Icon from "../components/Icon.vue";
 import FolderPicker from "../components/FolderPicker.vue";
 import type { Config } from "../types";
 import { debug } from '../utils/debug';
+import SettingsAbout from './SettingsAbout.vue';
 
 const config = ref<Config>({
   meme_dir: '',
@@ -23,7 +23,7 @@ const config = ref<Config>({
 });
 
 const isSaving = ref(false);
-const appVersion = ref('0.0.0');
+// appVersion moved to SettingsAbout.vue
 const showFolderPicker = ref(false);
 const showColorModePopup = ref(false);
 const autoSendEnabled = ref(false);
@@ -73,12 +73,7 @@ onMounted(async () => {
   // 保存原始目录
   originalMemeDir.value = config.value.meme_dir || '';
   
-  // ========== 异步获取版本号 ==========
-  try {
-    appVersion.value = await getVersion();
-  } catch (error) {
-    console.error('Failed to get version:', error);
-  }
+  // appVersion moved to SettingsAbout.vue
   
   // 检查无障碍服务状态
   await checkAccessibilityStatus();
@@ -151,9 +146,7 @@ async function goBack() {
   window.dispatchEvent(new CustomEvent('navigateHome'));
 }
 
-function goSupport() {
-  window.dispatchEvent(new CustomEvent('navigateToMenu', { detail: 'support' }));
-}
+// goSupport moved to SettingsAbout.vue
 
 function updateColorMode(mode: string) {
   const htmlElement = document.documentElement;
@@ -440,17 +433,8 @@ async function autoSaveConfig() {
   }
 }
 
-function openUserAgreement() {
-  window.dispatchEvent(new CustomEvent('navigateToMenu', { detail: 'user-agreement' }));
-}
 
-function openPrivacyPolicy() {
-  window.dispatchEvent(new CustomEvent('navigateToMenu', { detail: 'privacy-policy' }));
-}
 
-function openGitHubRepo() {
-  window.open('https://github.com/AlexIllinois2/meme_web', '_blank');
-}
 
 
 </script>
@@ -533,58 +517,7 @@ function openGitHubRepo() {
       </div>
       
       <div class="settings-section">
-        <h2>
-          <Icon name="information" :size="24" />
-          关于
-        </h2>
-        
-        <div class="setting-row" @click="openUserAgreement">
-          <Icon name="file-text" :size="22" class="setting-icon" />
-          <div class="setting-label">
-            <label>用户协议</label>
-            <p class="setting-desc">查看用户使用协议</p>
-          </div>
-          <Icon name="chevron-right" :size="20" class="arrow-icon" />
-        </div>
-        
-        <div class="setting-row" @click="openPrivacyPolicy">
-          <Icon name="shield" :size="22" class="setting-icon" />
-          <div class="setting-label">
-            <label>隐私政策</label>
-            <p class="setting-desc">查看隐私保护政策</p>
-          </div>
-          <Icon name="chevron-right" :size="20" class="arrow-icon" />
-        </div>
-        
-        <div class="setting-row" @click="openGitHubRepo">
-          <Icon name="github" :size="22" class="setting-icon" />
-          <div class="setting-label">
-            <label>开源地址</label>
-            <p class="setting-desc">Web 版已开源</p>
-          </div>
-          <Icon name="chevron-right" :size="20" class="arrow-icon" />
-        </div>
-        
-        <div class="setting-row" @click="goSupport">
-          <Icon name="heart" :size="22" class="setting-icon" />
-          <div class="setting-label">
-            <label>支持一下</label>
-            <p class="setting-desc">喜欢本应用吗? 豪我一下吧</p>
-          </div>
-          <Icon name="chevron-right" :size="20" class="arrow-icon" />
-        </div>
-        
-        <div class="card about-card">
-          <div class="about-content">
-            <div class="app-logo">≧▽≦</div>
-            <p class="version">v{{ appVersion }}</p>
-            <p class="description">本地表情包管理和分享工具</p>
-            
-            <div class="platform-info">
-              <p>支持平台：Linux (x86_64) / Android (aarch64)</p>
-            </div>
-          </div>
-        </div>
+        <SettingsAbout />
       </div>
     </div>
   </div>

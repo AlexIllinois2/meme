@@ -7,44 +7,25 @@
 use rusqlite::params;
 use std::path::PathBuf;
 use crate::{db::init_db, models::Image, meme_fs};
+use crate::error::AppError;
 
 #[cfg(not(target_os = "android"))]
 use clipboard_rs::{Clipboard, ClipboardContext};
 
 // 重新导出剪贴板模块的所有公共项，保持向后兼容
-pub use crate::clipboard::*;
 
 /// 检测图片格式
-fn detect_image_format(data: &[u8]) -> Option<&'static str> {
-	if data.len() < 8 {
-		return None;
-	}
-	
-	if data.starts_with(b"\x89PNG") {
-		Some("png")
-	} else if data.starts_with(b"\xFF\xD8\xFF") {
-		Some("jpg")
-	} else if data.starts_with(b"GIF89a") || data.starts_with(b"GIF87a") {
-		Some("gif")
-	} else if data.starts_with(b"RIFF") && data.len() > 12 && &data[8..12] == b"WEBP" {
-		Some("webp")
-	} else if data.starts_with(b"BM") {
-		Some("bmp")
-	} else {
-		None
-	}
-}
 
 /// 获取分组下的所有图片
 #[tauri::command]
-pub fn get_images_by_group(group_id: i32) -> Result<Vec<Image>, String> {
-	let conn = init_db().map_err(|e| e.to_string())?;
+pub fn get_images_by_group(group_id: i32) -> Result<Vec<Image>, AppError> {
+	let conn = init_db()?;
 	let meme_dir: String = conn.query_row(
 		"SELECT meme_dir FROM config WHERE id = 1", [], |row| row.get(0)
 	).unwrap_or_default();
 	let mut stmt = conn.prepare(
 		"SELECT id, image_path, thumbnail_path, share_count, group_id, mode_id FROM images WHERE group_id = ? ORDER BY share_count DESC, id ASC"
-	).map_err(|e| e.to_string())?;
+	)?;
 	let images = stmt.query_map(params![group_id], |row| {
 		Ok(Image {
 			id: row.get(0)?,
@@ -54,14 +35,14 @@ pub fn get_images_by_group(group_id: i32) -> Result<Vec<Image>, String> {
 			group_id: row.get(4)?,
 			mode_id: row.get(5)?,
 		})
-	}).map_err(|e| e.to_string())?.collect::<Result<Vec<_>,_>>().map_err(|e| e.to_string())?;
+	})?.collect::<Result<Vec<_>,_>>()?;
 	Ok(images)
 }
 
 /// 搜索图片
 #[tauri::command]
-pub fn search_images(keyword: String, pinyin: bool, acronym: bool) -> Result<Vec<Image>, String> {
-	let conn = init_db().map_err(|e| e.to_string())?;
+pub fn search_images(keyword: String, pinyin: bool, acronym: bool) -> Result<Vec<Image>, AppError> {
+	let conn = init_db()?;
 	let meme_dir: String = conn.query_row(
 		"SELECT meme_dir FROM config WHERE id = 1", [], |row| row.get(0)
 	).unwrap_or_default();
@@ -75,7 +56,7 @@ pub fn search_images(keyword: String, pinyin: bool, acronym: bool) -> Result<Vec
 	} else {
 		"SELECT DISTINCT i.id, i.image_path, i.thumbnail_path, i.share_count, i.group_id, i.mode_id FROM images i JOIN keyword_group_links kgl ON i.group_id = kgl.group_id JOIN keywords k ON kgl.keyword_id = k.id WHERE k.keyword LIKE ?1 ORDER BY i.share_count DESC"
 	};
-	let mut stmt = conn.prepare(query).map_err(|e| e.to_string())?;
+	let mut stmt = conn.prepare(query)?;
 	let images = stmt.query_map(params![search_pattern], |row| {
 		Ok(Image {
 			id: row.get(0)?,
@@ -85,7 +66,7 @@ pub fn search_images(keyword: String, pinyin: bool, acronym: bool) -> Result<Vec
 			group_id: row.get(4)?,
 			mode_id: row.get(5)?,
 		})
-	}).map_err(|e| e.to_string())?.collect::<Result<Vec<_>,_>>().map_err(|e| e.to_string())?;
+	})?.collect::<Result<Vec<_>,_>>()?;
 	Ok(images)
 }
 
@@ -94,28 +75,28 @@ fn increment_share_count_internal(
 	conn: &rusqlite::Connection, 
 	image_id: i32, 
 	group_id: Option<i32>
-) -> Result<(), String> {
+) -> Result<(), AppError> {
 	conn.execute(
 		"UPDATE images SET share_count = share_count + 1 WHERE id = ?",
 		params![image_id],
-	).map_err(|e| e.to_string())?;
+	)?;
 	
 	if let Some(gid) = group_id {
 		conn.execute(
 			"UPDATE groups SET share_count = share_count + 1 WHERE id = ?",
 			params![gid],
-		).map_err(|e| e.to_string())?;
+		)?;
 	} else {
 		let g_id: i32 = conn.query_row(
 			"SELECT group_id FROM images WHERE id = ?",
 			params![image_id],
 			|row| row.get(0)
-		).map_err(|e| e.to_string())?;
+		)?;
 		
 		conn.execute(
 			"UPDATE groups SET share_count = share_count + 1 WHERE id = ?",
 			params![g_id],
-		).map_err(|e| e.to_string())?;
+		)?;
 	}
 	
 	Ok(())
@@ -123,49 +104,49 @@ fn increment_share_count_internal(
 
 /// 分享图片
 #[tauri::command]
-pub fn share_image(image_id: i32) -> Result<(), String> {
-	let conn = init_db().map_err(|e| e.to_string())?;
+pub fn share_image(image_id: i32) -> Result<(), AppError> {
+	let conn = init_db()?;
 	increment_share_count_internal(&conn, image_id, None)
 }
 
 /// 复制图片到剪贴板（桌面端）
 #[cfg(not(target_os = "android"))]
 #[tauri::command]
-pub fn copy_image(image_id: i32) -> Result<(), String> {
-	let conn = init_db().map_err(|e| e.to_string())?;
+pub fn copy_image(image_id: i32) -> Result<(), AppError> {
+	let conn = init_db()?;
 	let raw_path: String = conn.query_row(
 		"SELECT image_path FROM images WHERE id = ?", params![image_id], |row| row.get(0)
-	).map_err(|e| e.to_string())?;
+	)?;
 	let meme_dir: String = conn.query_row(
 		"SELECT meme_dir FROM config WHERE id = 1", [], |row| row.get(0)
 	).unwrap_or_default();
 	let image_path = meme_fs::resolve_meme_path(&meme_dir, &raw_path).to_string_lossy().to_string();
 	increment_share_count_internal(&conn, image_id, None)?;
-	let ctx = ClipboardContext::new().map_err(|e| format!("Failed to create clipboard context: {}", e))?;
-	let abs_path = std::fs::canonicalize(&image_path).map_err(|e| format!("Failed to get absolute path: {}", e))?;
-	ctx.set_files(vec![abs_path.to_string_lossy().to_string()]).map_err(|e| format!("Failed to copy file to clipboard: {}", e))?;
+	let ctx = ClipboardContext::new().map_err(|e| AppError(format!("Failed to create clipboard context: {}", e)))?;
+	let abs_path = std::fs::canonicalize(&image_path).map_err(|e| AppError(format!("Failed to get absolute path: {}", e)))?;
+	ctx.set_files(vec![abs_path.to_string_lossy().to_string()]).map_err(|e| AppError(format!("Failed to copy file to clipboard: {}", e)))?;
 	Ok(())
 }
 
 /// 复制图片到剪贴板（Android 端）
 #[cfg(target_os = "android")]
 #[tauri::command]
-pub fn copy_image(image_id: i32) -> Result<(), String> {
-	let conn = init_db().map_err(|e| e.to_string())?;
+pub fn copy_image(image_id: i32) -> Result<(), AppError> {
+	let conn = init_db()?;
 	increment_share_count_internal(&conn, image_id, None)?;
-	Err("图片复制到剪贴板功能在 Android 端暂不支持".to_string())
+	Err("图片复制到剪贴板功能在 Android 端暂不支持".into())
 }
 
 /// 增加分享次数
 #[tauri::command]
-pub fn increment_share_count(image_id: i32, group_id: Option<i32>) -> Result<(), String> {
-	let conn = init_db().map_err(|e| e.to_string())?;
+pub fn increment_share_count(image_id: i32, group_id: Option<i32>) -> Result<(), AppError> {
+	let conn = init_db()?;
 	increment_share_count_internal(&conn, image_id, group_id)
 }
 
 /// 批量复制图片
 #[tauri::command]
-pub fn copy_images(image_ids: Vec<i32>) -> Result<(), String> {
+pub fn copy_images(image_ids: Vec<i32>) -> Result<(), AppError> {
 	if image_ids.is_empty() {
 		return Ok(());
 	}
@@ -174,12 +155,12 @@ pub fn copy_images(image_ids: Vec<i32>) -> Result<(), String> {
 	for image_id in &image_ids {
 		if let Err(e) = copy_image(*image_id) {
 			log::warn!("复制图片 {} 失败: {}", image_id, e);
-			errors.push(e);
+			errors.push(e.to_string());
 		}
 	}
 	
 	if errors.len() == image_ids.len() {
-		return Err(format!("所有 {} 张图片复制失败: {}", errors.len(), errors.join("; ")));
+		return Err(format!("所有 {} 张图片复制失败: {}", errors.len(), errors.join("; ")).into());
 	}
 	
 	Ok(())
@@ -187,8 +168,8 @@ pub fn copy_images(image_ids: Vec<i32>) -> Result<(), String> {
 
 /// 删除图片
 #[tauri::command]
-pub fn delete_images(image_ids: Vec<i32>) -> Result<(), String> {
-	let conn = init_db().map_err(|e| e.to_string())?;
+pub fn delete_images(image_ids: Vec<i32>) -> Result<(), AppError> {
+	let conn = init_db()?;
 	let meme_dir: String = conn.query_row(
 		"SELECT meme_dir FROM config WHERE id = 1", [], |row| row.get(0)
 	).unwrap_or_default();
@@ -201,37 +182,37 @@ pub fn delete_images(image_ids: Vec<i32>) -> Result<(), String> {
 			let image_path = meme_fs::resolve_meme_path(&meme_dir, &raw_path);
 			if image_path.exists() {
 				std::fs::remove_file(&image_path)
-					.map_err(|e| format!("删除图片文件失败 {}: {}", image_path.display(), e))?;
+					.map_err(|e| AppError(format!("删除图片文件失败 {}: {}", image_path.display(), e)))?;
 			}
 			if let Some(thumb) = thumb_path {
 				let thumb_path = std::path::Path::new(&thumb);
 				if thumb_path.exists() {
 					std::fs::remove_file(thumb_path)
-						.map_err(|e| format!("删除缩略图失败 {}: {}", thumb, e))?;
+						.map_err(|e| AppError(format!("删除缩略图失败 {}: {}", thumb, e)))?;
 				}
 			}
 		}
-		conn.execute("DELETE FROM images WHERE id = ?", params![image_id]).map_err(|e| e.to_string())?;
+		conn.execute("DELETE FROM images WHERE id = ?", params![image_id])?;
 	}
 	Ok(())
 }
 
 /// 移动图片到其他分组
 #[tauri::command]
-pub fn move_images(image_ids: Vec<i32>, target_group_id: i32) -> Result<(), String> {
-	let conn = init_db().map_err(|e| e.to_string())?;
+pub fn move_images(image_ids: Vec<i32>, target_group_id: i32) -> Result<(), AppError> {
+	let conn = init_db()?;
 	
 	let target_mode_id: i32 = conn.query_row(
 		"SELECT mode_id FROM groups WHERE id = ?",
 		params![target_group_id],
 		|row| row.get(0)
-	).map_err(|e| e.to_string())?;
+	)?;
 	
 	for image_id in image_ids {
 		conn.execute(
 			"UPDATE images SET group_id = ?, mode_id = ? WHERE id = ?",
 			params![target_group_id, target_mode_id, image_id]
-		).map_err(|e| e.to_string())?;
+		)?;
 	}
 	
 	Ok(())
@@ -240,119 +221,13 @@ pub fn move_images(image_ids: Vec<i32>, target_group_id: i32) -> Result<(), Stri
 /// Android 端上传图片（接收 Base64 编码的图片数据）
 /// 
 /// 前端读取 content:// URI 的数据并转为 Base64 传递给后端
-#[tauri::command]
-pub async fn upload_images_android(
-	images_data: Vec<AndroidImageData>,
-	group_id: i32,
-	mode_id: i32,
-) -> Result<usize, String> {
-	log::info!("[Android] upload_images_android 开始");
-	log::info!("[Android] 图片数量: {}", images_data.len());
-	log::info!("[Android] group_id: {}, mode_id: {}", group_id, mode_id);
-	
-	let conn = init_db().map_err(|e| e.to_string())?;
-	
-	// 获取 meme_dir 用于存储相对路径
-	let meme_dir: String = conn.query_row(
-		"SELECT meme_dir FROM config WHERE id = 1", [], |row| row.get(0)
-	).unwrap_or_default();
-	
-	// 获取分组信息
-	let group_folder: String = conn.query_row(
-		"SELECT folder_path FROM groups WHERE id = ?", params![group_id],
-		|row| row.get(0)
-	).map_err(|e| format!("获取分组信息失败: {}", e))?;
-	
-	let mut success_count = 0;
-	
-	for image_data in &images_data {
-		let data = base64_decode(&image_data.data)?;
-		let ext = detect_image_format(&data).unwrap_or("png");
-		let timestamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis();
-		let file_name = format!("image-{}.{}", timestamp, ext);
-		let dest_path = std::path::Path::new(&group_folder).join(&file_name);
-		std::fs::write(&dest_path, &data).map_err(|e| format!("写入文件失败: {}", e))?;
-		let dest_path_str = dest_path.to_string_lossy().to_string();
-		let relative_path = meme_fs::relative_path(&meme_dir, &dest_path_str);
-		conn.execute(
-			"INSERT INTO images (image_path, thumbnail_path, share_count, group_id, mode_id) VALUES (?, NULL, 0, ?, ?)",
-			params![relative_path, group_id, mode_id]
-		).map_err(|e| format!("插入数据库失败: {}", e))?;
-		success_count += 1;
-	}
-	
-	log::info!("[Android] upload_images_android 完成，成功上传 {} 张", success_count);
-	Ok(success_count)
-}
-
-/// Android 图片数据结构
-#[derive(serde::Deserialize)]
-pub struct AndroidImageData {
-	/// 文件名
-	pub name: String,
-	/// Base64 编码的图片数据
-	pub data: String,
-}
-
-/// Base64 解码
-fn base64_decode(data: &str) -> Result<Vec<u8>, String> {
-	// 移除 data URL 前缀（如果有）
-	let data = if data.starts_with("data:") {
-		// 找到 base64 数据部分
-		if let Some(idx) = data.find(";base64,") {
-			&data[idx + 8..]
-		} else {
-			data
-		}
-	} else {
-		data
-	};
-	
-	use base64::{Engine, engine::general_purpose::STANDARD};
-	STANDARD.decode(data).map_err(|e| format!("Base64 解码失败: {}", e))
-}
-
-/// 桌面端上传图片
-#[tauri::command]
-pub fn upload_images(
-	file_paths: Vec<String>, 
-	group_id: i32, 
-	mode_id: i32, 
-	meme_dir: String
-) -> Result<(), String> {
-	let conn = init_db().map_err(|e| e.to_string())?;
-	let group_folder: String = conn.query_row(
-		"SELECT folder_path FROM groups WHERE id = ?", params![group_id],
-		|row| row.get(0)
-	).map_err(|e| format!("获取分组信息失败: {}", e))?;
-	for file_path in &file_paths {
-		let src_path = std::path::Path::new(file_path);
-		if !src_path.exists() { continue; }
-		let file_name = src_path.file_name().and_then(|n| n.to_str()).unwrap_or("unknown.png");
-		let dest_path = std::path::Path::new(&group_folder).join(file_name);
-		std::fs::copy(src_path, &dest_path).map_err(|e| format!("复制文件失败 {}: {}", file_path, e))?;
-		let dest_path_str = dest_path.to_string_lossy().to_string();
-		let relative_path = meme_fs::relative_path(&meme_dir, &dest_path_str);
-		let existing: Option<i32> = conn.query_row(
-			"SELECT id FROM images WHERE image_path = ?", params![relative_path], |row| row.get(0)
-		).ok();
-		if existing.is_none() {
-			conn.execute(
-				"INSERT INTO images (image_path, thumbnail_path, share_count, group_id, mode_id) VALUES (?, NULL, 0, ?, ?)",
-				params![relative_path, group_id, mode_id]
-			).map_err(|e| e.to_string())?;
-		}
-	}
-	Ok(())
-}
-
 /// 获取图片完整路径
 #[tauri::command]
-pub fn get_image_full_path(image_id: i32) -> Result<String, String> {
-	let conn = init_db().map_err(|e| e.to_string())?;
+pub fn get_image_full_path(image_id: i32) -> Result<String, AppError> {
+	let conn = init_db()?;
 	let raw_path: String = conn.query_row(
 		"SELECT image_path FROM images WHERE id = ?", params![image_id], |row| row.get(0)
-	).map_err(|e| e.to_string())?;
+	)?;
 	let meme_dir: String = conn.query_row(
 		"SELECT meme_dir FROM config WHERE id = 1", [], |row| row.get(0)
 	).unwrap_or_default();
@@ -365,22 +240,22 @@ pub fn share_image_to_app<R: tauri::Runtime>(
 	_app: tauri::AppHandle<R>,
 	image_id: i32,
 	_target_app: String,
-) -> Result<(), String> {
-	let conn = init_db().map_err(|e| e.to_string())?;
+) -> Result<(), AppError> {
+	let conn = init_db()?;
 	let raw_path: String = conn.query_row(
 		"SELECT image_path FROM images WHERE id = ?", params![image_id], |row| row.get(0)
-	).map_err(|e| e.to_string())?;
+	)?;
 	let meme_dir: String = conn.query_row(
 		"SELECT meme_dir FROM config WHERE id = 1", [], |row| row.get(0)
 	).unwrap_or_default();
 	let image_path = meme_fs::resolve_meme_path(&meme_dir, &raw_path).to_string_lossy().to_string();
 	increment_share_count_internal(&conn, image_id, None)?;
 	#[cfg(target_os = "linux")]
-	{ std::process::Command::new("xdg-open").arg(&image_path).spawn().map_err(|e| format!("Failed to open image: {}", e))?; }
+	{ std::process::Command::new("xdg-open").arg(&image_path).spawn().map_err(|e| AppError(format!("Failed to open image: {}", e)))?; }
 	#[cfg(target_os = "macos")]
-	{ std::process::Command::new("open").arg(&image_path).spawn().map_err(|e| format!("Failed to open image: {}", e))?; }
+	{ std::process::Command::new("open").arg(&image_path).spawn().map_err(|e| AppError(format!("Failed to open image: {}", e)))?; }
 	#[cfg(target_os = "windows")]
-	{ std::process::Command::new("explorer").arg(&image_path).spawn().map_err(|e| format!("Failed to open image: {}", e))?; }
+	{ std::process::Command::new("explorer").arg(&image_path).spawn().map_err(|e| AppError(format!("Failed to open image: {}", e)))?; }
 	#[cfg(target_os = "android")]
 	{ let _ = image_path; let _ = _target_app; }
 	Ok(())
@@ -388,15 +263,15 @@ pub fn share_image_to_app<R: tauri::Runtime>(
 
 /// 刷新索引
 #[tauri::command]
-pub fn refresh_index(meme_dir: String) -> Result<String, String> {
+pub fn refresh_index(meme_dir: String) -> Result<String, AppError> {
 	log::info!("刷新索引开始: {}", meme_dir);
 	
-	let conn = init_db().map_err(|e| e.to_string())?;
+	let conn = init_db()?;
 	let path = PathBuf::from(&meme_dir);
 	
 	if !path.exists() {
 		std::fs::create_dir_all(&path)
-			.map_err(|e| format!("创建目录失败: {}", e))?;
+			.map_err(|e| AppError(format!("创建目录失败: {}", e)))?;
 	}
 	
 	// 删除无效记录
@@ -412,39 +287,33 @@ pub fn refresh_index(meme_dir: String) -> Result<String, String> {
 }
 
 /// 删除无效图片记录
-fn delete_invalid_images(conn: &rusqlite::Connection, meme_dir: &str) -> Result<(), String> {
-	let mut stmt = conn.prepare("SELECT id, image_path FROM images").map_err(|e| e.to_string())?;
+fn delete_invalid_images(conn: &rusqlite::Connection, meme_dir: &str) -> Result<(), AppError> {
+	let mut stmt = conn.prepare("SELECT id, image_path FROM images")?;
 	let images: Vec<(i32, String)> = stmt.query_map([], |row| {
 		Ok((row.get(0)?, row.get(1)?))
-	}).map_err(|e| e.to_string())?.collect::<Result<Vec<_>,_>>().map_err(|e| e.to_string())?;
+	})?.collect::<Result<Vec<_>,_>>()?;
 	for (id, raw_path) in &images {
 		let image_path = meme_fs::resolve_meme_path(meme_dir, raw_path);
 		if !image_path.exists() {
-			conn.execute("DELETE FROM images WHERE id = ?", params![id]).map_err(|e| e.to_string())?;
+			conn.execute("DELETE FROM images WHERE id = ?", params![id])?;
 		}
 	}
 	Ok(())
 }
 
 /// 删除无效分组
-fn delete_invalid_groups(conn: &rusqlite::Connection) -> Result<(), String> {
-	let mut stmt = conn.prepare("SELECT id, folder_path FROM groups")
-		.map_err(|e| e.to_string())?;
+fn delete_invalid_groups(conn: &rusqlite::Connection) -> Result<(), AppError> {
+	let mut stmt = conn.prepare("SELECT id, folder_path FROM groups")?;
 	
 	let groups: Vec<(i32, String)> = stmt.query_map([], |row| {
 		Ok((row.get(0)?, row.get(1)?))
-	}).map_err(|e| e.to_string())?
-		.collect::<Result<Vec<_>, _>>()
-		.map_err(|e| e.to_string())?;
+	})?.collect::<Result<Vec<_>, _>>()?;
 	
 	for (id, folder_path) in &groups {
 		if !std::path::Path::new(folder_path).exists() {
-			conn.execute("DELETE FROM keyword_group_links WHERE group_id = ?", params![id])
-				.map_err(|e| e.to_string())?;
-			conn.execute("DELETE FROM images WHERE group_id = ?", params![id])
-				.map_err(|e| e.to_string())?;
-			conn.execute("DELETE FROM groups WHERE id = ?", params![id])
-				.map_err(|e| e.to_string())?;
+			conn.execute("DELETE FROM keyword_group_links WHERE group_id = ?", params![id])?;
+			conn.execute("DELETE FROM images WHERE group_id = ?", params![id])?;
+			conn.execute("DELETE FROM groups WHERE id = ?", params![id])?;
 		}
 	}
 	
@@ -452,22 +321,17 @@ fn delete_invalid_groups(conn: &rusqlite::Connection) -> Result<(), String> {
 }
 
 /// 删除无效模式
-fn delete_invalid_modes(conn: &rusqlite::Connection) -> Result<(), String> {
-	let mut stmt = conn.prepare("SELECT id, folder_path FROM modes")
-		.map_err(|e| e.to_string())?;
+fn delete_invalid_modes(conn: &rusqlite::Connection) -> Result<(), AppError> {
+	let mut stmt = conn.prepare("SELECT id, folder_path FROM modes")?;
 	
 	let modes: Vec<(i32, String)> = stmt.query_map([], |row| {
 		Ok((row.get(0)?, row.get(1)?))
-	}).map_err(|e| e.to_string())?
-		.collect::<Result<Vec<_>, _>>()
-		.map_err(|e| e.to_string())?;
+	})?.collect::<Result<Vec<_>, _>>()?;
 	
 	for (id, folder_path) in &modes {
 		if !std::path::Path::new(folder_path).exists() {
-			conn.execute("DELETE FROM groups WHERE mode_id = ?", params![id])
-				.map_err(|e| e.to_string())?;
-			conn.execute("DELETE FROM modes WHERE id = ?", params![id])
-				.map_err(|e| e.to_string())?;
+			conn.execute("DELETE FROM groups WHERE mode_id = ?", params![id])?;
+			conn.execute("DELETE FROM modes WHERE id = ?", params![id])?;
 		}
 	}
 	
@@ -475,11 +339,11 @@ fn delete_invalid_modes(conn: &rusqlite::Connection) -> Result<(), String> {
 }
 
 /// 扫描并新增模式、分组和图片
-fn scan_and_add_items(conn: &rusqlite::Connection, meme_dir: &String) -> Result<(), String> {
+fn scan_and_add_items(conn: &rusqlite::Connection, meme_dir: &String) -> Result<(), AppError> {
 	let path = PathBuf::from(meme_dir);
 	
-	for entry in std::fs::read_dir(&path).map_err(|e| e.to_string())? {
-		let entry = entry.map_err(|e| e.to_string())?;
+	for entry in std::fs::read_dir(&path)? {
+		let entry = entry?;
 		let mode_path = entry.path();
 		
 		if !mode_path.is_dir() {
@@ -507,15 +371,14 @@ fn scan_and_add_items(conn: &rusqlite::Connection, meme_dir: &String) -> Result<
 			conn.execute(
 				"INSERT INTO modes (name, folder_path, sort_order) VALUES (?, ?, 0)",
 				params![mode_name, mode_path.to_string_lossy()]
-			).map_err(|e| e.to_string())?;
+			)?;
 			
-			conn.query_row("SELECT last_insert_rowid()", [], |row| row.get(0))
-				.map_err(|e| e.to_string())?
+			conn.query_row("SELECT last_insert_rowid()", [], |row| row.get(0))?
 		};
 		
 		// 扫描分组
-		for group_entry in std::fs::read_dir(&mode_path).map_err(|e| e.to_string())? {
-			let group_entry = group_entry.map_err(|e| e.to_string())?;
+		for group_entry in std::fs::read_dir(&mode_path)? {
+			let group_entry = group_entry?;
 			let group_path = group_entry.path();
 			
 			if !group_path.is_dir() {
@@ -543,15 +406,14 @@ fn scan_and_add_items(conn: &rusqlite::Connection, meme_dir: &String) -> Result<
 				conn.execute(
 					"INSERT INTO groups (name, folder_path, mode_id, share_count) VALUES (?, ?, ?, 0)",
 					params![group_name, group_path.to_string_lossy(), mode_id]
-				).map_err(|e| e.to_string())?;
+				)?;
 				
-				conn.query_row("SELECT last_insert_rowid()", [], |row| row.get(0))
-					.map_err(|e| e.to_string())?
+				conn.query_row("SELECT last_insert_rowid()", [], |row| row.get(0))?
 			};
 			
 			// 扫描图片
-			for image_entry in std::fs::read_dir(&group_path).map_err(|e| e.to_string())? {
-				let image_entry = image_entry.map_err(|e| e.to_string())?;
+			for image_entry in std::fs::read_dir(&group_path)? {
+				let image_entry = image_entry?;
 				let image_path = image_entry.path();
 				
 				if !image_path.is_file() {
@@ -579,7 +441,7 @@ fn scan_and_add_items(conn: &rusqlite::Connection, meme_dir: &String) -> Result<
 				conn.execute(
 					"INSERT INTO images (image_path, thumbnail_path, share_count, group_id, mode_id) VALUES (?, NULL, 0, ?, ?)",
 					params![relative_path, group_id, mode_id]
-				).map_err(|e| e.to_string())?;
+				)?;
 			}
 			}
 		}
@@ -603,26 +465,26 @@ struct FsSnapshot {
 	keywords_pinyin: std::collections::HashMap<String, KeywordPinyin>,
 }
 
-fn scan_filesystem_snapshot(meme_dir: &str) -> Result<FsSnapshot, String> {
+fn scan_filesystem_snapshot(meme_dir: &str) -> Result<FsSnapshot, AppError> {
 	let meme_path = PathBuf::from(meme_dir);
 	if !meme_path.exists() {
-		std::fs::create_dir_all(&meme_path).map_err(|e| format!("创建目录失败: {}", e))?;
+		std::fs::create_dir_all(&meme_path).map_err(|e| AppError(format!("创建目录失败: {}", e)))?;
 	}
 	let mut modes: Vec<(String, String)> = Vec::new();
 	let mut groups: Vec<(String, String, String)> = Vec::new();
 	let mut images: Vec<(String, String)> = Vec::new();
 	let mut group_keywords: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
 	let mut all_keywords = HashSet::new();
-	for entry in std::fs::read_dir(&meme_path).map_err(|e| e.to_string())? {
-		let entry = entry.map_err(|e| e.to_string())?;
+	for entry in std::fs::read_dir(&meme_path)? {
+		let entry = entry?;
 		let mode_path = entry.path();
 		if !mode_path.is_dir() { continue; }
 		let mode_name = mode_path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
 		if mode_name.starts_with('.') { continue; }
 		let mode_folder = mode_path.to_string_lossy().to_string();
 		modes.push((mode_name.clone(), mode_folder.clone()));
-		for group_entry in std::fs::read_dir(&mode_path).map_err(|e| e.to_string())? {
-			let group_entry = group_entry.map_err(|e| e.to_string())?;
+		for group_entry in std::fs::read_dir(&mode_path)? {
+			let group_entry = group_entry?;
 			let group_path = group_entry.path();
 			if !group_path.is_dir() { continue; }
 			let group_name = group_path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
@@ -635,8 +497,8 @@ fn scan_filesystem_snapshot(meme_dir: &str) -> Result<FsSnapshot, String> {
 				group_keywords.insert(group_name.clone(), keywords.clone());
 				for kw in &keywords { all_keywords.insert(kw.clone()); }
 			}
-			for image_entry in std::fs::read_dir(&group_path).map_err(|e| e.to_string())? {
-				let image_entry = image_entry.map_err(|e| e.to_string())?;
+			for image_entry in std::fs::read_dir(&group_path)? {
+				let image_entry = image_entry?;
 				let image_path = image_entry.path();
 				if !image_path.is_file() { continue; }
 				let ext = image_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
@@ -674,25 +536,25 @@ struct FullDiff {
 	insert_links: Vec<(String, String)>,
 }
 
-fn compute_db_diff(conn: &rusqlite::Connection, snap: &FsSnapshot) -> Result<FullDiff, String> {
+fn compute_db_diff(conn: &rusqlite::Connection, snap: &FsSnapshot) -> Result<FullDiff, AppError> {
 	let db_mode_paths: HashSet<String> = {
-		let mut stmt = conn.prepare("SELECT folder_path FROM modes").map_err(|e| e.to_string())?;
-		let rows: Vec<rusqlite::Result<String>> = stmt.query_map([], |r| r.get(0)).map_err(|e| e.to_string())?.collect();
+		let mut stmt = conn.prepare("SELECT folder_path FROM modes")?;
+		let rows: Vec<rusqlite::Result<String>> = stmt.query_map([], |r| r.get(0))?.collect();
 		rows.into_iter().filter_map(|r| r.ok()).collect()
 	};
 	let db_group_paths: HashSet<String> = {
-		let mut stmt = conn.prepare("SELECT folder_path FROM groups").map_err(|e| e.to_string())?;
-		let rows: Vec<rusqlite::Result<String>> = stmt.query_map([], |r| r.get(0)).map_err(|e| e.to_string())?.collect();
+		let mut stmt = conn.prepare("SELECT folder_path FROM groups")?;
+		let rows: Vec<rusqlite::Result<String>> = stmt.query_map([], |r| r.get(0))?.collect();
 		rows.into_iter().filter_map(|r| r.ok()).collect()
 	};
 	let db_image_paths: HashSet<String> = {
-		let mut stmt = conn.prepare("SELECT image_path FROM images").map_err(|e| e.to_string())?;
-		let rows: Vec<rusqlite::Result<String>> = stmt.query_map([], |r| r.get(0)).map_err(|e| e.to_string())?.collect();
+		let mut stmt = conn.prepare("SELECT image_path FROM images")?;
+		let rows: Vec<rusqlite::Result<String>> = stmt.query_map([], |r| r.get(0))?.collect();
 		rows.into_iter().filter_map(|r| r.ok()).collect()
 	};
 	let db_keywords: HashSet<String> = {
-		let mut stmt = conn.prepare("SELECT keyword FROM keywords").map_err(|e| e.to_string())?;
-		let rows: Vec<rusqlite::Result<String>> = stmt.query_map([], |r| r.get(0)).map_err(|e| e.to_string())?.collect();
+		let mut stmt = conn.prepare("SELECT keyword FROM keywords")?;
+		let rows: Vec<rusqlite::Result<String>> = stmt.query_map([], |r| r.get(0))?.collect();
 		rows.into_iter().filter_map(|r| r.ok()).collect()
 	};
 	let snap_mode_paths: HashSet<String> = snap.modes.iter().map(|(_,p)| p.clone()).collect();
@@ -723,30 +585,30 @@ fn compute_db_diff(conn: &rusqlite::Connection, snap: &FsSnapshot) -> Result<Ful
 	Ok(FullDiff { delete_modes, delete_groups, delete_images, delete_keywords, insert_modes, insert_groups, insert_images, insert_keywords, insert_links })
 }
 
-fn apply_diff(conn: &rusqlite::Connection, diff: &FullDiff) -> Result<(), String> {
+fn apply_diff(conn: &rusqlite::Connection, diff: &FullDiff) -> Result<(), AppError> {
 	use rusqlite::params_from_iter;
 
-	conn.execute("DELETE FROM keyword_group_links", []).map_err(|e| e.to_string())?;
+	conn.execute("DELETE FROM keyword_group_links", [])?;
 
 	for chunk in diff.delete_images.chunks(CHUNK_SIZE) {
 		let ph: Vec<String> = chunk.iter().enumerate().map(|(i,_)| format!("?{}",i+1)).collect();
 		let sql = format!("DELETE FROM images WHERE image_path IN ({})", ph.join(","));
-		conn.execute(&sql, params_from_iter(chunk.iter())).map_err(|e| e.to_string())?;
+		conn.execute(&sql, params_from_iter(chunk.iter()))?;
 	}
 	for chunk in diff.delete_groups.chunks(CHUNK_SIZE) {
 		let ph: Vec<String> = chunk.iter().enumerate().map(|(i,_)| format!("?{}",i+1)).collect();
 		let sql = format!("DELETE FROM groups WHERE folder_path IN ({})", ph.join(","));
-		conn.execute(&sql, params_from_iter(chunk.iter())).map_err(|e| e.to_string())?;
+		conn.execute(&sql, params_from_iter(chunk.iter()))?;
 	}
 	for chunk in diff.delete_modes.chunks(CHUNK_SIZE) {
 		let ph: Vec<String> = chunk.iter().enumerate().map(|(i,_)| format!("?{}",i+1)).collect();
 		let sql = format!("DELETE FROM modes WHERE folder_path IN ({})", ph.join(","));
-		conn.execute(&sql, params_from_iter(chunk.iter())).map_err(|e| e.to_string())?;
+		conn.execute(&sql, params_from_iter(chunk.iter()))?;
 	}
 	for chunk in diff.delete_keywords.chunks(CHUNK_SIZE) {
 		let ph: Vec<String> = chunk.iter().enumerate().map(|(i,_)| format!("?{}",i+1)).collect();
 		let sql = format!("DELETE FROM keywords WHERE keyword IN ({})", ph.join(","));
-		conn.execute(&sql, params_from_iter(chunk.iter())).map_err(|e| e.to_string())?;
+		conn.execute(&sql, params_from_iter(chunk.iter()))?;
 	}
 
 	if !diff.insert_modes.is_empty() {
@@ -759,7 +621,7 @@ fn apply_diff(conn: &rusqlite::Connection, diff: &FullDiff) -> Result<(), String
 			params.push(Box::new(path.clone()));
 		}
 		let refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
-		conn.execute(&sql, refs.as_slice()).map_err(|e| e.to_string())?;
+		conn.execute(&sql, refs.as_slice())?;
 	}
 	for chunk in diff.insert_groups.chunks(CHUNK_SIZE) {
 		let mut parts: Vec<String> = Vec::new();
@@ -769,7 +631,7 @@ fn apply_diff(conn: &rusqlite::Connection, diff: &FullDiff) -> Result<(), String
 			params.push(name.clone()); params.push(fp.clone()); params.push(mfp.clone());
 		}
 		let sql = format!("INSERT INTO groups (name, folder_path, mode_id, share_count) {}", parts.join(" UNION ALL "));
-		conn.execute(&sql, params_from_iter(params.iter())).map_err(|e| e.to_string())?;
+		conn.execute(&sql, params_from_iter(params.iter()))?;
 	}
 	for chunk in diff.insert_images.chunks(CHUNK_SIZE) {
 		let mut parts: Vec<String> = Vec::new();
@@ -779,7 +641,7 @@ fn apply_diff(conn: &rusqlite::Connection, diff: &FullDiff) -> Result<(), String
 			params.push(rp.clone()); params.push(gfp.clone());
 		}
 		let sql = format!("INSERT INTO images (image_path, group_id, mode_id, share_count) {}", parts.join(" UNION ALL "));
-		conn.execute(&sql, params_from_iter(params.iter())).map_err(|e| e.to_string())?;
+		conn.execute(&sql, params_from_iter(params.iter()))?;
 	}
 	for chunk in diff.insert_keywords.chunks(CHUNK_SIZE) {
 		let mut sql = String::from("INSERT INTO keywords (keyword, pinyin, acronym) VALUES ");
@@ -792,7 +654,7 @@ fn apply_diff(conn: &rusqlite::Connection, diff: &FullDiff) -> Result<(), String
 			params.push(Box::new(abbr.clone()));
 		}
 		let refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
-		conn.execute(&sql, refs.as_slice()).map_err(|e| e.to_string())?;
+		conn.execute(&sql, refs.as_slice())?;
 	}
 	for chunk in diff.insert_links.chunks(CHUNK_SIZE) {
 		let mut parts: Vec<String> = Vec::new();
@@ -802,12 +664,12 @@ fn apply_diff(conn: &rusqlite::Connection, diff: &FullDiff) -> Result<(), String
 			params.push(kw.clone()); params.push(gn.clone());
 		}
 		let sql = format!("INSERT INTO keyword_group_links (keyword_id, group_id) {}", parts.join(" UNION ALL "));
-		conn.execute(&sql, params_from_iter(params.iter())).map_err(|e| e.to_string())?;
+		conn.execute(&sql, params_from_iter(params.iter()))?;
 	}
 	Ok(())
 }
 
-fn refresh_everything(conn: &rusqlite::Connection, meme_dir: &str) -> Result<String, String> {
+fn refresh_everything(conn: &rusqlite::Connection, meme_dir: &str) -> Result<String, AppError> {
 	let snapshot = scan_filesystem_snapshot(meme_dir)?;
 	crate::keyword::write_keywords_toml_snapshot(meme_dir, &snapshot.group_keywords, &snapshot.keywords_pinyin)?;
 	let diff = compute_db_diff(conn, &snapshot)?;
@@ -821,14 +683,14 @@ fn refresh_everything(conn: &rusqlite::Connection, meme_dir: &str) -> Result<Str
 }
 
 #[tauri::command]
-pub fn full_refresh(meme_dir: String) -> Result<String, String> {
-	let conn = init_db().map_err(|e| e.to_string())?;
-	conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
+pub fn full_refresh(meme_dir: String) -> Result<String, AppError> {
+	let conn = init_db()?;
+	conn.execute_batch("BEGIN")?;
 	match refresh_everything(&conn, &meme_dir) {
 		Ok(msg) => {
 			conn.execute_batch("COMMIT").map_err(|e| {
 				let _ = conn.execute_batch("ROLLBACK");
-				e.to_string()
+				e
 			})?;
 			Ok(msg)
 		}
