@@ -2502,50 +2502,6 @@ async function handleImageMenuSelect(img: Image, action: string) {
   cursor: pointer;
 }
 
-/* 图片网格编辑模式 */
-.image-grid.edit-mode {
-  padding-top: 8px;
-}
-
-/* 添加图片按钮 */
-.image-item.add-image-item {
-  background-color: var(--color-primary-light);
-  border: 2px dashed var(--color-primary);
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.image-item.add-image-item:hover {
-  background-color: var(--color-primary);
-  border-style: solid;
-}
-
-.add-image-content {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
-
-.add-image-content span {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--color-primary);
-}
-
-.image-item.add-image-item:hover .add-image-content span {
-  color: white;
-}
-
-.image-item.add-image-item:hover :deep(.var-icon) {
-  color: white !important;
-}
 
 /* 图片选择复选框 */
 .image-select-checkbox {
@@ -2582,50 +2538,6 @@ async function handleImageMenuSelect(img: Image, action: string) {
   cursor: pointer;
 }
 
-/* 图片网格编辑模式 */
-.image-grid.edit-mode {
-  padding-top: 8px;
-}
-
-/* 添加图片按钮 */
-.image-item.add-image-item {
-  background-color: var(--color-primary-light);
-  border: 2px dashed var(--color-primary);
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.image-item.add-image-item:hover {
-  background-color: var(--color-primary);
-  border-style: solid;
-}
-
-.add-image-content {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
-
-.add-image-content span {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--color-primary);
-}
-
-.image-item.add-image-item:hover .add-image-content span {
-  color: white;
-}
-
-.image-item.add-image-item:hover :deep(.var-icon) {
-  color: white !important;
-}
 
 /* 图片选择复选框 */
 .image-select-checkbox {
@@ -2662,50 +2574,6 @@ async function handleImageMenuSelect(img: Image, action: string) {
   cursor: pointer;
 }
 
-/* 图片网格编辑模式 */
-.image-grid.edit-mode {
-  padding-top: 8px;
-}
-
-/* 添加图片按钮 */
-.image-item.add-image-item {
-  background-color: var(--color-primary-light);
-  border: 2px dashed var(--color-primary);
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.image-item.add-image-item:hover {
-  background-color: var(--color-primary);
-  border-style: solid;
-}
-
-.add-image-content {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
-
-.add-image-content span {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--color-primary);
-}
-
-.image-item.add-image-item:hover .add-image-content span {
-  color: white;
-}
-
-.image-item.add-image-item:hover :deep(.var-icon) {
-  color: white !important;
-}
 
 /* 图片选择复选框 */
 .image-select-checkbox {
@@ -2742,50 +2610,6 @@ async function handleImageMenuSelect(img: Image, action: string) {
   cursor: pointer;
 }
 
-/* 图片网格编辑模式 */
-.image-grid.edit-mode {
-  padding-top: 8px;
-}
-
-/* 添加图片按钮 */
-.image-item.add-image-item {
-  background-color: var(--color-primary-light);
-  border: 2px dashed var(--color-primary);
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.image-item.add-image-item:hover {
-  background-color: var(--color-primary);
-  border-style: solid;
-}
-
-.add-image-content {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
-
-.add-image-content span {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--color-primary);
-}
-
-.image-item.add-image-item:hover .add-image-content span {
-  color: white;
-}
-
-.image-item.add-image-item:hover :deep(.var-icon) {
-  color: white !important;
-}
 
 /* 图片选择复选框 */
 .image-select-checkbox {
@@ -2822,50 +2646,6 @@ async function handleImageMenuSelect(img: Image, action: string) {
   cursor: pointer;
 }
 
-/* 图片网格编辑模式 */
-.image-grid.edit-mode {
-  padding-top: 8px;
-}
-
-/* 添加图片按钮 */
-.image-item.add-image-item {
-  background-color: var(--color-primary-light);
-  border: 2px dashed var(--color-primary);
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.image-item.add-image-item:hover {
-  background-color: var(--color-primary);
-  border-style: solid;
-}
-
-.add-image-content {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
-
-.add-image-content span {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--color-primary);
-}
-
-.image-item.add-image-item:hover .add-image-content span {
-  color: white;
-}
-
-.image-item.add-image-item:hover :deep(.var-icon) {
-  color: white !important;
-}
 
 /* 图片选择复选框 */
 .image-select-checkbox {
@@ -2902,50 +2682,6 @@ async function handleImageMenuSelect(img: Image, action: string) {
   cursor: pointer;
 }
 
-/* 图片网格编辑模式 */
-.image-grid.edit-mode {
-  padding-top: 8px;
-}
-
-/* 添加图片按钮 */
-.image-item.add-image-item {
-  background-color: var(--color-primary-light);
-  border: 2px dashed var(--color-primary);
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.image-item.add-image-item:hover {
-  background-color: var(--color-primary);
-  border-style: solid;
-}
-
-.add-image-content {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
-
-.add-image-content span {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--color-primary);
-}
-
-.image-item.add-image-item:hover .add-image-content span {
-  color: white;
-}
-
-.image-item.add-image-item:hover :deep(.var-icon) {
-  color: white !important;
-}
 
 /* 图片选择复选框 */
 .image-select-checkbox {
