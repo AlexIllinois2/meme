@@ -1,5 +1,14 @@
 # 🤖 Universal Coding Agent Instructions
 
+## 0. PackageManager
+- This project uses **Bun** as the package manager.
+- NEVER run `npm install`, `npm run build`, or `npx`.
+- Use `bun install` and `bun run <script>`.
+- Tauri commands should be run via `bun run tauri ...`.
+- Node is installed via mise for tooling only; do NOT invoke npm.
+
+---
+
 ## 1. Core Engineering Principles
 - **Surgical Changes**: Touch only what you must. Match existing style. Do not refactor unbroken adjacent code.
 - **Simplicity First**: Write the minimum code that solves the problem. No speculative features, premature optimizations, or unrequested abstractions.

@@ -684,16 +684,6 @@ onMounted(async () => {
     await syncSystemTheme(); // 直接调用抽出来的函数
   });
   
-  // 只在用户明确改变窗口大小时才调整列数
-  let resizeTimeout: number;
-  window.addEventListener('resize', () => {
-    clearTimeout(resizeTimeout);
-    resizeTimeout = window.setTimeout(() => {
-      // 如果用户没有手动调整过列数，才自动调整
-      // 这里暂时不做自动调整，保留用户设置
-    }, 300);
-  });
-  
   window.addEventListener('modeImported', async (event: any) => {
     const { modeId } = event.detail;
     await loadModes();
