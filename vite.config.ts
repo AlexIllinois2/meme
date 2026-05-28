@@ -41,7 +41,7 @@ export default defineConfig(async () => ({
       output: {
         manualChunks: {
           vendor: ["vue", "@varlet/ui"],
-          tauri: ["@tauri-apps/api", "@tauri-apps/plugin-clipboard-manager", "@tauri-apps/plugin-dialog", "@tauri-apps/plugin-fs", "@tauri-apps/plugin-opener"],
+          tauri: ["@tauri-apps/api", "@tauri-apps/plugin-dialog", "@tauri-apps/plugin-fs"],
         },
       },
     },
