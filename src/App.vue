@@ -13,6 +13,7 @@ import ThemeProvider from "./components/ThemeProvider.vue";
 import FloatingSearchButton from "./components/FloatingSearchButton.vue";
 import Icon from "./components/Icon.vue";
 import type { Mode, Group, Image, Config } from "./types";
+import { debug } from './utils/debug';
 
 const isTauri = typeof window !== 'undefined' && window.__TAURI__;
 const invoke = isTauri ? tauri.invoke : async () => {
@@ -95,7 +96,7 @@ const handleAgreementReject = () => {
   showAgreementConfirm.value = false;
   // 如果用户拒绝协议，退出应用
   if (isTauri) {
-    invoke('exit_app');
+    invoke('exit_app').catch((e: any) => console.error('[App] Failed to exit app:', e));
   } else {
     window.close();
   }
@@ -122,11 +123,11 @@ function handleUserInteraction(_e: Event) {
         // 直接查找并聚焦原生 input
         const nativeInput = document.querySelector('.search-input input, .search-input [role="textbox"]') as HTMLInputElement;
         if (nativeInput) {
-          console.log('[Floating] Directly focusing native input');
+          debug.log('[Floating] Directly focusing native input');
           nativeInput.focus({ preventScroll: false });
         } else {
           console.warn('[Floating] Native input not found, falling back to triggerSearchFocus');
-          (window as any).triggerSearchFocus();
+          window.triggerSearchFocus();
         }
       }, 300);
     });
@@ -135,7 +136,7 @@ function handleUserInteraction(_e: Event) {
 
 // 显示首次使用提示
 function showFirstUsePrompt() {
-  console.log('[Floating] showFirstUsePrompt');
+  debug.log('[Floating] showFirstUsePrompt');
   if (!hasUserInteracted.value) {
     showFirstUseMask.value = true;
   }
@@ -161,10 +162,10 @@ function toggleGlobalEditMode() {
 // 监听应用恢复前台事件
 function handleAppResume() {
   if (document.visibilityState === 'visible') {
-    console.log('[App] App resumed to foreground');
+    debug.log('[App] App resumed to foreground');
     // 桌面端恢复前台后调用triggerSearchFocus
     if (!isAndroidTauri()) {
-      (window as any).triggerSearchFocus();
+      window.triggerSearchFocus();
     }
   }
 }
@@ -181,8 +182,8 @@ function exitGlobalEditMode() {
 function handleAndroidBack(event: any) {
   // 0. 若自动发送流程进行中，按返回键即终止
   if (isAndroidTauri()) {
-    const native = (window as any).AndroidNative;
-    if (native && native.deactivateSendFlow) {
+    const native = window.AndroidNative;
+    if (native && typeof native.deactivateSendFlow === 'function') {
       native.deactivateSendFlow();
     }
   }
@@ -264,8 +265,8 @@ function handleAndroidBack(event: any) {
   }
   
   // 8. 如果在首页且没有其他状态，将应用后台到桌面
-  if (isAndroidTauri() && (window as any).AndroidNative?.minimizeApp) {
-    (window as any).AndroidNative.minimizeApp();
+  if (isAndroidTauri() && typeof window.AndroidNative?.minimizeApp === 'function') {
+    window.AndroidNative.minimizeApp();
     event.preventDefault?.();
     return true;
   }
@@ -511,10 +512,11 @@ const themeKey = ref(0);
 
 // 全局分享应用选择回调
 if (typeof window !== 'undefined') {
-  (window as any).onCustomAppSelected = async (packageName: string, appName: string) => {
+  // 注入全局回调供 Android 原生调用 — 在 android.d.ts 中声明了类型
+  window.onCustomAppSelected = async (packageName: string, appName: string) => {
     try {
-      if ((!appName || appName === packageName) && isAndroidTauri() && typeof (window as any).AndroidNative?.getApplicationName === 'function') {
-        appName = (window as any).AndroidNative.getApplicationName(packageName);
+      if ((!appName || appName === packageName) && isAndroidTauri() && typeof window.AndroidNative?.getApplicationName === 'function') {
+        appName = window.AndroidNative.getApplicationName(packageName);
       }
       await invoke('add_custom_share_app', { packageName, appName });
       Snackbar.success(`已保存应用: ${appName || packageName}`);
@@ -587,7 +589,7 @@ onMounted(async () => {
       if (state.page) activeMenu.value = state.page;
       if (state.modeId) selectedModeId.value = state.modeId;
       if (state.groupId) selectedGroupId.value = state.groupId;
-      console.log('[Restore] State restored:', state);
+      debug.log('[Restore] State restored:', state);
     } catch (e) {
       console.error('[Restore] Failed to parse saved state:', e);
     }
@@ -680,27 +682,39 @@ onMounted(async () => {
   window.addEventListener('touchstart', handleTouchStart, { passive: false });
   window.addEventListener('touchmove', handleTouchMove, { passive: false });
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', async () => {
-    console.log('[Theme] 系统深色模式切换');
-    await syncSystemTheme(); // 直接调用抽出来的函数
-  });
-  
-  window.addEventListener('modeImported', async (event: any) => {
-    const { modeId } = event.detail;
-    await loadModes();
-    if (modeId && modes.value.find(m => m.id === modeId)) {
-      await switchMode(modeId);
+    try {
+      debug.log('[Theme] 系统深色模式切换');
+      await syncSystemTheme(); // 直接调用抽出来的函数
+    } catch (e) {
+      console.error('[Theme] Failed to sync system theme on change:', e);
     }
   });
   
-  window.addEventListener('modeCreated', async (event: any) => {
-    const { modeId } = event.detail;
-    await loadModes();
-    if (modeId && modes.value.find(m => m.id === modeId)) {
-      await switchMode(modeId);
-      activeMenu.value = 'home';
-      Snackbar.success('已切换到新模式');
+  window.addEventListener('modeImported', (async (event: Event) => {
+    try {
+      const { modeId } = (event as CustomEvent<{ modeId: number }>).detail;
+      await loadModes();
+      if (modeId && modes.value.find(m => m.id === modeId)) {
+        await switchMode(modeId);
+      }
+    } catch (e) {
+      console.error('[Mode] Failed to handle modeImported event:', e);
     }
-  });
+  }) as EventListener);
+  
+  window.addEventListener('modeCreated', (async (event: Event) => {
+    try {
+      const { modeId } = (event as CustomEvent<{ modeId: number }>).detail;
+      await loadModes();
+      if (modeId && modes.value.find(m => m.id === modeId)) {
+        await switchMode(modeId);
+        activeMenu.value = 'home';
+        Snackbar.success('已切换到新模式');
+      }
+    } catch (e) {
+      console.error('[Mode] Failed to handle modeCreated event:', e);
+    }
+  }) as EventListener);
   
   window.addEventListener('navigateHome', () => {
     activeMenu.value = 'home';
@@ -726,17 +740,21 @@ onMounted(async () => {
 
   // 监听应用恢复前台事件，自动同步系统颜色模式
   document.addEventListener('visibilitychange', async () => {
-    if (document.visibilityState === 'visible') {
-      // 应用恢复到前台
-      console.log('[Theme] App resumed to foreground');
-      await syncSystemTheme(); 
-      handleAppResume();
+    try {
+      if (document.visibilityState === 'visible') {
+        // 应用恢复到前台
+        debug.log('[Theme] App resumed to foreground');
+        await syncSystemTheme(); 
+        handleAppResume();
+      }
+    } catch (e) {
+      console.error('[Theme] Failed to handle visibility change:', e);
     }
   });
 
   // 添加悬浮窗触发搜索的全局方法
-  (window as any).triggerSearchFocus = (foregroundApp?: { packageName: string; appName: string } | null) => {
-    console.log('[Floating] Triggering search focus', foregroundApp);
+  window.triggerSearchFocus = (foregroundApp?: { packageName: string; appName: string } | null) => {
+    debug.log('[Floating] Triggering search focus', foregroundApp);
 
     // 如果从悬浮窗触发且检测到前台应用（非本应用），自动切换分享目标
     if (foregroundApp && foregroundApp.packageName) {
@@ -744,7 +762,7 @@ onMounted(async () => {
       const mappedApp = pkg === 'com.tencent.mobileqq' ? 'qq'
                       : pkg === 'com.tencent.mm' ? 'wechat'
                       : pkg;
-      console.log('[Floating] Auto-switching share target to:', mappedApp, '(pkg:', pkg, ')');
+      debug.log('[Floating] Auto-switching share target to:', mappedApp, '(pkg:', pkg, ')');
       shareApp.value = mappedApp;
       handleShareAppChange(mappedApp);
     }
@@ -757,12 +775,12 @@ onMounted(async () => {
     
     // 立即聚焦搜索框
     if (searchInputRef.value) {
-      console.log('[Floating] Using Vue ref to focus');
+      debug.log('[Floating] Using Vue ref to focus');
       
       // Varlet Input 组件的聚焦方法
       if (typeof searchInputRef.value.focus === 'function') {
         searchInputRef.value.focus();
-        console.log('[Floating] Called ref.focus()');
+        debug.log('[Floating] Called ref.focus()');
       }
       
       // 尝试获取内部 input 元素
@@ -781,7 +799,7 @@ onMounted(async () => {
       }
       
       if (nativeInput) {
-        console.log('[Floating] Found native input element');
+        debug.log('[Floating] Found native input element');
         
         // 强制聚焦
         nativeInput.focus({ preventScroll: false });
@@ -795,8 +813,8 @@ onMounted(async () => {
 
   // 监听原生端触发的搜索聚焦事件
   window.addEventListener('triggerSearchFocus', ((e: CustomEvent) => {
-    console.log('[Floating] Received triggerSearchFocus event', e.detail);
-    (window as any).triggerSearchFocus(e.detail);
+    debug.log('[Floating] Received triggerSearchFocus event', e.detail);
+    window.triggerSearchFocus(e.detail);
     showFirstUsePrompt();
   }) as EventListener);
 
@@ -848,7 +866,7 @@ onUnmounted(() => {
 // 监听全局悬浮窗状态变化
 window.addEventListener('globalFloatingWindowChanged', ((e: CustomEvent) => {
   globalFloatingWindowEnabled.value = e.detail;
-  console.log('[Floating] Global floating window state changed:', e.detail);
+  debug.log('[Floating] Global floating window state changed:', e.detail);
 }) as EventListener);
 
 async function syncSystemTheme() {
@@ -862,29 +880,29 @@ async function syncSystemTheme() {
 
   // 不一致 → 重新同步
   if (isSystemDark !== isCurrentlyDark) {
-    console.log('[Theme] 系统主题变化，正在同步...');
+    debug.log('[Theme] 系统主题变化，正在同步...');
     
     applyTheme();          // 应用主题到 DOM
     themeKey.value++;      // 强制 ThemeProvider 更新
-    console.log('[Theme] 主题同步完成');
+    debug.log('[Theme] 主题同步完成');
   }
 }
 
 // 检查 AndroidNative 接口是否可用
 if (isAndroidTauri()) {
   setTimeout(() => {
-    if (typeof (window as any).AndroidNative === 'undefined') {
+    if (typeof window.AndroidNative === 'undefined') {
       console.warn('[Android] AndroidNative interface not ready, waiting...');
       // 再等待一下
       setTimeout(() => {
-        if (typeof (window as any).AndroidNative === 'undefined') {
+        if (typeof window.AndroidNative === 'undefined') {
           console.error('[Android] AndroidNative interface still not available after waiting');
         } else {
-          console.log('[Android] AndroidNative interface is now available');
+          debug.log('[Android] AndroidNative interface is now available');
         }
       }, 2000);
     } else {
-      console.log('[Android] AndroidNative interface is available');
+      debug.log('[Android] AndroidNative interface is available');
     }
   }, 1000);
 }
@@ -929,18 +947,18 @@ async function loadConfig() {
       // Android 平台：从原生服务同步悬浮窗实际状态，并在需要时自动启动服务
       if (/Android/i.test(navigator.userAgent)) {
         try {
-          const nativeEnabled = (window as any).AndroidNative?.isFloatingWindowEnabled?.();
+          const nativeEnabled = window.AndroidNative?.isFloatingWindowEnabled?.();
           const shouldBeEnabled = config.value.global_floating_window === true;
           
           if (shouldBeEnabled && nativeEnabled !== true) {
             // 配置中开启了但服务未运行，自动启动
-            console.log('[Floating] Config says enabled but service not running, starting...');
-            (window as any).AndroidNative?.startFloatingWindow?.();
+            debug.log('[Floating] Config says enabled but service not running, starting...');
+            window.AndroidNative?.startFloatingWindow?.();
             globalFloatingWindowEnabled.value = true;
           } else {
             globalFloatingWindowEnabled.value = nativeEnabled === true;
           }
-          console.log('[Floating] Synced from native service:', nativeEnabled, 'config:', shouldBeEnabled);
+          debug.log('[Floating] Synced from native service:', nativeEnabled, 'config:', shouldBeEnabled);
         } catch (e) {
           // 如果无法获取原生状态，使用配置中的值
           globalFloatingWindowEnabled.value = config.value.global_floating_window || true;
@@ -975,17 +993,17 @@ async function loadCustomApps() {
     customShareApps.value = await invoke<any[]>("get_custom_share_apps") || [];
     
     // 从 SharedPreferences 同步到数据库（处理分享后未返回应用的情况）
-    if (isAndroidTauri() && typeof (window as any).AndroidNative?.getCustomAppsFromPrefs === 'function') {
-      const prefsJson = (window as any).AndroidNative.getCustomAppsFromPrefs();
+    if (isAndroidTauri() && typeof window.AndroidNative?.getCustomAppsFromPrefs === 'function') {
+      const prefsJson = window.AndroidNative.getCustomAppsFromPrefs();
       if (prefsJson) {
         const prefsPackages: string[] = JSON.parse(prefsJson);
         for (const pkg of prefsPackages) {
           if (pkg === 'com.tencent.mm' || pkg === 'com.tencent.mobileqq') continue;
           const exists = customShareApps.value.some(app => app.package_name === pkg);
           if (!exists) {
-            const appName = (window as any).AndroidNative.getApplicationName(pkg);
+            const appName = window.AndroidNative.getApplicationName(pkg);
             await invoke('add_custom_share_app', { packageName: pkg, appName: appName || pkg });
-            console.log('Synced from SharedPreferences to DB:', pkg, appName);
+            debug.log('Synced from SharedPreferences to DB:', pkg, appName);
           }
         }
         customShareApps.value = await invoke<any[]>("get_custom_share_apps") || [];
@@ -993,11 +1011,11 @@ async function loadCustomApps() {
     }
     
     // 补全缺失的应用名（app_name 为空或等于包名时，从原生端获取真实应用名）
-    if (isAndroidTauri() && typeof (window as any).AndroidNative?.getApplicationName === 'function') {
+    if (isAndroidTauri() && typeof window.AndroidNative?.getApplicationName === 'function') {
       let needsUpdate = false;
       for (const app of customShareApps.value) {
         if (!app.app_name || app.app_name === app.package_name) {
-          const realName = (window as any).AndroidNative.getApplicationName(app.package_name);
+          const realName = window.AndroidNative.getApplicationName(app.package_name);
           if (realName && realName !== app.package_name) {
             app.app_name = realName;
             needsUpdate = true;
@@ -1006,15 +1024,15 @@ async function loadCustomApps() {
         }
       }
       if (needsUpdate) {
-        console.log('Updated missing app names for custom apps');
+        debug.log('Updated missing app names for custom apps');
       }
     }
     
     // 同步到 SharedPreferences（确保悬浮窗服务能读取到最新数据）
-    if (isAndroidTauri() && typeof (window as any).AndroidNative?.syncCustomAppsToPrefs === 'function') {
+    if (isAndroidTauri() && typeof window.AndroidNative?.syncCustomAppsToPrefs === 'function') {
       const packages = customShareApps.value.map(app => app.package_name);
-      (window as any).AndroidNative.syncCustomAppsToPrefs(JSON.stringify(packages));
-      console.log(`Synced ${packages.length} apps to SharedPreferences`);
+      window.AndroidNative.syncCustomAppsToPrefs(JSON.stringify(packages));
+      debug.log(`Synced ${packages.length} apps to SharedPreferences`);
     }
   } catch (error) {
     console.error("Failed to load custom apps:", error);
@@ -1027,11 +1045,11 @@ async function removeCustomApp(id: number) {
     Snackbar.success("已移除应用");
     
     // 先同步到 SharedPreferences（必须在 loadCustomApps 之前，否则会被重新加回来）
-    if (isAndroidTauri() && typeof (window as any).AndroidNative?.syncCustomAppsToPrefs === 'function') {
+    if (isAndroidTauri() && typeof window.AndroidNative?.syncCustomAppsToPrefs === 'function') {
       const packages = customShareApps.value
         .filter(app => app.id !== id)
         .map(app => app.package_name);
-      (window as any).AndroidNative.syncCustomAppsToPrefs(JSON.stringify(packages));
+      window.AndroidNative.syncCustomAppsToPrefs(JSON.stringify(packages));
     }
     
     await loadCustomApps();
@@ -1371,10 +1389,10 @@ async function uploadImages() {
  * 5. 前端接收结果 → 更新 UI
  */
 async function uploadImagesAndroid() {
-	console.log('[Android] uploadImagesAndroid 开始');
-	console.log('[Android] config:', config.value);
-	console.log('[Android] selectedGroupId:', selectedGroupId.value);
-	console.log('[Android] selectedModeId:', selectedModeId.value);
+	debug.log('[Android] uploadImagesAndroid 开始');
+	debug.log('[Android] config:', config.value);
+	debug.log('[Android] selectedGroupId:', selectedGroupId.value);
+	debug.log('[Android] selectedModeId:', selectedModeId.value);
 	
 	if (!config.value || !selectedGroupId.value || !selectedModeId.value) {
 		Snackbar.warning('请先选择分组');
@@ -1383,7 +1401,7 @@ async function uploadImagesAndroid() {
 	
 	try {
 		// 步骤1：打开系统图片选择器，获取 content:// URI
-		console.log('[Android] 打开图片选择器...');
+		debug.log('[Android] 打开图片选择器...');
 		const { open } = await import("@tauri-apps/plugin-dialog");
 		
 		const selected = await open({
@@ -1394,19 +1412,19 @@ async function uploadImagesAndroid() {
 			}]
 		});
 		
-		console.log('[Android] 选择器返回结果:', selected);
+		debug.log('[Android] 选择器返回结果:', selected);
 		
 		if (!selected || (Array.isArray(selected) && selected.length === 0)) {
-			console.log('[Android] 未选择文件');
+			debug.log('[Android] 未选择文件');
 			return;
 		}
 		
 		// 统一转为数组
 		const uris: string[] = Array.isArray(selected) ? selected : [selected];
-		console.log('[Android] 待上传 URI 列表:', uris);
+		debug.log('[Android] 待上传 URI 列表:', uris);
 		
 		// 步骤2：读取文件内容并转为 Base64
-		console.log('[Android] 读取文件内容...');
+		debug.log('[Android] 读取文件内容...');
 		const { readFile } = await import("@tauri-apps/plugin-fs");
 		
 		const imagesData: Array<{ name: string; data: string }> = [];
@@ -1423,7 +1441,7 @@ async function uploadImagesAndroid() {
 				const name = uri.split('/').pop() || 'image.png';
 				
 				imagesData.push({ name, data: base64 });
-				console.log('[Android] 读取文件成功:', name, '大小:', fileData.length);
+				debug.log('[Android] 读取文件成功:', name, '大小:', fileData.length);
 			} catch (err) {
 				console.error('[Android] 读取文件失败:', uri, err);
 			}
@@ -1435,20 +1453,20 @@ async function uploadImagesAndroid() {
 		}
 		
 		// 步骤3：调用后端上传接口
-		console.log('[Android] 调用后端 upload_images_android...');
+		debug.log('[Android] 调用后端 upload_images_android...');
 		const successCount = await invoke<number>("upload_images_android", {
 			imagesData: imagesData,
 			groupId: selectedGroupId.value,
 			modeId: selectedModeId.value
 		});
 		
-		console.log('[Android] 上传完成，成功数量:', successCount);
+		debug.log('[Android] 上传完成，成功数量:', successCount);
 		
 		// 步骤4：刷新图片列表
 		await loadImages(selectedGroupId.value);
 		
 		Snackbar.success(`成功添加 ${successCount} 张图片`);
-		console.log('[Android] uploadImagesAndroid 完成');
+		debug.log('[Android] uploadImagesAndroid 完成');
 	} catch (error) {
 		console.error("[Android] 上传失败:", error);
 		Snackbar.error('添加失败: ' + error);
@@ -1639,8 +1657,8 @@ async function fullRefresh() {
 
     const accessible = await invoke<boolean>('check_storage_accessible', { memeDir });
     if (!accessible) {
-      if (typeof (window as any).AndroidNative?.requestStoragePermission === 'function') {
-        (window as any).AndroidNative.requestStoragePermission();
+      if (typeof window.AndroidNative?.requestStoragePermission === 'function') {
+        window.AndroidNative.requestStoragePermission();
       }
       Snackbar.warning('请授予存储权限后重试');
       return;
@@ -1648,7 +1666,7 @@ async function fullRefresh() {
 
     Snackbar.info('正在刷新数据...');
     const result = await invoke<string>("full_refresh", { memeDir });
-    console.log('Full refresh result:', result);
+    debug.log('Full refresh result:', result);
     await reloadPageState();
     Snackbar.success('数据刷新完成');
   } catch (error) {
@@ -1674,19 +1692,19 @@ async function reloadPageState() {
  */
 async function autoRefreshAfterDirChange(newDir: string) {
   try {
-    console.log('[Auto Refresh] Checking directory:', newDir);
+    debug.log('[Auto Refresh] Checking directory:', newDir);
     
     // 检查存储是否可访问
     const accessible = await invoke<boolean>('check_storage_accessible', { memeDir: newDir });
     if (!accessible) {
-      console.log('[Auto Refresh] Storage not accessible, skipping');
+      debug.log('[Auto Refresh] Storage not accessible, skipping');
       return;
     }
     
     // 执行全量刷新，将文件系统数据同步到数据库
     Snackbar.info('正在初始化数据...');
     const result = await invoke<string>("full_refresh", { memeDir: newDir });
-    console.log('[Auto Refresh] Result:', result);
+    debug.log('[Auto Refresh] Result:', result);
     
     // 刷新完成后重新加载页面状态
     await reloadPageState();
@@ -2040,34 +2058,34 @@ async function shareImageToApp(img: Image) {
   try {
     const imagePath = img.image_path;
     const app = shareApp.value;
-    console.log(`[Android] 分享图片到 ${app}:`, imagePath);
+    debug.log(`[Android] 分享图片到 ${app}:`, imagePath);
     
     // 如果选择的是"所有应用"或未指定特定应用，传递空字符串以显示系统分享菜单
     const targetApp = (app === 'all' || !app) ? '' : app;
 
     if (isAndroidTauri()) {
       // 检查 AndroidNative 接口是否可用，带重试机制
-      let androidNative = (window as any).AndroidNative;
+      let androidNative = window.AndroidNative;
       
-      if (!androidNative || !androidNative.shareImageToApp) {
+      if (!androidNative || typeof androidNative.shareImageToApp !== 'function') {
         console.warn('[Android] AndroidNative interface not immediately available, waiting...');
         
         // 等待最多 2 秒，每 100ms 检查一次
         for (let i = 0; i < 20; i++) {
           await new Promise(resolve => setTimeout(resolve, 100));
-          androidNative = (window as any).AndroidNative;
+          androidNative = window.AndroidNative;
           
-          if (androidNative && androidNative.shareImageToApp) {
-            console.log(`[Android] AndroidNative interface became available after ${i + 1} attempts`);
+          if (androidNative && typeof androidNative.shareImageToApp === 'function') {
+            debug.log(`[Android] AndroidNative interface became available after ${i + 1} attempts`);
             break;
           }
         }
       }
       
-      if (androidNative && androidNative.shareImageToApp) {
-        console.log(`[Android] 调用原生分享接口:`, imagePath, targetApp);
+      if (androidNative && typeof androidNative.shareImageToApp === 'function') {
+        debug.log(`[Android] 调用原生分享接口:`, imagePath, targetApp);
         // 激活自动发送流程：用户已点击图片，准备打开系统分享
-        if (androidNative.activateSendFlow) {
+        if (typeof androidNative.activateSendFlow === 'function') {
           androidNative.activateSendFlow();
         }
         androidNative.shareImageToApp(imagePath, targetApp);
@@ -2080,11 +2098,11 @@ async function shareImageToApp(img: Image) {
         }
       } else {
         console.error('[Android] AndroidNative interface still not available after retries');
-        console.log('[Android] Window keys:', Object.keys(window).filter(k => k.includes('Android') || k.includes('android')));
+        debug.log('[Android] Window keys:', Object.keys(window).filter(k => k.includes('Android') || k.includes('android')));
         
         // 尝试使用 Tauri Share 插件作为备选方案
         try {
-          console.log('[Android] Falling back to tauri-plugin-share');
+          debug.log('[Android] Falling back to tauri-plugin-share');
           const { shareFile } = await import('tauri-plugin-share');
           const ext = imagePath.split('.').pop()?.toLowerCase() || 'png';
           const mimeMap: Record<string, string> = {

@@ -6,7 +6,6 @@ use rusqlite::params;
 use std::path::PathBuf;
 use crate::{db::init_db, models::Image, meme_fs};
 use tauri_plugin_clipboard_manager::ClipboardExt;
-use tauri_plugin_fs::FsExt;
 use image::ImageEncoder;
 
 #[cfg(not(target_os = "android"))]
@@ -342,8 +341,16 @@ pub fn copy_images(image_ids: Vec<i32>) -> Result<(), String> {
 		return Ok(());
 	}
 	
+	let mut errors: Vec<String> = Vec::new();
 	for image_id in &image_ids {
-		let _ = copy_image(*image_id);
+		if let Err(e) = copy_image(*image_id) {
+			log::warn!("复制图片 {} 失败: {}", image_id, e);
+			errors.push(e);
+		}
+	}
+	
+	if errors.len() == image_ids.len() {
+		return Err(format!("所有 {} 张图片复制失败: {}", errors.len(), errors.join("; ")));
 	}
 	
 	Ok(())
@@ -989,7 +996,13 @@ pub fn full_refresh(meme_dir: String) -> Result<String, String> {
 	let conn = init_db().map_err(|e| e.to_string())?;
 	conn.execute_batch("BEGIN").map_err(|e| e.to_string())?;
 	match refresh_everything(&conn, &meme_dir) {
-		Ok(msg) => { conn.execute_batch("COMMIT").map_err(|e| e.to_string())?; Ok(msg) }
+		Ok(msg) => {
+			conn.execute_batch("COMMIT").map_err(|e| {
+				let _ = conn.execute_batch("ROLLBACK");
+				e.to_string()
+			})?;
+			Ok(msg)
+		}
 		Err(e) => { let _ = conn.execute_batch("ROLLBACK"); Err(e) }
 	}
 }

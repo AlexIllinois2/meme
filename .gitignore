@@ -27,11 +27,14 @@ dist-ssr
 .vscode
 .lingma
 .trae
+.hermes
 
 src-tauri/target
 
 keystore.properties
 release-key.p12
+
+audit_report.md
 
 # Environment variables
 .env

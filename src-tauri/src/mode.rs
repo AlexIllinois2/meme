@@ -2,35 +2,7 @@ use rusqlite::params;
 use std::path::PathBuf;
 use std::fs;
 use crate::{db::init_db, models::Mode};
-
-/// 非法文件名字符
-const INVALID_CHARS: &[char] = &['/', '\\', ':', '*', '?', '"', '<', '>', '|'];
-
-/// 验证名称是否合法（不包含非法字符）
-fn validate_name(name: &str) -> Result<(), String> {
-    if name.trim().is_empty() {
-        return Err("名称不能为空".to_string());
-    }
-    
-    if name.trim() != name {
-        return Err("名称首尾不能有空格".to_string());
-    }
-    
-    for c in name.chars() {
-        if INVALID_CHARS.contains(&c) {
-            return Err(format!("名称包含非法字符: '{}'", c));
-        }
-    }
-    
-    Ok(())
-}
-
-/// 生成安全的文件夹名称（替换非法字符）
-fn sanitize_folder_name(name: &str) -> String {
-    name.chars()
-        .map(|c| if INVALID_CHARS.contains(&c) { '_' } else { c })
-        .collect()
-}
+use crate::meme_fs::{validate_name, sanitize_folder_name};
 
 /// 获取 meme 基础目录
 fn get_meme_base_dir() -> Result<String, String> {
@@ -113,7 +85,7 @@ pub fn add_mode(name: String, sort_order: i32) -> Result<i32, String> {
 
 #[tauri::command]
 pub fn update_mode(id: i32, name: String, sort_order: i32) -> Result<(), String> {
-    eprintln!("Updating mode: id={}, name={}", id, name);
+    log::info!("Updating mode: id={}, name={}", id, name);
     
     // 验证名称
     validate_name(&name)?;
@@ -146,34 +118,25 @@ pub fn update_mode(id: i32, name: String, sort_order: i32) -> Result<(), String>
     }
     
     // 2. 更新数据库
-    let result = conn.execute(
+    let rows = conn.execute(
         "UPDATE modes SET name = ?, sort_order = ?, folder_path = ? WHERE id = ?",
         params![name, sort_order, new_folder_path, id],
-    );
-    
-    if let Err(e) = result {
+    ).map_err(|e| {
         // 数据库更新失败，尝试回滚文件夹
         if let Some((old_name, old_folder_path)) = &old_mode {
             if old_name != &name && PathBuf::from(&new_folder_path).exists() {
                 let _ = fs::rename(&new_folder_path, old_folder_path);
             }
         }
-        return Err(format!("更新数据库失败: {}", e));
+        format!("更新数据库失败: {}", e)
+    })?;
+    
+    log::info!("Updated {} rows", rows);
+    if rows == 0 {
+        return Err(format!("Mode with id {} not found", id));
     }
     
-    match result {
-        Ok(rows) => {
-            eprintln!("Updated {} rows", rows);
-            if rows == 0 {
-                return Err(format!("Mode with id {} not found", id));
-            }
-            Ok(())
-        }
-        Err(e) => {
-            eprintln!("Database error: {}", e);
-            Err(e.to_string())
-        }
-    }
+    Ok(())
 }
 
 /// 内部函数：删除单个模式及其相关数据
@@ -189,7 +152,7 @@ fn delete_mode_internal(conn: &rusqlite::Connection, mode_id: i32) -> Result<(),
         return Err(format!("模式 ID {} 不存在", mode_id));
     }
     
-    eprintln!("Deleting mode {} and all related data...", mode_id);
+    log::info!("Deleting mode {} and all related data...", mode_id);
     
     // 获取模式信息（用于删除文件夹）
     let folder_path: String = conn.query_row(
@@ -215,21 +178,21 @@ fn delete_mode_internal(conn: &rusqlite::Connection, mode_id: i32) -> Result<(),
         "DELETE FROM images WHERE group_id IN (SELECT id FROM groups WHERE mode_id = ?)",
         params![mode_id]
     ).map_err(|e| format!("删除图片失败: {}", e))?;
-    eprintln!("Deleted {} images", images_deleted);
+    log::info!("Deleted {} images", images_deleted);
     
     // 2.2 删除关键词-分组关联
     let kg_deleted = conn.execute(
         "DELETE FROM keyword_group_links WHERE group_id IN (SELECT id FROM groups WHERE mode_id = ?)",
         params![mode_id]
     ).map_err(|e| format!("删除关键词关联失败: {}", e))?;
-    eprintln!("Deleted {} keyword-group links", kg_deleted);
+    log::info!("Deleted {} keyword-group links", kg_deleted);
     
     // 2.3 删除该模式下的所有分组
     let groups_deleted = conn.execute(
         "DELETE FROM groups WHERE mode_id = ?",
         params![mode_id]
     ).map_err(|e| format!("删除分组失败: {}", e))?;
-    eprintln!("Deleted {} groups", groups_deleted);
+    log::info!("Deleted {} groups", groups_deleted);
     
     // 2.4 最后删除模式本身
     let result = conn.execute("DELETE FROM modes WHERE id = ?", params![mode_id]);
@@ -237,14 +200,14 @@ fn delete_mode_internal(conn: &rusqlite::Connection, mode_id: i32) -> Result<(),
     match result {
         Ok(rows) => {
             if rows > 0 {
-                eprintln!("Mode {} deleted successfully", mode_id);
+                log::info!("Mode {} deleted successfully", mode_id);
                 Ok(())
             } else {
                 Err(format!("Failed to delete mode {}", mode_id))
             }
         }
         Err(e) => {
-            eprintln!("Database error deleting mode: {}", e);
+            log::error!("Database error deleting mode: {}", e);
             Err(format!("删除模式失败: {}", e))
         }
     }
@@ -262,10 +225,10 @@ pub fn delete_modes(mode_ids: Vec<i32>) -> Result<(), String> {
     
     let count = mode_ids.len();
     for id in mode_ids {
-        eprintln!("Deleting mode {}...", id);
+        log::info!("Deleting mode {}...", id);
         delete_mode_internal(&conn, id)?;
     }
     
-    eprintln!("Successfully deleted {} modes", count);
+    log::info!("Successfully deleted {} modes", count);
     Ok(())
 }

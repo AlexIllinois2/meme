@@ -151,7 +151,7 @@ pub fn init_db() -> Result<Connection> {
     
     if !thumb_nullable {
         // SQLite 不支持 ALTER COLUMN，需要重建表
-        eprintln!("Fixing images table thumbnail_path column to allow NULL...");
+        log::info!("Fixing images table thumbnail_path column to allow NULL...");
         
         // 检查旧表是否有 created_at 列
         let has_created_at: bool = conn.query_row(
@@ -206,7 +206,7 @@ pub fn init_db() -> Result<Connection> {
             ")?;
         }
         
-        eprintln!("Fixed images table successfully");
+        log::info!("Fixed images table successfully");
     }
     
     // 创建分组表
@@ -247,11 +247,11 @@ pub fn init_db() -> Result<Connection> {
     ).unwrap_or(0) > 0;
     
     if has_abbreviation && !has_acronym {
-        eprintln!("Migrating keywords table: renaming abbreviation to acronym");
+        log::info!("Migrating keywords table: renaming abbreviation to acronym");
         conn.execute("ALTER TABLE keywords RENAME COLUMN abbreviation TO acronym", [])?;
     } else if !has_acronym {
         // 如果两列都没有，添加 acronym 列
-        eprintln!("Adding acronym column to keywords table");
+        log::info!("Adding acronym column to keywords table");
         conn.execute("ALTER TABLE keywords ADD COLUMN acronym TEXT", [])?;
     }
     
@@ -315,7 +315,7 @@ fn migrate_db(conn: &Connection) -> Result<()> {
 
 /// v1 → v2: image_path 从绝对路径迁移为相对路径
 fn migrate_to_v2(conn: &Connection) -> Result<()> {
-    eprintln!("Running DB migration: v1 -> v2 (relative image paths)");
+    log::info!("Running DB migration: v1 -> v2 (relative image paths)");
 
     let meme_dir: String = conn.query_row(
         "SELECT meme_dir FROM config WHERE id = 1",
@@ -344,6 +344,6 @@ fn migrate_to_v2(conn: &Connection) -> Result<()> {
     }
 
     conn.pragma_update(None, "user_version", 2)?;
-    eprintln!("DB migration v1 -> v2 completed");
+    log::info!("DB migration v1 -> v2 completed");
     Ok(())
 }

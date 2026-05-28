@@ -5,6 +5,35 @@
 
 use std::path::PathBuf;
 
+/// 非法文件名字符
+pub const INVALID_CHARS: &[char] = &['/', '\\', ':', '*', '?', '"', '<', '>', '|'];
+
+/// 验证名称是否合法（不包含非法字符）
+pub fn validate_name(name: &str) -> Result<(), String> {
+    if name.trim().is_empty() {
+        return Err("名称不能为空".to_string());
+    }
+
+    if name.trim() != name {
+        return Err("名称首尾不能有空格".to_string());
+    }
+
+    for c in name.chars() {
+        if INVALID_CHARS.contains(&c) {
+            return Err(format!("名称包含非法字符: '{}'", c));
+        }
+    }
+
+    Ok(())
+}
+
+/// 生成安全的文件夹名称（替换非法字符）
+pub fn sanitize_folder_name(name: &str) -> String {
+    name.chars()
+        .map(|c| if INVALID_CHARS.contains(&c) { '_' } else { c })
+        .collect()
+}
+
 /// 将相对于 meme 根目录的路径解析为绝对路径
 ///
 /// 如果路径已经是绝对路径，直接返回（向后兼容未迁移的数据）

@@ -96,9 +96,8 @@ let unlistenSaveImage: (() => void) | null = null;
 onMounted(async () => {
   if (isAndroidTauri()) {
     unlistenSaveImage = await listen<{ path: string; displayName: string }>('saveImageToGallery', (event) => {
-      const win = window as any;
-      if (win.AndroidNative && win.AndroidNative.saveImageToGallery) {
-        win.AndroidNative.saveImageToGallery(JSON.stringify(event.payload));
+      if (typeof window.AndroidNative?.saveImageToGallery === 'function') {
+        window.AndroidNative.saveImageToGallery(JSON.stringify(event.payload));
       }
     });
   }

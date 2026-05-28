@@ -20,8 +20,12 @@ declare global {
       isSendFlowActive: () => boolean;
       activateSendFlow: () => void;
       deactivateSendFlow: () => void;
+      minimizeApp: () => void;
+      getCustomAppsFromPrefs: () => string;
+      saveImageToGallery: (payload: string) => void;
     };
-    triggerSearchFocus: () => void;
+    triggerSearchFocus: (foregroundApp?: { packageName: string; appName: string } | null) => void;
+    onCustomAppSelected: (packageName: string, appName: string) => Promise<void>;
   }
 }
 

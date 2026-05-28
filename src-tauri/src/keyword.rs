@@ -66,7 +66,7 @@ fn load_keywords_from_file(meme_dir: String) -> Result<KeywordsToml, String> {
 /// 生成关键词配置文件 - 只扫描文件系统，不依赖数据库
 /// 根据模式/分组文件夹名自动生成关键词
 #[tauri::command]
-pub fn generate_keywords_file(meme_dir: String, _generate_pinyin: bool, _generate_acronym: bool) -> Result<(), String> {
+pub fn generate_keywords_file(meme_dir: String, generate_pinyin: bool, generate_acronym: bool) -> Result<(), String> {
     use std::fs;
     
     let meme_path = PathBuf::from(&meme_dir);
@@ -132,20 +132,28 @@ pub fn generate_keywords_file(meme_dir: String, _generate_pinyin: bool, _generat
     }
     
     // ========== 2. 构建拼音数据 ==========
-    
+
     let mut target_keywords_pinyin: HashMap<String, KeywordPinyin> = HashMap::new();
-    
+
     for keywords in target_groups_keywords.values() {
         for keyword in keywords {
             // 只处理包含中文的关键词
             let has_chinese = keyword.chars().any(|c| ('\u{4e00}'..='\u{9fff}').contains(&c));
-            if !has_chinese {
+            if !has_chinese && (generate_pinyin || generate_acronym) {
                 continue;
             }
-            
-            let pinyin = convert_to_pinyin(keyword);
-            let abbr = convert_to_acronym(keyword);
-            
+
+            let pinyin = if generate_pinyin {
+                convert_to_pinyin(keyword)
+            } else {
+                String::new()
+            };
+            let abbr = if generate_acronym {
+                convert_to_acronym(keyword)
+            } else {
+                String::new()
+            };
+
             if !pinyin.is_empty() || !abbr.is_empty() {
                 target_keywords_pinyin.insert(keyword.clone(), KeywordPinyin { pinyin, abbr });
             }
@@ -397,15 +405,6 @@ pub fn import_keywords_from_file(meme_dir: String) -> Result<(), String> {
     }
     
     Ok(())
-}
-
-// TOML字符串转义
-fn escape_toml_string(s: &str) -> String {
-    s.replace('\\', "\\\\")
-     .replace('"', "\\\"")
-     .replace('\n', "\\n")
-     .replace('\r', "\\r")
-     .replace('\t', "\\t")
 }
 
 /// 同步关键词到文件

@@ -38,11 +38,11 @@ pub fn get_config() -> Result<Config, String> {
         })
     }) {
         Ok(config) => {
-            eprintln!("Config loaded: meme_dir={}", config.meme_dir);
+            log::info!("Config loaded: meme_dir={}", config.meme_dir);
             Ok(config)
         }
         Err(rusqlite::Error::QueryReturnedNoRows) => {
-            eprintln!("No config found, creating default config");
+            log::info!("No config found, creating default config");
             // 如果配置不存在，创建默认配置 - 全局悬浮窗默认开启
             conn.execute(
                 "INSERT INTO config (id, meme_dir, color_mode, theme_style, last_mode, last_group, share_app, grid_size, pinyin_search, acronym_search, global_floating_window) VALUES (1, '', 'system', 'modern', 1, 1, '', 4, 0, 0, 1)",
@@ -63,7 +63,7 @@ pub fn get_config() -> Result<Config, String> {
             })
         }
         Err(e) => {
-            eprintln!("Error loading config: {}", e);
+            log::error!("Error loading config: {}", e);
             Err(e.to_string())
         }
     }
@@ -71,10 +71,12 @@ pub fn get_config() -> Result<Config, String> {
 
 #[tauri::command]
 pub fn update_config(config: Config) -> Result<(), String> {
-    eprintln!("Updating config: meme_dir={}, color_mode={}, theme_style={}, global_floating_window={}", 
-        config.meme_dir, config.color_mode, config.theme_style, config.global_floating_window);
+    log::info!(
+        "Updating config: meme_dir={}, color_mode={}, theme_style={}, global_floating_window={}",
+        config.meme_dir, config.color_mode, config.theme_style, config.global_floating_window
+    );
     let conn = init_db().map_err(|e| {
-        eprintln!("Failed to init db for config update: {}", e);
+        log::error!("Failed to init db for config update: {}", e);
         e.to_string()
     })?;
     
@@ -85,22 +87,22 @@ pub fn update_config(config: Config) -> Result<(), String> {
     
     match result {
         Ok(rows) => {
-            eprintln!("Config updated, {} rows affected", rows);
+            log::info!("Config updated, {} rows affected", rows);
             if rows == 0 {
-                eprintln!("Warning: No config row found, inserting new one");
+                log::warn!("Warning: No config row found, inserting new one");
                 // 如果不存在则插入
                 conn.execute(
                     "INSERT OR REPLACE INTO config (id, meme_dir, color_mode, theme_style, last_mode, last_group, share_app, grid_size, pinyin_search, acronym_search, global_floating_window) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     params![config.meme_dir, config.color_mode, config.theme_style, config.last_mode, config.last_group, config.share_app, config.grid_size, config.pinyin_search as i32, config.acronym_search as i32, config.global_floating_window as i32],
                 ).map_err(|e| {
-                    eprintln!("Failed to insert config: {}", e);
+                    log::error!("Failed to insert config: {}", e);
                     e.to_string()
                 })?;
             }
             Ok(())
         }
         Err(e) => {
-            eprintln!("Database error updating config: {}", e);
+            log::error!("Database error updating config: {}", e);
             Err(e.to_string())
         }
     }

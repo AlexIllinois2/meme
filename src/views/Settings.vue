@@ -7,6 +7,7 @@ import { Snackbar } from '@varlet/ui';
 import Icon from "../components/Icon.vue";
 import FolderPicker from "../components/FolderPicker.vue";
 import type { Config } from "../types";
+import { debug } from '../utils/debug';
 
 const config = ref<Config>({
   meme_dir: '',
@@ -56,13 +57,13 @@ let colorSchemeQuery: MediaQueryList | null = null;
 const originalMemeDir = ref('');
 
 const handleAccessibilityStatusChanged = async () => {
-  console.log('[Settings] accessibility-status-changed event received');
+  debug.log('[Settings] accessibility-status-changed event received');
   await checkAccessibilityStatus();
 };
 
 const handleVisibilityChange = async () => {
   if (document.visibilityState === 'visible') {
-    console.log('[Settings] page became visible, checking accessibility status');
+    debug.log('[Settings] page became visible, checking accessibility status');
     await checkAccessibilityStatus();
   }
 };
@@ -132,7 +133,7 @@ async function loadConfig() {
       // Android 平台：从原生服务同步悬浮窗实际状态
       if (isAndroidTauri()) {
         try {
-          const nativeEnabled = (window as any).AndroidNative?.isFloatingWindowEnabled?.();
+          const nativeEnabled = window.AndroidNative?.isFloatingWindowEnabled?.();
           if (nativeEnabled !== undefined) {
             config.value.global_floating_window = nativeEnabled === true;
           }
@@ -201,12 +202,12 @@ async function toggleGlobalFloatingWindow(enabled: boolean) {
   
   if (isAndroidTauri()) {
     if (enabled) {
-      if (typeof (window as any).AndroidNative?.startFloatingWindow === 'function') {
-        (window as any).AndroidNative.startFloatingWindow();
+      if (typeof window.AndroidNative?.startFloatingWindow === 'function') {
+        window.AndroidNative.startFloatingWindow();
       }
     } else {
-      if (typeof (window as any).AndroidNative?.stopFloatingWindow === 'function') {
-        (window as any).AndroidNative.stopFloatingWindow();
+      if (typeof window.AndroidNative?.stopFloatingWindow === 'function') {
+        window.AndroidNative.stopFloatingWindow();
       }
     }
   }
@@ -215,7 +216,7 @@ async function toggleGlobalFloatingWindow(enabled: boolean) {
 async function checkAccessibilityStatus() {
   if (!isAndroidTauri()) return
   try {
-    const native = (window as any).AndroidNative
+    const native = window.AndroidNative
     if (typeof native?.isAccessibilityServiceEnabled === 'function') {
       accessibilityServiceEnabled.value = native.isAccessibilityServiceEnabled()
     }
@@ -231,7 +232,7 @@ async function toggleAutoSend(enabled: boolean) {
   autoSendEnabled.value = enabled
   if (!isAndroidTauri()) return
 
-  const native = (window as any).AndroidNative
+  const native = window.AndroidNative
   if (typeof native?.setAutoSendEnabled === 'function') {
     native.setAutoSendEnabled(enabled)
   }
@@ -250,7 +251,7 @@ async function toggleAutoSend(enabled: boolean) {
 
 function openAccessibilitySettings() {
   if (!isAndroidTauri()) return
-  const native = (window as any).AndroidNative
+  const native = window.AndroidNative
   if (typeof native?.openAccessibilitySettings === 'function') {
     native.openAccessibilitySettings()
   }
@@ -319,7 +320,7 @@ async function selectMemeDir() {
           // 执行全量刷新
           try {
             // const result = await invoke<string>("full_refresh", { memeDir: selectedPath });
-            // console.log('[Settings] Auto refresh result:', result);
+            // debug.log('[Settings] Auto refresh result:', result);
             
             // 保存当前状态用于重启后恢复
             const savedPage = localStorage.getItem('meme_active_page') || 'home';
@@ -341,8 +342,8 @@ async function selectMemeDir() {
           }
         } catch (e) {
           console.error('Cannot access path:', e);
-          if (typeof (window as any).AndroidNative?.requestStoragePermission === 'function') {
-            (window as any).AndroidNative.requestStoragePermission();
+          if (typeof window.AndroidNative?.requestStoragePermission === 'function') {
+            window.AndroidNative.requestStoragePermission();
           }
           Snackbar.warning('无法访问目录，请授予存储权限后重试');
         }
@@ -381,7 +382,7 @@ async function selectMemeDir() {
       // 执行全量刷新
       try {
         const result = await invoke<string>("full_refresh", { memeDir: dirPath });
-        console.log('[Settings] Auto refresh result:', result);
+        debug.log('[Settings] Auto refresh result:', result);
         
         localStorage.setItem('meme_restore_state', JSON.stringify({ page: 'settings' }));
         Snackbar.success('数据初始化完成，应用将重启...');

@@ -3,35 +3,7 @@ use std::path::PathBuf;
 use std::fs;
 use crate::{db::init_db, models::Group};
 use crate::keyword::{convert_to_pinyin, convert_to_acronym};
-
-/// 非法文件名字符
-const INVALID_CHARS: &[char] = &['/', '\\', ':', '*', '?', '"', '<', '>', '|'];
-
-/// 验证名称是否合法（不包含非法字符）
-fn validate_name(name: &str) -> Result<(), String> {
-    if name.trim().is_empty() {
-        return Err("名称不能为空".to_string());
-    }
-    
-    if name.trim() != name {
-        return Err("名称首尾不能有空格".to_string());
-    }
-    
-    for c in name.chars() {
-        if INVALID_CHARS.contains(&c) {
-            return Err(format!("名称包含非法字符: '{}'", c));
-        }
-    }
-    
-    Ok(())
-}
-
-/// 生成安全的文件夹名称（替换非法字符）
-fn sanitize_folder_name(name: &str) -> String {
-    name.chars()
-        .map(|c| if INVALID_CHARS.contains(&c) { '_' } else { c })
-        .collect()
-}
+use crate::meme_fs::{validate_name, sanitize_folder_name};
 
 /// 获取模式对应的文件夹路径
 fn get_mode_folder_path(mode_id: i32) -> Result<String, String> {
