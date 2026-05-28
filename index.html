@@ -6,8 +6,31 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="theme-color" content="#6200ee" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#121212" />
     <title>表情包管理</title>
+    <style>
+      /* 防止深色模式下启动白屏刺眼 */
+      html {
+        background-color: #ffffff;
+      }
+      @media (prefers-color-scheme: dark) {
+        html {
+          background-color: #121212;
+        }
+      }
+    </style>
+    <script>
+      // 在 Vue 加载前消除深色模式下的白屏闪烁
+      (function() {
+        try {
+          if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.style.backgroundColor = '#121212';
+            document.documentElement.classList.add('var-dark');
+          }
+        } catch(e) {}
+      })();
+    </script>
   </head>
 
   <body>
