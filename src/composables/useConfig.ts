@@ -101,7 +101,11 @@ export function useConfig(invoke: (...args: any[]) => any) {
       const result = await invoke("get_config") as Config;
       if (result && result.meme_dir) {
         config.value = result;
-        await invoke("full_refresh", { memeDir: config.value.meme_dir }) as string;
+
+        // 启动时不阻塞 full_refresh，后台异步执行，首页先渲染
+        invoke("full_refresh", { memeDir: config.value.meme_dir }).catch((e: any) => {
+          console.warn("[Config] Background refresh failed:", e);
+        });
 
         // 通知 App.vue 设置其自身的状态 (selectedModeId, selectedGroupId, shareApp, loadCustomApps)
         if (context?.onConfigLoaded) {

@@ -1,18 +1,20 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, nextTick, onUnmounted } from "vue";
+import { ref, onMounted, computed, nextTick, onUnmounted, defineAsyncComponent } from "vue";
 import { Snackbar, Dialog } from '@varlet/ui';
 import { isTauri, isAndroidTauri, toAssetPath, invoke } from './utils/tauri';
 import { useConfig } from './composables/useConfig';
 import { useMemeData } from './composables/useMemeData';
-import Settings from "./views/Settings.vue";
-import Support from "./views/Support.vue";
-import UserAgreement from "./views/UserAgreement.vue";
-import PrivacyPolicy from "./views/PrivacyPolicy.vue";
-import ContextMenu from "./components/ContextMenu.vue";
-import KeywordManager from "./components/KeywordManager.vue";
 import ThemeProvider from "./components/ThemeProvider.vue";
 import FloatingSearchButton from "./components/FloatingSearchButton.vue";
 import Icon from "./components/Icon.vue";
+
+// 延迟加载的非首屏组件
+const Settings = defineAsyncComponent(() => import("./views/Settings.vue"));
+const Support = defineAsyncComponent(() => import("./views/Support.vue"));
+const UserAgreement = defineAsyncComponent(() => import("./views/UserAgreement.vue"));
+const PrivacyPolicy = defineAsyncComponent(() => import("./views/PrivacyPolicy.vue"));
+const ContextMenu = defineAsyncComponent(() => import("./components/ContextMenu.vue"));
+const KeywordManager = defineAsyncComponent(() => import("./components/KeywordManager.vue"));
 import type { Mode, Group, Image } from "./types";
 import { debug } from './utils/debug';
 
@@ -416,11 +418,8 @@ onMounted(async () => {
     showAgreementConfirm.value = true;
   }
 
-  // 先加载配置，但不设置响应式监听
-  await loadConfig();
-  
-  // 然后加载模式和数据
-  await loadModes();
+  // 并行加载配置和模式列表（两者互不依赖）
+  await Promise.all([loadConfig(), loadModes()]);
   
   if (selectedModeId.value) {
     await loadGroups(selectedModeId.value);
