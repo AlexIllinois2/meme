@@ -118,19 +118,20 @@ export function useEditMode(
     if (result !== 'confirm') return;
 
     try {
-      if (selectedModeIds.value.length > 0) {
-        await invoke('delete_modes', { modeIds: selectedModeIds.value });
-      }
-      if (selectedGroupIds.value.length > 0) {
-        await invoke('delete_groups', { groupIds: selectedGroupIds.value });
-      }
+      // 过滤掉已通过分组删除的图片
       const remainingImageIds = selectedImages.value.filter(imgId => {
         const img = deps.images.value.find(i => i.id === imgId);
         return img && !selectedGroupIds.value.includes(img.group_id);
       });
-      if (remainingImageIds.length > 0) {
-        await invoke('delete_images', { imageIds: remainingImageIds });
-      }
+
+      // 单次 Rust 调用完成所有删除（原子操作）
+      await invoke('batch_delete', {
+        req: {
+          mode_ids: selectedModeIds.value,
+          group_ids: selectedGroupIds.value,
+          image_ids: remainingImageIds,
+        },
+      });
 
       Snackbar.success('批量删除成功');
       exitGlobalEditMode();

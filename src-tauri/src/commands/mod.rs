@@ -7,5 +7,6 @@ pub mod clipboard;
 pub mod upload;
 pub mod custom_share;
 pub mod save_image;
+pub mod batch_delete;
 #[cfg(target_os = "android")]
 pub mod android_picker;

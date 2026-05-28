@@ -26,7 +26,7 @@ export function useMemeData(
     try {
       const result = await invoke<Mode[]>("get_modes");
       if (result) {
-        modes.value = result.sort((a, b) => a.sort_order - b.sort_order);
+        modes.value = result;
 
         if (selectedModeId.value && !modes.value.find(m => m.id === selectedModeId.value)) {
           selectedModeId.value = null;
@@ -60,7 +60,7 @@ export function useMemeData(
     try {
       const result = await invoke<Group[]>("get_groups_by_mode", { modeId });
       if (result) {
-        groups.value = result.sort((a, b) => b.share_count - a.share_count);
+        groups.value = result;
 
         if (selectedGroupId.value && !groups.value.find(g => g.id === selectedGroupId.value)) {
           selectedGroupId.value = null;
@@ -102,7 +102,7 @@ export function useMemeData(
     try {
       const result = await invoke<Image[]>("get_images_by_group", { groupId });
       if (result) {
-        images.value = result.sort((a, b) => b.share_count - a.share_count);
+        images.value = result;
       } else {
         images.value = [];
       }

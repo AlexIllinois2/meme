@@ -18,6 +18,7 @@ export function useSearch(
 
   async function searchImages() {
     if (!searchKeyword.value.trim()) {
+      // 搜索清空时重新从后端加载全部分组（groups 已被搜索覆盖）
       try {
         const allGroups = await invoke('get_groups_by_mode', {
           modeId: deps.selectedModeId.value,

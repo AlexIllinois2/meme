@@ -97,6 +97,8 @@ pub fn run() {
         commands::custom_share::remove_custom_share_app,
         // 保存图片到相册
         commands::save_image::save_image_to_gallery,
+        // 批量删除（合并三次 RPC）
+        commands::batch_delete::batch_delete,
         // Android 平台专有命令
         #[cfg(target_os = "android")]
         commands::android_picker::select_directory_android,

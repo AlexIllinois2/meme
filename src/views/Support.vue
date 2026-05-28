@@ -3,9 +3,9 @@ import { ref, onMounted, onUnmounted } from 'vue';
 import { Snackbar } from '@varlet/ui';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import alipayImg from '@/assets/images/support/alipay.jpg'
-import wechatImg from '@/assets/images/support/wechat.png'
-import qqImg from '@/assets/images/support/qq.png'
+import alipayImg from '@/assets/images/support/alipay.webp'
+import wechatImg from '@/assets/images/support/wechat.webp'
+import qqImg from '@/assets/images/support/qq.webp'
 import Icon from "../components/Icon.vue";
 
 const activeTab = ref(0);

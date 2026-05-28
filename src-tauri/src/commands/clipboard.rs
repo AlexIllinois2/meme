@@ -39,7 +39,7 @@ pub fn paste_image_from_clipboard<R: tauri::Runtime>(
                     let mut png_bytes: Vec<u8> = Vec::new();
                     let encoder = image::codecs::png::PngEncoder::new(&mut png_bytes);
                     match encoder.write_image(
-                        &buffer, width, height, image::ColorType::Rgba8
+                        &buffer, width, height, image::ColorType::Rgba8.into()
                     ) {
                         Ok(_) => Ok(ClipboardImage {
                             data: png_bytes,
