@@ -84,6 +84,7 @@ pub fn run() {
         commands::clipboard::paste_image_from_clipboard_raw,
         // 应用控制
         exit_app,
+        restart_app,
         // 索引刷新
         commands::image::refresh_index,
         commands::image::full_refresh,
@@ -115,6 +116,12 @@ pub fn run() {
 #[tauri::command]
 fn exit_app(_app_handle: tauri::AppHandle) {
     std::process::exit(0);
+}
+
+// 完全重启应用（Android 上会重建进程，SAF 权限重新生效）
+#[tauri::command]
+fn restart_app(app_handle: tauri::AppHandle) {
+    app_handle.restart();
 }
 
 // 悬浮窗触发搜索聚焦的命令 - Android 平台

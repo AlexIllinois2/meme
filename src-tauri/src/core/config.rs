@@ -7,15 +7,6 @@ use crate::core::db_state::DbState;
 pub fn get_config(state: tauri::State<'_, DbState>) -> Result<Config, AppError> {
     let conn = state.lock().map_err(|e| AppError(e.to_string()))?;
     
-    let table_info: Vec<String> = conn.prepare("PRAGMA table_info(config)")?
-        .query_map([], |row| row.get::<_, String>(1))?
-        .filter_map(|r| r.ok())
-        .collect();
-    
-    if !table_info.contains(&"global_floating_window".to_string()) {
-        conn.execute("ALTER TABLE config ADD COLUMN global_floating_window INTEGER DEFAULT 1", [])?;
-    }
-    
     let mut stmt = conn.prepare(
         "SELECT meme_dir, color_mode, theme_style, last_mode, last_group, share_app, grid_size, pinyin_search, acronym_search, global_floating_window FROM config WHERE id = 1"
     )?;

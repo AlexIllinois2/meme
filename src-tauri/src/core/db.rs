@@ -51,55 +51,29 @@ pub fn init_db() -> Result<Connection, AppError> {
             grid_size INTEGER DEFAULT 4,
             pinyin_search INTEGER DEFAULT 1,
             acronym_search INTEGER DEFAULT 1,
+            theme_style TEXT NOT NULL DEFAULT 'modern',
             global_floating_window INTEGER DEFAULT 1
         )",
         [],
     )?;
-    
-    // 检查并添加 pinyin_search 列（兼容旧数据库）
-    let has_pinyin_search: bool = conn.query_row(
-        "SELECT COUNT(*) FROM pragma_table_info('config') WHERE name='pinyin_search'",
-        [],
-        |row| row.get::<_, i32>(0)
-    ).unwrap_or(0) > 0;
-    
-    if !has_pinyin_search {
-        conn.execute("ALTER TABLE config ADD COLUMN pinyin_search INTEGER DEFAULT 1", [])?;
-    }
-    
-    // 检查并添加 acronym_search 列（兼容旧数据库）
-    let has_acronym_search: bool = conn.query_row(
-        "SELECT COUNT(*) FROM pragma_table_info('config') WHERE name='acronym_search'",
-        [],
-        |row| row.get::<_, i32>(0)
-    ).unwrap_or(0) > 0;
-    
-    if !has_acronym_search {
-        conn.execute("ALTER TABLE config ADD COLUMN acronym_search INTEGER DEFAULT 1", [])?;
-    }
-    
-    // 检查并添加 theme_style 列（兼容旧数据库）
-    let has_theme_style: bool = conn.query_row(
-        "SELECT COUNT(*) FROM pragma_table_info('config') WHERE name='theme_style'",
-        [],
-        |row| row.get::<_, i32>(0)
-    ).unwrap_or(0) > 0;
-    
-    if !has_theme_style {
-        conn.execute("ALTER TABLE config ADD COLUMN theme_style TEXT DEFAULT 'modern'", [])?;
-    }
-    
-    // 检查并添加 global_floating_window 列（兼容旧数据库，默认开启）
-    let has_global_floating: bool = conn.query_row(
-        "SELECT COUNT(*) FROM pragma_table_info('config') WHERE name='global_floating_window'",
-        [],
-        |row| row.get::<_, i32>(0)
-    ).unwrap_or(0) > 0;
-    
-    if !has_global_floating {
-        conn.execute("ALTER TABLE config ADD COLUMN global_floating_window INTEGER DEFAULT 1", [])?;
-    }
-    
+
+    // 兼容旧数据库：添加可能缺失的列
+    let add_column = |name: &str, def: &str| -> Result<(), AppError> {
+        let exists: bool = conn.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('config') WHERE name=?",
+            params![name],
+            |row| row.get::<_, i32>(0)
+        ).unwrap_or(0) > 0;
+        if !exists {
+            conn.execute(
+                &format!("ALTER TABLE config ADD COLUMN {}", def),
+                [],
+            )?;
+        }
+        Ok(())
+    };
+    add_column("theme_style", "theme_style TEXT NOT NULL DEFAULT 'modern'")?;
+
     // 插入默认配置（如果不存在）
     let default_meme_dir = {
         #[cfg(target_os = "android")]
@@ -127,84 +101,6 @@ pub fn init_db() -> Result<Connection, AppError> {
         [],
     )?;
     
-    // 检查并添加 folder_path 列(兼容旧数据库)
-    let has_folder_path: bool = conn.query_row(
-        "SELECT COUNT(*) FROM pragma_table_info('modes') WHERE name='folder_path'",
-        [],
-        |row| row.get::<_, i32>(0)
-    ).unwrap_or(0) > 0;
-    
-    if !has_folder_path {
-        conn.execute("ALTER TABLE modes ADD COLUMN folder_path TEXT NOT NULL DEFAULT ''", [])?;
-    }
-    
-    // 检查并修复 images 表的 thumbnail_path 字段（兼容旧数据库）
-    let thumb_nullable: bool = conn.query_row(
-        "SELECT \"notnull\" FROM pragma_table_info('images') WHERE name='thumbnail_path'",
-        [],
-        |row| row.get::<_, i32>(0)
-    ).unwrap_or(0) == 0; // notnull=0 表示允许 NULL
-    
-    if !thumb_nullable {
-        // SQLite 不支持 ALTER COLUMN，需要重建表
-        log::info!("Fixing images table thumbnail_path column to allow NULL...");
-        
-        // 检查旧表是否有 created_at 列
-        let has_created_at: bool = conn.query_row(
-            "SELECT COUNT(*) FROM pragma_table_info('images') WHERE name='created_at'",
-            [],
-            |row| row.get::<_, i32>(0)
-        ).unwrap_or(0) > 0;
-        
-        if has_created_at {
-            conn.execute_batch("
-                BEGIN TRANSACTION;
-                CREATE TABLE IF NOT EXISTS images_new (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    image_path TEXT NOT NULL,
-                    thumbnail_path TEXT,
-                    share_count INTEGER DEFAULT 0,
-                    group_id INTEGER NOT NULL,
-                    mode_id INTEGER NOT NULL,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
-                    FOREIGN KEY (mode_id) REFERENCES modes(id) ON DELETE CASCADE
-                );
-                INSERT INTO images_new (id, image_path, thumbnail_path, share_count, group_id, mode_id, created_at) 
-                SELECT id, image_path, thumbnail_path, share_count, group_id, mode_id, created_at FROM images;
-                DROP TABLE images;
-                ALTER TABLE images_new RENAME TO images;
-                CREATE INDEX IF NOT EXISTS idx_images_group_share ON images(group_id, share_count DESC);
-                CREATE INDEX IF NOT EXISTS idx_images_mode ON images(mode_id);
-                COMMIT;
-            ")?;
-        } else {
-            conn.execute_batch("
-                BEGIN TRANSACTION;
-                CREATE TABLE IF NOT EXISTS images_new (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    image_path TEXT NOT NULL,
-                    thumbnail_path TEXT,
-                    share_count INTEGER DEFAULT 0,
-                    group_id INTEGER NOT NULL,
-                    mode_id INTEGER NOT NULL,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
-                    FOREIGN KEY (mode_id) REFERENCES modes(id) ON DELETE CASCADE
-                );
-                INSERT INTO images_new (id, image_path, thumbnail_path, share_count, group_id, mode_id) 
-                SELECT id, image_path, thumbnail_path, share_count, group_id, mode_id FROM images;
-                DROP TABLE images;
-                ALTER TABLE images_new RENAME TO images;
-                CREATE INDEX IF NOT EXISTS idx_images_group_share ON images(group_id, share_count DESC);
-                CREATE INDEX IF NOT EXISTS idx_images_mode ON images(mode_id);
-                COMMIT;
-            ")?;
-        }
-        
-        log::info!("Fixed images table successfully");
-    }
-    
     // 创建分组表
     conn.execute(
         "CREATE TABLE IF NOT EXISTS groups (
@@ -229,28 +125,6 @@ pub fn init_db() -> Result<Connection, AppError> {
         [],
     )?;
     
-    // 迁移：如果 keywords 表有 abbreviation 列但没有 acronym 列，重命名
-    let has_abbreviation: bool = conn.query_row(
-        "SELECT COUNT(*) FROM pragma_table_info('keywords') WHERE name='abbreviation'",
-        [],
-        |row| row.get::<_, i32>(0)
-    ).unwrap_or(0) > 0;
-    
-    let has_acronym: bool = conn.query_row(
-        "SELECT COUNT(*) FROM pragma_table_info('keywords') WHERE name='acronym'",
-        [],
-        |row| row.get::<_, i32>(0)
-    ).unwrap_or(0) > 0;
-    
-    if has_abbreviation && !has_acronym {
-        log::info!("Migrating keywords table: renaming abbreviation to acronym");
-        conn.execute("ALTER TABLE keywords RENAME COLUMN abbreviation TO acronym", [])?;
-    } else if !has_acronym {
-        // 如果两列都没有，添加 acronym 列
-        log::info!("Adding acronym column to keywords table");
-        conn.execute("ALTER TABLE keywords ADD COLUMN acronym TEXT", [])?;
-    }
-    
     // 创建图片表
     conn.execute(
         "CREATE TABLE IF NOT EXISTS images (
@@ -260,7 +134,6 @@ pub fn init_db() -> Result<Connection, AppError> {
             share_count INTEGER DEFAULT 0,
             group_id INTEGER NOT NULL,
             mode_id INTEGER NOT NULL,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
             FOREIGN KEY (mode_id) REFERENCES modes(id) ON DELETE CASCADE
         )",
@@ -291,55 +164,5 @@ pub fn init_db() -> Result<Connection, AppError> {
         CREATE INDEX IF NOT EXISTS idx_keywords_acronym ON keywords(acronym);
     ")?;
 
-    // 数据库迁移
-    migrate_db(&conn)?;
-    
     Ok(conn)
-}
-
-/// 数据库迁移管理
-fn migrate_db(conn: &Connection) -> Result<(), AppError> {
-    let version: i32 = conn.pragma_query_value(None, "user_version", |row| row.get(0))
-        .unwrap_or(0);
-
-    if version < 2 {
-        migrate_to_v2(conn)?;
-    }
-
-    Ok(())
-}
-
-/// v1 → v2: image_path 从绝对路径迁移为相对路径
-fn migrate_to_v2(conn: &Connection) -> Result<(), AppError> {
-    log::info!("Running DB migration: v1 -> v2 (relative image paths)");
-
-    let meme_dir: String = conn.query_row(
-        "SELECT meme_dir FROM config WHERE id = 1",
-        [],
-        |row| row.get(0),
-    ).unwrap_or_default();
-
-    if !meme_dir.is_empty() {
-        let prefix = if meme_dir.ends_with('/') {
-            meme_dir.clone()
-        } else {
-            format!("{}/", meme_dir)
-        };
-
-        // 迁移 images.image_path
-        let mut stmt = conn.prepare("SELECT id, image_path FROM images")?;
-        let rows: Vec<(i32, String)> = stmt
-            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
-            .collect::<Result<Vec<_>, _>>()?;
-
-        let mut update = conn.prepare("UPDATE images SET image_path = ? WHERE id = ?")?;
-        for (id, path) in rows {
-            let relative = path.strip_prefix(&prefix).unwrap_or(&path).to_string();
-            update.execute(rusqlite::params![relative, id])?;
-        }
-    }
-
-    conn.pragma_update(None, "user_version", 2)?;
-    log::info!("DB migration v1 -> v2 completed");
-    Ok(())
 }

@@ -102,10 +102,8 @@ export function useConfig(invoke: (...args: any[]) => any) {
       if (result && result.meme_dir) {
         config.value = result;
 
-        // 启动时不阻塞 full_refresh，后台异步执行，首页先渲染
-        invoke("full_refresh", { memeDir: config.value.meme_dir }).catch((e: any) => {
-          console.warn("[Config] Background refresh failed:", e);
-        });
+        // 不再后台执行 full_refresh（它会持锁阻塞 update_config 等其他命令）
+        // full_refresh 仅在用户手动刷新或切换目录时执行
 
         // 通知 App.vue 设置其自身的状态 (selectedModeId, selectedGroupId, shareApp, loadCustomApps)
         if (context?.onConfigLoaded) {

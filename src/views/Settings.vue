@@ -301,45 +301,52 @@ async function selectMemeDir() {
           return;
         }
 
-        // 验证路径是否可访问
-        try {
-          const fs = await import('@tauri-apps/plugin-fs');
-          await fs.readDir(selectedPath);
-          
-          config.value.meme_dir = selectedPath;
-          await autoSaveConfig();
+        // Android 上直接保存，跳过 tauri-plugin-fs 验证（SAF 路径可能不支持 readDir）
+        console.log('[Settings] Selected path:', selectedPath);
+        config.value.meme_dir = selectedPath;
+        
+        // 先设到界面显示上，看看路径对不对
+        Snackbar.info('路径: ' + selectedPath);
 
-          // Snackbar.info('正在初始化数据...');
-          // 执行全量刷新
-          try {
-            // const result = await invoke<string>("full_refresh", { memeDir: selectedPath });
-            // debug.log('[Settings] Auto refresh result:', result);
-            
-            // 保存当前状态用于重启后恢复
-            const savedPage = localStorage.getItem('meme_active_page') || 'home';
-            localStorage.setItem('meme_restore_state', JSON.stringify({
-              page: savedPage,
-            }));
-            
-            Snackbar.success('目录已更新，应用将重启...');
-            // 延迟重启，让 snackbar 显示一下
-            setTimeout(() => location.reload(), 800);
-          } catch (refreshError) {
-            console.error('[Settings] Auto refresh failed:', refreshError);
-            // 即使刷新失败也重启，让用户看到新目录
-            localStorage.setItem('meme_restore_state', JSON.stringify({
-              page: 'settings'
-            }));
-            Snackbar.warning('数据初始化失败，请手动刷新');
-            setTimeout(() => location.reload(), 1500);
+        console.log('[Settings] About to invoke update_config directly...');
+        try {
+          await invoke('update_config', { config: {
+            meme_dir: selectedPath,
+            color_mode: config.value.color_mode || 'system',
+            theme_style: config.value.theme_style || 'modern',
+            last_mode: config.value.last_mode || 1,
+            last_group: config.value.last_group || 1,
+            share_app: config.value.share_app || '',
+            grid_size: config.value.grid_size || 4,
+            pinyin_search: true,
+            acronym_search: true,
+            global_floating_window: config.value.global_floating_window ?? true,
+          }});
+          // 读取回来验证保存是否成功
+          const verify = await invoke<Config>('get_config');
+          if (verify.meme_dir === selectedPath) {
+            console.log('[Settings] Verified: config.meme_dir is', verify.meme_dir);
+            Snackbar.success('保存成功 ✓');
+          } else {
+            console.error('[Settings] VERIFY FAILED: expected', selectedPath, 'got', verify.meme_dir);
+            Snackbar.error('保存验证失败: 预期=' + selectedPath + ' 实际=' + verify.meme_dir);
+            return;
           }
         } catch (e) {
-          console.error('Cannot access path:', e);
-          if (typeof window.AndroidNative?.requestStoragePermission === 'function') {
-            window.AndroidNative.requestStoragePermission();
-          }
-          Snackbar.warning('无法访问目录，请授予存储权限后重试');
+          console.error('[Settings] update_config FAILED:', e);
+          Snackbar.error('保存失败: ' + e);
+          return;
         }
+
+        // 保存当前状态用于重启后恢复
+        const savedPage = localStorage.getItem('meme_active_page') || 'home';
+        localStorage.setItem('meme_restore_state', JSON.stringify({
+          page: savedPage,
+        }));
+
+        // SAF 选完路径后立即调 readDir 可能权限未稳定，延迟重试
+        Snackbar.info('正在刷新数据...');
+        await refreshWithRetry(selectedPath, 3);
       }
     } catch (error) {
       console.error('Failed to select directory:', error);
@@ -347,6 +354,40 @@ async function selectMemeDir() {
     }
     return;
   }
+
+/** 带延迟重试的全量刷新 */
+async function refreshWithRetry(dir: string, maxRetries = 5, delayMs = 2000) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      if (i > 0) {
+        Snackbar.info(`等待后重试 (${i}/${maxRetries})...`);
+        await new Promise(r => setTimeout(r, delayMs));
+      }
+      const result = await invoke<string>('full_refresh', { memeDir: dir });
+      console.log('[Refresh] Success:', result);
+      Snackbar.success('数据刷新完成 ✓');
+      // 刷新成功后重载页面显示数据
+      setTimeout(() => location.reload(), 500);
+      return;
+    } catch (e: any) {
+      const msg = String(e?.message || e || '');
+      console.warn(`[Refresh] Attempt ${i + 1}/${maxRetries} failed:`, msg);
+      // 如果是权限错误，多等一会儿
+      if (msg.includes('denied') || msg.includes('permission') || msg.includes('没有权限')) {
+        await new Promise(r => setTimeout(r, 3000));
+      }
+    }
+  }
+  // 全部失败：真·重启 app（重建进程后 SAF 权限重新生效）
+  Snackbar.warning('正在重启应用...');
+  await new Promise(r => setTimeout(r, 1000));
+  try {
+    await invoke('restart_app');
+  } catch {
+    // fallback: exit + 用户手动开
+    await invoke('exit_app');
+  }
+}
   
   // 其他移动端使用内嵌文件夹浏览器
   if (!isDesktop()) {
@@ -423,7 +464,9 @@ async function autoSaveConfig() {
       global_floating_window: Boolean(config.value.global_floating_window),
     };
     
+    console.log('[Config] autoSaveConfig: about to call update_config');
     await invoke('update_config', { config: safeConfig });
+    console.log('[Config] update_config returned successfully');
     updateColorMode(safeConfig.color_mode);
   } catch (error) {
     console.error('Failed to save config:', error);
