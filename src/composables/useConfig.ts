@@ -254,6 +254,13 @@ export function useConfig(invoke: (...args: any[]) => any) {
   // Event handlers
   // ==============================
   function handleResize() {
+    // 如果用户已在 config 中保存了 column 设置，优先使用它
+    // 防止 Android 悬浮窗返回时 resize 事件覆盖用户的选择
+    if (config.value?.grid_size) {
+      gridColumns.value = config.value.grid_size;
+      return;
+    }
+    // 无已保存设置时，根据屏幕宽度自适应
     if (window.innerWidth < 768) {
       gridColumns.value = 3;
     } else if (window.innerWidth < 1024) {
