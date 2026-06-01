@@ -1724,7 +1724,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
         </div>
 
         <div
-          v-show="isActive"
+          v-show="isActive || isAndroidTauri()"
           class="image-grid"
           :style="{ 
             gridTemplateColumns: `repeat(${gridColumns}, 1fr)`,
@@ -1802,8 +1802,8 @@ async function handleImageMenuSelect(img: Image, action: string) {
           </div>
         </div>
 
-        <!-- 窗口非活动时的暂停占位 -->
-        <div v-if="!isActive" class="inactive-overlay">
+        <!-- 窗口非活动时的暂停占位（仅桌面端） -->
+        <div v-if="!isActive && !isAndroidTauri()" class="inactive-overlay">
           <div class="inactive-overlay-content">
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
               <rect x="6" y="4" width="4" height="16"/>
