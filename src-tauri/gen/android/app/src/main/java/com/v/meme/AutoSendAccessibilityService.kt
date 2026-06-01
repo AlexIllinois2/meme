@@ -21,7 +21,6 @@ class AutoSendAccessibilityService : AccessibilityService() {
     private var retryCount = 0
     private val maxRetries = 15
     private var handler: Handler? = null
-    private var servicePollRunnable: Runnable? = null
     private val maxNodesPerTraversal = 500
 
     companion object {
@@ -161,6 +160,8 @@ class AutoSendAccessibilityService : AccessibilityService() {
                     Log.d(TAG, "onStartCommand: received ACTIVATE_SEND_FLOW")
                     setSendFlowActive(this, true)
                     retryCount = 0
+                    scheduleFlowTimeout()
+                    resumePollingIfNeeded()
                 }
                 ACTION_DEACTIVATE_SEND_FLOW -> {
                     Log.d(TAG, "onStartCommand: received DEACTIVATE_SEND_FLOW")
@@ -168,6 +169,8 @@ class AutoSendAccessibilityService : AccessibilityService() {
                     setDialogContext(this, false)
                     setLastWindowEvent(this, 0L)
                     retryCount = 0
+                    cancelFlowTimeout()
+                    stopPolling()
                 }
             }
         }
@@ -222,41 +225,64 @@ class AutoSendAccessibilityService : AccessibilityService() {
 
     private fun startContinuousPolling() {
         handler = Handler(Looper.getMainLooper())
-        servicePollRunnable = Runnable {
-            try {
-                if (getSendFlowActive(this)) {
-                    Log.d(TAG, "Poll tick: sendFlowActive=true, retryCount=$retryCount")
-                    val now = System.currentTimeMillis()
-                    if (now - lastProcessedTime >= debounceMs) {
-                        if (findAndClickSendButton()) {
-                            Log.d(TAG, "Send button clicked via polling, send flow complete")
-                            deactivateSendFlowInternal()
-                            lastProcessedTime = now
-                            retryCount = 0
-                        } else {
-                            retryCount++
-                            if (retryCount >= maxRetries) {
-                                Log.d(TAG, "Max retries ($maxRetries) reached, deactivating send flow")
-                                deactivateSendFlowInternal()
-                                retryCount = 0
-                            }
-                        }
-                    }
-                } else {
-                    retryCount = 0
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Poll tick exception: ${e.message}", e)
+    }
+
+    private fun stopPolling() {
+        handler?.removeCallbacksAndMessages(null)
+    }
+
+    /** 轮询单次 tick，返回 true 表示需要继续调度下一 tick */
+    private fun pollTick(): Boolean {
+        try {
+            if (!getSendFlowActive(this)) {
+                Log.d(TAG, "Poll idle, no active flow")
                 retryCount = 0
+                return false
             }
-            handler?.postDelayed(servicePollRunnable!!, POLL_INTERVAL_MS)
+            Log.d(TAG, "Poll tick: sendFlowActive=true, retryCount=$retryCount")
+            val now = System.currentTimeMillis()
+            if (now - lastProcessedTime < debounceMs) return true
+
+            if (findAndClickSendButton()) {
+                Log.d(TAG, "Send button clicked via polling, send flow complete")
+                deactivateSendFlowInternal()
+                lastProcessedTime = now
+                retryCount = 0
+                return false
+            }
+            retryCount++
+            if (retryCount >= maxRetries) {
+                Log.d(TAG, "Max retries ($maxRetries) reached, deactivating send flow")
+                deactivateSendFlowInternal()
+                retryCount = 0
+                return false
+            }
+            return true
+        } catch (e: Exception) {
+            Log.e(TAG, "Poll tick exception: ${e.message}", e)
+            retryCount = 0
+            return false
         }
-        handler?.post(servicePollRunnable!!)
+    }
+
+    /** 如果发送流程激活中且轮询未运行，启动轮询 */
+    private fun resumePollingIfNeeded() {
+        if (!getSendFlowActive(this)) return
+        handler?.removeCallbacksAndMessages(null)
+        handler?.post(object : Runnable {
+            override fun run() {
+                if (pollTick()) {
+                    handler?.postDelayed(this, POLL_INTERVAL_MS)
+                }
+            }
+        })
     }
 
     private fun activateSendFlowInternal() {
         setSendFlowActive(this, true)
         retryCount = 0
+        scheduleFlowTimeout()
+        resumePollingIfNeeded()
     }
 
     private fun deactivateSendFlowInternal() {
@@ -264,7 +290,30 @@ class AutoSendAccessibilityService : AccessibilityService() {
         setDialogContext(this, false)
         setLastWindowEvent(this, 0L)
         retryCount = 0
+        cancelFlowTimeout()
+        stopPolling()
         Log.d(TAG, "deactivateSendFlowInternal called, sendFlowActive = false")
+    }
+
+    /** 30 秒超时：发送流程激活后如果未完成自动关闭 */
+    private var flowTimeoutHandler: Handler? = null
+    private var flowTimeoutRunnable: Runnable? = null
+
+    private fun scheduleFlowTimeout() {
+        cancelFlowTimeout()
+        if (flowTimeoutHandler == null) {
+            flowTimeoutHandler = Handler(Looper.getMainLooper())
+        }
+        flowTimeoutRunnable = Runnable {
+            Log.d(TAG, "Send flow timeout (30s), deactivating")
+            deactivateSendFlowInternal()
+        }
+        flowTimeoutHandler?.postDelayed(flowTimeoutRunnable!!, SEND_FLOW_TIMEOUT_MS)
+    }
+
+    private fun cancelFlowTimeout() {
+        flowTimeoutRunnable?.let { flowTimeoutHandler?.removeCallbacks(it) }
+        flowTimeoutRunnable = null
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -539,8 +588,10 @@ class AutoSendAccessibilityService : AccessibilityService() {
             setLastWindowEvent(this, 0L)
             handler?.removeCallbacksAndMessages(null)
             handler = null
-            servicePollRunnable = null
             retryCount = 0
+            cancelFlowTimeout()
+            flowTimeoutRunnable = null
+            flowTimeoutHandler = null
             
             // 停止前台服务
             try {
