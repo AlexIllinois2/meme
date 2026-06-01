@@ -22,6 +22,13 @@ import { useVisibility } from './composables/useVisibility';
 // 窗口非活动时隐藏图片区域（停止 CSS 动画 + GIF 解码）
 const { isActive } = useVisibility();
 
+// 窗口焦点回调（供 onMounted/onUnmounted 共用）
+const handleWindowFocus = () => {
+  if (!isAndroidTauri()) {
+    handleAppResume();
+  }
+};
+
 const { config, currentColorMode, gridColumns, pinyinSearchEnabled, acronymSearchEnabled, globalFloatingWindowEnabled, themeKey, safeUpdateConfig, loadConfig, applyTheme, syncSystemTheme, handleResize, handleWheel, handleTouchStart, handleTouchMove, isMobile } = useConfig(invoke);
 
 const { modes, groups, images, selectedModeId, selectedGroupId, loadModes, loadGroups, loadImages, switchMode, switchGroup, fullRefresh } = useMemeData(config, safeUpdateConfig);
@@ -568,6 +575,9 @@ onMounted(async () => {
     }
   });
 
+  // 桌面端窗口重新获得焦点时同样触发搜索框聚焦
+  window.addEventListener('focus', handleWindowFocus);
+
   // 添加悬浮窗触发搜索的全局方法
   window.triggerSearchFocus = (foregroundApp?: { packageName: string; appName: string } | null) => {
     debug.log('[Floating] Triggering search focus', foregroundApp);
@@ -677,6 +687,7 @@ onUnmounted(() => {
   document.removeEventListener('touchstart', handleUserInteraction);
   document.removeEventListener('click', handleUserInteraction);
   document.removeEventListener('visibilitychange', handleAppResume);
+  window.removeEventListener('focus', handleWindowFocus);
 });
 
 // 监听全局悬浮窗状态变化
