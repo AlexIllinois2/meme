@@ -6,6 +6,7 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import android.content.Intent
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -21,6 +22,7 @@ class AutoSendAccessibilityService : AccessibilityService() {
     private val maxRetries = 15
     private var handler: Handler? = null
     private var servicePollRunnable: Runnable? = null
+    private val maxNodesPerTraversal = 500
 
     companion object {
         private const val TAG = "AutoSendA11y"
@@ -37,24 +39,16 @@ class AutoSendAccessibilityService : AccessibilityService() {
         private const val WECHAT_PACKAGE = "com.tencent.mm"
         private const val QQ_PACKAGE = "com.tencent.mobileqq"
 
-        @Volatile
-        var isRunning = false
-            private set
+        // Intent actions for cross-process communication
+        const val ACTION_ACTIVATE_SEND_FLOW = "com.v.meme.ACTION_ACTIVATE_SEND_FLOW"
+        const val ACTION_DEACTIVATE_SEND_FLOW = "com.v.meme.ACTION_DEACTIVATE_SEND_FLOW"
 
-        @Volatile
-        var sendFlowActive = false
-            private set
-
-        @Volatile
-        var inDialogContext = false
-            private set
-
-        @Volatile
-        private var lastTargetWindowEvent = 0L
+        // SharedPreferences keys for cross-process state
+        private const val KEY_SERVICE_IS_RUNNING = "service_is_running"
+        private const val KEY_SEND_FLOW_ACTIVE = "send_flow_active"
+        private const val KEY_IN_DIALOG_CONTEXT = "in_dialog_context"
+        private const val KEY_LAST_TARGET_WINDOW_EVENT = "last_target_window_event"
         private const val STALE_EVENT_TIMEOUT_MS = 1500L
-
-        private var flowTimeoutHandler: Handler? = null
-        private var flowTimeoutRunnable: Runnable? = null
 
         fun isEnabled(context: Context): Boolean {
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -68,44 +62,72 @@ class AutoSendAccessibilityService : AccessibilityService() {
                 .apply()
         }
 
-        fun activateSendFlow() {
+        // Cross-process state accessors (SharedPreferences-backed)
+        fun getServiceRunning(context: Context): Boolean {
+            return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getBoolean(KEY_SERVICE_IS_RUNNING, false)
+        }
+
+        fun setServiceRunning(context: Context, running: Boolean) {
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean(KEY_SERVICE_IS_RUNNING, running)
+                .apply()
+        }
+
+        fun getSendFlowActive(context: Context): Boolean {
+            return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getBoolean(KEY_SEND_FLOW_ACTIVE, false)
+        }
+
+        fun setSendFlowActive(context: Context, active: Boolean) {
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean(KEY_SEND_FLOW_ACTIVE, active)
+                .apply()
+        }
+
+        fun getDialogContext(context: Context): Boolean {
+            return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getBoolean(KEY_IN_DIALOG_CONTEXT, false)
+        }
+
+        fun setDialogContext(context: Context, inDialog: Boolean) {
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean(KEY_IN_DIALOG_CONTEXT, inDialog)
+                .apply()
+        }
+
+        fun getLastWindowEvent(context: Context): Long {
+            return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getLong(KEY_LAST_TARGET_WINDOW_EVENT, 0L)
+        }
+
+        fun setLastWindowEvent(context: Context, timestamp: Long) {
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .putLong(KEY_LAST_TARGET_WINDOW_EVENT, timestamp)
+                .apply()
+        }
+
+        fun activateSendFlow(context: Context) {
             Log.d(TAG, "activateSendFlow called, setting sendFlowActive = true")
-            sendFlowActive = true
-            startFlowTimeout()
+            setSendFlowActive(context, true)
         }
 
-        fun deactivateSendFlow() {
-            sendFlowActive = false
-            inDialogContext = false
-            lastTargetWindowEvent = 0L
+        fun deactivateSendFlow(context: Context) {
+            setSendFlowActive(context, false)
+            setDialogContext(context, false)
+            setLastWindowEvent(context, 0L)
             Log.d(TAG, "deactivateSendFlow called, sendFlowActive = false")
-            cancelFlowTimeout()
-        }
-
-        private fun startFlowTimeout() {
-            cancelFlowTimeout()
-            if (flowTimeoutHandler == null) {
-                flowTimeoutHandler = Handler(Looper.getMainLooper())
-            }
-            flowTimeoutRunnable = Runnable {
-                Log.d(TAG, "Send flow timeout (30s), deactivating")
-                sendFlowActive = false
-                inDialogContext = false
-                lastTargetWindowEvent = 0L
-            }
-            flowTimeoutHandler?.postDelayed(flowTimeoutRunnable!!, SEND_FLOW_TIMEOUT_MS)
-        }
-
-        private fun cancelFlowTimeout() {
-            flowTimeoutRunnable?.let { flowTimeoutHandler?.removeCallbacks(it) }
-            flowTimeoutRunnable = null
         }
     }
 
     override fun onServiceConnected() {
         try {
             super.onServiceConnected()
-            isRunning = true
+            setServiceRunning(this, true)
             Log.d(TAG, "Service connected, starting continuous polling")
 
             val info = AccessibilityServiceInfo().apply {
@@ -113,7 +135,8 @@ class AutoSendAccessibilityService : AccessibilityService() {
                         AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
                 feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
                 flags = AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
-                        AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
+                        AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
+                        AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
                 notificationTimeout = 100
             }
             serviceInfo = info
@@ -127,8 +150,28 @@ class AutoSendAccessibilityService : AccessibilityService() {
             startContinuousPolling()
         } catch (e: Exception) {
             Log.e(TAG, "Error in onServiceConnected: ${e.message}", e)
-            isRunning = false
+            setServiceRunning(this, false)
         }
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent != null) {
+            when (intent.action) {
+                ACTION_ACTIVATE_SEND_FLOW -> {
+                    Log.d(TAG, "onStartCommand: received ACTIVATE_SEND_FLOW")
+                    setSendFlowActive(this, true)
+                    retryCount = 0
+                }
+                ACTION_DEACTIVATE_SEND_FLOW -> {
+                    Log.d(TAG, "onStartCommand: received DEACTIVATE_SEND_FLOW")
+                    setSendFlowActive(this, false)
+                    setDialogContext(this, false)
+                    setLastWindowEvent(this, 0L)
+                    retryCount = 0
+                }
+            }
+        }
+        return START_STICKY
     }
     
     private fun startForegroundService() {
@@ -181,20 +224,20 @@ class AutoSendAccessibilityService : AccessibilityService() {
         handler = Handler(Looper.getMainLooper())
         servicePollRunnable = Runnable {
             try {
-                if (sendFlowActive) {
+                if (getSendFlowActive(this)) {
                     Log.d(TAG, "Poll tick: sendFlowActive=true, retryCount=$retryCount")
                     val now = System.currentTimeMillis()
                     if (now - lastProcessedTime >= debounceMs) {
                         if (findAndClickSendButton()) {
                             Log.d(TAG, "Send button clicked via polling, send flow complete")
-                            deactivateSendFlow()
+                            deactivateSendFlowInternal()
                             lastProcessedTime = now
                             retryCount = 0
                         } else {
                             retryCount++
                             if (retryCount >= maxRetries) {
                                 Log.d(TAG, "Max retries ($maxRetries) reached, deactivating send flow")
-                                deactivateSendFlow()
+                                deactivateSendFlowInternal()
                                 retryCount = 0
                             }
                         }
@@ -211,6 +254,19 @@ class AutoSendAccessibilityService : AccessibilityService() {
         handler?.post(servicePollRunnable!!)
     }
 
+    private fun activateSendFlowInternal() {
+        setSendFlowActive(this, true)
+        retryCount = 0
+    }
+
+    private fun deactivateSendFlowInternal() {
+        setSendFlowActive(this, false)
+        setDialogContext(this, false)
+        setLastWindowEvent(this, 0L)
+        retryCount = 0
+        Log.d(TAG, "deactivateSendFlowInternal called, sendFlowActive = false")
+    }
+
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         try {
             if (event == null) return
@@ -218,7 +274,7 @@ class AutoSendAccessibilityService : AccessibilityService() {
             val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             if (!prefs.getBoolean(KEY_ENABLED, false)) return
 
-            if (!sendFlowActive) return
+            if (!getSendFlowActive(this)) return
 
             val packageName = event.packageName?.toString() ?: return
             if (packageName != WECHAT_PACKAGE && packageName != QQ_PACKAGE) return
@@ -231,7 +287,7 @@ class AutoSendAccessibilityService : AccessibilityService() {
                     val eventClassName = event.className?.toString() ?: ""
                     Log.d(TAG, "Event window state changed: $eventClassName, package: $packageName")
 
-                    lastTargetWindowEvent = now
+                    setLastWindowEvent(this, now)
 
                     val isDialogEvent = eventClassName.contains("Dialog") ||
                         eventClassName.contains("BottomSheet") || eventClassName.contains("Popup")
@@ -247,18 +303,18 @@ class AutoSendAccessibilityService : AccessibilityService() {
                         eventClassName.contains("LauncherUI")
 
                     if (isDialogEvent || isWechatShareActivity) {
-                        if (!inDialogContext) {
-                            inDialogContext = true
+                        if (!getDialogContext(this)) {
+                            setDialogContext(this, true)
                             Log.d(TAG, "inDialogContext set to true")
                         }
                     } else if (isWechatMainChat) {
-                        if (inDialogContext) {
-                            inDialogContext = false
+                        if (getDialogContext(this)) {
+                            setDialogContext(this, false)
                             Log.d(TAG, "inDialogContext set to false (main chat)")
                         }
                     } else if (packageName == QQ_PACKAGE && !isDialogEvent) {
-                        if (inDialogContext) {
-                            inDialogContext = false
+                        if (getDialogContext(this)) {
+                            setDialogContext(this, false)
                             Log.d(TAG, "inDialogContext set to false")
                         }
                     }
@@ -273,16 +329,16 @@ class AutoSendAccessibilityService : AccessibilityService() {
     }
 
     private fun findAndClickSendButton(): Boolean {
-        if (!inDialogContext) {
+        if (!getDialogContext(this)) {
             if (!checkDialogFromEventFallback()) {
                 Log.d(TAG, "Not in dialog context, skipping send button search")
                 return false
             }
         }
 
-        if (System.currentTimeMillis() - lastTargetWindowEvent > STALE_EVENT_TIMEOUT_MS) {
+        if (System.currentTimeMillis() - getLastWindowEvent(this) > STALE_EVENT_TIMEOUT_MS) {
             Log.d(TAG, "No window events from target app for ${STALE_EVENT_TIMEOUT_MS}ms, treating context as stale, clearing inDialogContext")
-            inDialogContext = false
+            setDialogContext(this, false)
             return false
         }
 
@@ -293,9 +349,7 @@ class AutoSendAccessibilityService : AccessibilityService() {
         }
 
         try {
-            Log.d(TAG, "Searching for send button in window... (package=${root.packageName})")
-            dumpNodeTreeSafe(root, 0)
-
+            visitedNodes = 0
             val sendButton = findSendButtonInTree(root)
             if (sendButton != null) {
                 val hasCancel = hasButtonWithTextInTree(root, "取消")
@@ -329,14 +383,14 @@ class AutoSendAccessibilityService : AccessibilityService() {
 
             if (hasCancel && hasSend) {
                 Log.d(TAG, "Fallback: tree has both '取消' and '发送', in share dialog context")
-                inDialogContext = true
+                setDialogContext(this, true)
                 return true
             }
 
             val hasDialogLike = hasDialogContainerInTree(root)
             if (hasDialogLike) {
                 Log.d(TAG, "Fallback: tree contains dialog-like container, setting inDialogContext=true")
-                inDialogContext = true
+                setDialogContext(this, true)
                 return true
             }
 
@@ -351,6 +405,8 @@ class AutoSendAccessibilityService : AccessibilityService() {
     }
 
     private fun hasButtonWithTextInTree(node: AccessibilityNodeInfo, targetText: String): Boolean {
+        if (visitedNodes >= maxNodesPerTraversal) return false
+        visitedNodes++
         try {
             if (node.isVisibleToUser) {
                 val text = node.text?.toString()?.trim()
@@ -375,6 +431,8 @@ class AutoSendAccessibilityService : AccessibilityService() {
     }
 
     private fun hasDialogContainerInTree(node: AccessibilityNodeInfo): Boolean {
+        if (visitedNodes >= maxNodesPerTraversal) return false
+        visitedNodes++
         try {
             val className = node.className?.toString() ?: ""
             if (node.isVisibleToUser && (className.contains("Dialog") ||
@@ -396,7 +454,11 @@ class AutoSendAccessibilityService : AccessibilityService() {
         return false
     }
 
+    private var visitedNodes = 0
+
     private fun findSendButtonInTree(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        if (visitedNodes >= maxNodesPerTraversal) return null
+        visitedNodes++
         try {
             if (node.isVisibleToUser) {
                 val text = node.text?.toString()?.trim()
@@ -462,14 +524,19 @@ class AutoSendAccessibilityService : AccessibilityService() {
         Log.d(TAG, "Service interrupted")
     }
 
+    override fun onUnbind(intent: android.content.Intent?): Boolean {
+        Log.d(TAG, "Service onUnbind, requesting rebind on next event")
+        // 返回 true 表示当有新的 accessibility 事件时，系统应重新绑定服务
+        return true
+    }
+
     override fun onDestroy() {
         try {
             super.onDestroy()
-            isRunning = false
-            sendFlowActive = false
-            inDialogContext = false
-            lastTargetWindowEvent = 0L
-            cancelFlowTimeout()
+            setServiceRunning(this, false)
+            setSendFlowActive(this, false)
+            setDialogContext(this, false)
+            setLastWindowEvent(this, 0L)
             handler?.removeCallbacksAndMessages(null)
             handler = null
             servicePollRunnable = null

@@ -1000,8 +1000,8 @@ class MainActivity : TauriActivity() {
 
   @JavascriptInterface
   fun isAccessibilityServiceEnabled(): Boolean {
-    // 首先检查 AccessibilityService.isRunning 标志，这是最直接的状态
-    if (AutoSendAccessibilityService.isRunning) {
+    // 跨进程读 SharedPreferences（服务在 :accessibility 进程）
+    if (AutoSendAccessibilityService.getServiceRunning(this)) {
       Log.d(TAG, "isAccessibilityServiceEnabled: isRunning=true, returning true")
       return true
     }
@@ -1035,19 +1035,28 @@ class MainActivity : TauriActivity() {
 
   @JavascriptInterface
   fun isSendFlowActive(): Boolean {
-    return AutoSendAccessibilityService.sendFlowActive
+    // 跨进程读 SharedPreferences（服务在 :accessibility 进程）
+    return AutoSendAccessibilityService.getSendFlowActive(this)
   }
 
   @JavascriptInterface
   fun activateSendFlow() {
     Log.d(TAG, "activateSendFlow called from JS")
-    AutoSendAccessibilityService.activateSendFlow()
+    // 跨进程发送 Intent 到 :accessibility 进程的服务
+    val intent = Intent(this, AutoSendAccessibilityService::class.java).apply {
+      action = AutoSendAccessibilityService.ACTION_ACTIVATE_SEND_FLOW
+    }
+    startService(intent)
   }
 
   @JavascriptInterface
   fun deactivateSendFlow() {
     Log.d(TAG, "deactivateSendFlow called from JS")
-    AutoSendAccessibilityService.deactivateSendFlow()
+    // 跨进程发送 Intent 到 :accessibility 进程的服务
+    val intent = Intent(this, AutoSendAccessibilityService::class.java).apply {
+      action = AutoSendAccessibilityService.ACTION_DEACTIVATE_SEND_FLOW
+    }
+    startService(intent)
   }
 
   private fun startFloatingWindowService() {
