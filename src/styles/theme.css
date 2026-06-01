@@ -146,6 +146,31 @@ html, body {
   background-color: transparent;
 }
 
+/* 窗口非活动时暂停所有 CSS 动画以释放 CPU */
+.window-inactive,
+.window-inactive * {
+  animation-play-state: paused !important;
+}
+
+/* 窗口非活动时的暂停占位 */
+.inactive-overlay {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  color: var(--theme-text-tertiary);
+}
+.inactive-overlay-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  opacity: 0.5;
+}
+.inactive-overlay-content span {
+  font-size: 14px;
+}
+
 /* 移动端禁用 hover 效果，修复点击后高亮状态保持问题 */
 @media (hover: none) {
   .btn-icon:hover {

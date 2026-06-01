@@ -17,6 +17,10 @@ const ContextMenu = defineAsyncComponent(() => import("./components/ContextMenu.
 const KeywordManager = defineAsyncComponent(() => import("./components/KeywordManager.vue"));
 import type { Mode, Group, Image } from "./types";
 import { debug } from './utils/debug';
+import { useVisibility } from './composables/useVisibility';
+
+// 窗口非活动时隐藏图片区域（停止 CSS 动画 + GIF 解码）
+const { isActive } = useVisibility();
 
 const { config, currentColorMode, gridColumns, pinyinSearchEnabled, acronymSearchEnabled, globalFloatingWindowEnabled, themeKey, safeUpdateConfig, loadConfig, applyTheme, syncSystemTheme, handleResize, handleWheel, handleTouchStart, handleTouchMove, isMobile } = useConfig(invoke);
 
@@ -1709,6 +1713,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
         </div>
 
         <div
+          v-show="isActive"
           class="image-grid"
           :style="{ 
             gridTemplateColumns: `repeat(${gridColumns}, 1fr)`,
@@ -1738,7 +1743,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
           class="image-item"
           :class="{ 
             selected: selectedImages.includes(img.id),
-            'is-selectable': isGlobalEditMode 
+            'is-selectable': isGlobalEditMode
           }"
           @click="isGlobalEditMode && toggleImageSelection(img.id)"
         >
@@ -1783,6 +1788,17 @@ async function handleImageMenuSelect(img: Image, action: string) {
             <div v-if="selectedImages.includes(img.id) && !isGlobalEditMode" class="check-overlay">
               <var-icon name="check-circle" size="24" color="#fff" />
             </div>
+          </div>
+        </div>
+
+        <!-- 窗口非活动时的暂停占位 -->
+        <div v-if="!isActive" class="inactive-overlay">
+          <div class="inactive-overlay-content">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="6" y="4" width="4" height="16"/>
+              <rect x="14" y="4" width="4" height="16"/>
+            </svg>
+            <span>窗口非活跃，已暂停渲染</span>
           </div>
         </div>
 
