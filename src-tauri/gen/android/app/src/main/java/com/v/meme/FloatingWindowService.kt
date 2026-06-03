@@ -2,6 +2,7 @@ package com.v.meme
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.app.usage.UsageStats
 import android.app.usage.UsageStatsManager
@@ -20,6 +21,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.ImageView
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 
@@ -208,13 +210,26 @@ class FloatingWindowService : Service() {
         }
     }
 
+    private var notificationPendingIntent: PendingIntent? = null
+
     private fun createNotification(): NotificationCompat.Builder {
+        if (notificationPendingIntent == null) {
+            val intent = Intent(this, MainActivity::class.java).apply {
+                action = "com.v.meme.ACTION_TRIGGER_SEARCH"
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            notificationPendingIntent = PendingIntent.getActivity(
+                this, 0, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        }
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("咪萌悬浮窗")
             .setContentText("悬浮窗服务运行中")
             .setSmallIcon(android.R.drawable.ic_menu_search)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
+            .setContentIntent(notificationPendingIntent)
     }
 
     private fun createFloatingView() {
@@ -385,6 +400,8 @@ class FloatingWindowService : Service() {
 
     private fun triggerSearch() {
         val foregroundApp = getForegroundApp()
+
+        // 构建最新 Intent（每次构建确保 foreground_app 是最新的）
         val intent = Intent(this, MainActivity::class.java).apply {
             action = "com.v.meme.ACTION_TRIGGER_SEARCH"
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -392,7 +409,36 @@ class FloatingWindowService : Service() {
                 putExtra("foreground_app", foregroundApp)
             }
         }
-        startActivity(intent)
-        Log.d(TAG, "已发送触发搜索 Intent, foregroundApp=$foregroundApp")
+
+        // 通过 notification PendingIntent 启动 Activity
+        // Android 14+ 对 foreground service notification 来源的 PendingIntent
+        // 豁免后台 Activity 启动限制，比直接 startActivity() 更可靠
+        val pi = PendingIntent.getActivity(
+            this, 0, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        notificationPendingIntent = pi
+
+        try {
+            pi.send()
+            Log.d(TAG, "已通过 PendingIntent 触发搜索, foregroundApp=$foregroundApp")
+        } catch (e: Exception) {
+            Log.w(TAG, "PendingIntent.send() 失败，尝试 startActivity 兜底", e)
+            try {
+                startActivity(intent)
+                Log.d(TAG, "通过 startActivity 兜底成功, foregroundApp=$foregroundApp")
+            } catch (e2: Exception) {
+                Log.e(TAG, "后台启动 Activity 均被系统拦截", e2)
+                // 最终手段：通过更新 notification 让用户手动点击通知来触发
+                val notification = createNotification().build()
+                val nm = getSystemService(NotificationManager::class.java)
+                nm.notify(NOTIFICATION_ID, notification)
+                Toast.makeText(
+                    this,
+                    "系统限制了后台弹出，请在设置中开启「后台弹出界面」权限，或点击通知进入",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
     }
 }
