@@ -77,19 +77,38 @@ jobs:
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
             "platform-tools" \
-            "platforms;android-34" \
-            "build-tools;34.0.0" \
+            "platforms;android-36" \
+            "build-tools;35.0.0" \
             "ndk;26.3.11579264"
       - name: Remove cargo config (let Tauri regenerate)
         run: rm -f src-tauri/.cargo/config.toml
       - name: Create local.properties
         run: echo "sdk.dir=$ANDROID_HOME" > src-tauri/gen/android/local.properties
+      - name: Generate debug keystore for CI signing
+        run: |
+          keytool -genkeypair \
+            -v \
+            -keystore src-tauri/gen/android/app/debug.keystore \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US" \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000
+          cat > src-tauri/gen/android/app/tauri.properties << 'PROPS'
+          tauri.android.storeFile=debug.keystore
+          tauri.android.storeType=JKS
+          tauri.android.storePassword=android
+          tauri.android.keyAlias=androiddebugkey
+          tauri.android.keyPassword=android
+          PROPS
       - name: Install frontend deps
         run: bun install
       - name: Build frontend
         run: bun run build
       - name: Build Android APK
-        run: bun run android:build
+        run: bunx tauri android build --apk
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
         with:
