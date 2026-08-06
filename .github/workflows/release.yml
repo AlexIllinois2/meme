@@ -96,12 +96,11 @@ jobs:
             -keyalg RSA \
             -keysize 2048 \
             -validity 10000
-          cat > src-tauri/gen/android/app/tauri.properties << 'PROPS'
+          cat > src-tauri/gen/android/app/keystore.properties << 'PROPS'
           tauri.android.storeFile=debug.keystore
           tauri.android.storeType=JKS
           tauri.android.storePassword=android
           tauri.android.keyAlias=androiddebugkey
-          tauri.android.keyPassword=android
           PROPS
       - name: Install frontend deps
         run: bun install
