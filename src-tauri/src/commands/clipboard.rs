@@ -55,6 +55,61 @@ pub fn paste_image_from_clipboard<R: tauri::Runtime>(
     }
 }
 
+/// 将 `file://` URI 转换为本地文件系统路径（处理 URL 编码与 localhost 前缀）。
+///
+/// Linux 下剪贴板文件列表（text/uri-list）中的条目是 `file:///path/to/file` 形式，
+/// 不能直接当作路径使用。
+#[cfg(not(target_os = "android"))]
+fn file_uri_to_path(uri: &str) -> String {
+    use percent_encoding::percent_decode_str;
+
+    let path_part = uri.strip_prefix("file://").unwrap_or(uri);
+    let path_part = path_part.strip_prefix("localhost").unwrap_or(path_part);
+    percent_decode_str(path_part)
+        .decode_utf8()
+        .map(|s| s.into_owned())
+        .unwrap_or_else(|_| path_part.to_string())
+}
+
+/// 遍历剪贴板文件列表，将第一张存在的文件复制到临时目录。
+///
+/// 找不到可用的文件时返回 `Ok(None)`，交由后续方案（系统命令 / 剪贴板图片）处理。
+#[cfg(not(target_os = "android"))]
+fn copy_clipboard_file(files: &[String], temp_dir: &str) -> Result<Option<String>, AppError> {
+    for file in files {
+        let src_path = std::path::PathBuf::from(file_uri_to_path(file));
+        if !src_path.exists() {
+            continue;
+        }
+
+        let extension = src_path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("png")
+            .to_lowercase();
+
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis();
+
+        let temp_file_name = format!("pasted-{}.{}", timestamp, extension);
+        let temp_path = std::path::Path::new(temp_dir).join(&temp_file_name);
+
+        if let Some(parent) = temp_path.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| AppError(format!("Failed to create temp dir: {}", e)))?;
+        }
+
+        std::fs::copy(&src_path, &temp_path).map_err(|e| {
+            AppError(format!("Failed to copy file: {}", e))
+        })?;
+
+        return Ok(Some(temp_path.to_string_lossy().to_string()));
+    }
+    Ok(None)
+}
+
 /// 使用系统命令读取剪贴板图片（桌面端）
 ///
 /// 主要用于 Wayland 环境，作为 clipboard-rs 的补充方案。
@@ -109,35 +164,8 @@ pub fn paste_image_from_clipboard_raw<R: tauri::Runtime>(
         AppError(format!("Failed to read files from clipboard: {}", e))
     })?;
 
-    if !files.is_empty() {
-        let src_path = std::path::Path::new(&files[0]);
-        if !src_path.exists() {
-            return Err("剪贴板中的文件不存在".into());
-        }
-
-        let extension = src_path.extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("png")
-            .to_lowercase();
-
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis();
-
-        let temp_file_name = format!("pasted-{}.{}", timestamp, extension);
-        let temp_path = std::path::Path::new(&temp_dir).join(&temp_file_name);
-
-        if let Some(parent) = temp_path.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| AppError(format!("Failed to create temp dir: {}", e)))?;
-        }
-
-        std::fs::copy(src_path, &temp_path).map_err(|e| {
-            AppError(format!("Failed to copy file: {}", e))
-        })?;
-
-        return Ok(temp_path.to_string_lossy().to_string());
+    if let Some(copied_path) = copy_clipboard_file(&files, &temp_dir)? {
+        return Ok(copied_path);
     }
 
     match read_clipboard_with_system_command(&temp_dir) {
