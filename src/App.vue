@@ -964,6 +964,29 @@ function handleShareAppChange(app: string) {
 function handleKeyDown(event: KeyboardEvent) {
   if (event.ctrlKey && event.key === 'v') {
     handlePasteImage();
+    return;
+  }
+
+  // 桌面端主页面：Ctrl+= 放大图片（列数-1），Ctrl+- 缩小图片（列数+1）
+  if (event.ctrlKey && !isAndroidTauri() && activeMenu.value === 'home') {
+    if (event.key === '=' || event.key === '+' || event.code === 'NumpadAdd') {
+      event.preventDefault();
+      adjustGridColumns(-1);
+    } else if (event.key === '-' || event.key === '_' || event.code === 'NumpadSubtract') {
+      event.preventDefault();
+      adjustGridColumns(1);
+    }
+  }
+}
+
+// 调整列数（范围 2~8），并持久化到配置
+function adjustGridColumns(delta: number) {
+  const newColumns = Math.max(2, Math.min(8, gridColumns.value + delta));
+  if (newColumns === gridColumns.value) return;
+  gridColumns.value = newColumns;
+  if (config.value) {
+    config.value.grid_size = gridColumns.value;
+    safeUpdateConfig(config.value);
   }
 }
 
