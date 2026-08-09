@@ -49,6 +49,7 @@ base64 = "0.22"
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 clipboard-rs = "0.3"
+tauri-plugin-window-state = "2"
 
 [target.'cfg(target_os = "android")'.dependencies]
 tauri-plugin-share = "2"

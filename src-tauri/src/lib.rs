@@ -26,6 +26,12 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_clipboard_manager::init());
 
+    // 桌面端：记住窗口的位置和尺寸，下次启动时恢复
+    #[cfg(not(target_os = "android"))]
+    {
+        builder = builder.plugin(tauri_plugin_window_state::Builder::default().build());
+    }
+
     // Android 平台添加 share 插件
     #[cfg(target_os = "android")]
     {
@@ -112,10 +118,10 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
-// 退出应用命令
+// 退出应用命令（使用 app.exit 触发正常退出流程，确保窗口状态被保存）
 #[tauri::command]
-fn exit_app(_app_handle: tauri::AppHandle) {
-    std::process::exit(0);
+fn exit_app(app_handle: tauri::AppHandle) {
+    app_handle.exit(0);
 }
 
 // 完全重启应用（Android 上会重建进程，SAF 权限重新生效）
