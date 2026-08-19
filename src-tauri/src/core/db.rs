@@ -57,23 +57,6 @@ pub fn init_db() -> Result<Connection, AppError> {
         [],
     )?;
 
-    // 兼容旧数据库：添加可能缺失的列
-    let add_column = |name: &str, def: &str| -> Result<(), AppError> {
-        let exists: bool = conn.query_row(
-            "SELECT COUNT(*) FROM pragma_table_info('config') WHERE name=?",
-            params![name],
-            |row| row.get::<_, i32>(0)
-        ).unwrap_or(0) > 0;
-        if !exists {
-            conn.execute(
-                &format!("ALTER TABLE config ADD COLUMN {}", def),
-                [],
-            )?;
-        }
-        Ok(())
-    };
-    add_column("theme_style", "theme_style TEXT NOT NULL DEFAULT 'modern'")?;
-
     // 插入默认配置（如果不存在）
     let default_meme_dir = {
         #[cfg(target_os = "android")]
@@ -134,23 +117,12 @@ pub fn init_db() -> Result<Connection, AppError> {
             share_count INTEGER DEFAULT 0,
             group_id INTEGER NOT NULL,
             mode_id INTEGER NOT NULL,
+            sticker_data BLOB,
             FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
             FOREIGN KEY (mode_id) REFERENCES modes(id) ON DELETE CASCADE
         )",
         [],
     )?;
-
-    // 兼容旧数据库：为 images 表新增表情图 BLOB 字段
-    {
-        let exists: bool = conn.query_row(
-            "SELECT COUNT(*) FROM pragma_table_info('images') WHERE name = 'sticker_data'",
-            [],
-            |row| row.get::<_, i32>(0)
-        ).unwrap_or(0) > 0;
-        if !exists {
-            conn.execute("ALTER TABLE images ADD COLUMN sticker_data BLOB", [])?;
-        }
-    }
 
     // 创建关键词-分组关联表
     conn.execute(
