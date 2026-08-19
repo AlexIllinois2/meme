@@ -29,7 +29,7 @@ const handleWindowFocus = () => {
   }
 };
 
-const { config, currentColorMode, gridColumns, pinyinSearchEnabled, acronymSearchEnabled, globalFloatingWindowEnabled, themeKey, safeUpdateConfig, loadConfig, applyTheme, syncSystemTheme, handleResize, handleWheel, handleTouchStart, handleTouchMove, isMobile } = useConfig(invoke);
+const { config, currentColorMode, gridColumns, pinyinSearchEnabled, acronymSearchEnabled, globalFloatingWindowEnabled, themeKey, safeUpdateConfig, loadConfig, applyTheme, syncSystemTheme, handleResize, handleWheel, handleTouchStart, handleTouchMove } = useConfig(invoke);
 
 const { modes, groups, images, selectedModeId, selectedGroupId, loadModes, loadGroups, loadImages, switchMode, switchGroup, fullRefresh } = useMemeData(config, safeUpdateConfig);
 
@@ -1656,7 +1656,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
               </div>
             </div>
           </div>
-          <div v-if="isMobile && !isGlobalEditMode" class="share-app-icons">
+          <div v-if="!isAndroidTauri() && !isGlobalEditMode" class="share-app-icons">
             <div
               class="share-app-icon" :class="{ active: shareApp === 'qq' }"
               @click="shareApp = 'qq'; handleShareAppChange('qq')">
