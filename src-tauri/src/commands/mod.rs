@@ -3,6 +3,7 @@ pub mod mode;
 pub mod group;
 pub mod keyword;
 pub mod image;
+pub mod sticker;
 pub mod clipboard;
 pub mod upload;
 pub mod custom_share;

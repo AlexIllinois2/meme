@@ -139,7 +139,19 @@ pub fn init_db() -> Result<Connection, AppError> {
         )",
         [],
     )?;
-    
+
+    // 兼容旧数据库：为 images 表新增表情图 BLOB 字段
+    {
+        let exists: bool = conn.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('images') WHERE name = 'sticker_data'",
+            [],
+            |row| row.get::<_, i32>(0)
+        ).unwrap_or(0) > 0;
+        if !exists {
+            conn.execute("ALTER TABLE images ADD COLUMN sticker_data BLOB", [])?;
+        }
+    }
+
     // 创建关键词-分组关联表
     conn.execute(
         "CREATE TABLE IF NOT EXISTS keyword_group_links (

@@ -8,6 +8,7 @@ use rusqlite::params;
 use std::path::PathBuf;
 use crate::core::{db_state::DbState, models::Image, meme_fs};
 use crate::core::error::AppError;
+use crate::commands::sticker::ensure_sticker_path;
 
 #[cfg(not(target_os = "android"))]
 use clipboard_rs::{Clipboard, ClipboardContext};
@@ -110,13 +111,10 @@ pub fn share_image(state: tauri::State<'_, DbState>, image_id: i32) -> Result<()
 #[tauri::command]
 pub fn copy_image(state: tauri::State<'_, DbState>, image_id: i32) -> Result<(), AppError> {
 	let conn = state.lock().map_err(|e| AppError(e.to_string()))?;
-	let raw_path: String = conn.query_row(
-		"SELECT image_path FROM images WHERE id = ?", params![image_id], |row| row.get(0)
-	)?;
 	let meme_dir: String = conn.query_row(
 		"SELECT meme_dir FROM config WHERE id = 1", [], |row| row.get(0)
 	).unwrap_or_default();
-	let image_path = meme_fs::resolve_meme_path(&meme_dir, &raw_path).to_string_lossy().to_string();
+	let image_path = ensure_sticker_path(&conn, image_id, &meme_dir)?;
 	increment_share_count_internal(&conn, image_id, None)?;
 	let ctx = ClipboardContext::new().map_err(|e| AppError(format!("Failed to create clipboard context: {}", e)))?;
 	let abs_path = std::fs::canonicalize(&image_path).map_err(|e| AppError(format!("Failed to get absolute path: {}", e)))?;
@@ -148,20 +146,17 @@ pub fn copy_images(state: tauri::State<'_, DbState>, image_ids: Vec<i32>) -> Res
 		return Ok(());
 	}
 
-	// 先持锁收集所有图片路径并更新分享次数，尽快释放锁
-	let collected: Vec<(i32, String)> = {
+	// 先持锁确保表情图已生成(懒加载，首次分享时生成)，并收集路径、更新分享次数，尽快释放锁
+	let collected: Vec<(i32, PathBuf)> = {
 		let conn = state.lock().map_err(|e| AppError(e.to_string()))?;
 		let meme_dir: String = conn.query_row(
 			"SELECT meme_dir FROM config WHERE id = 1", [], |row| row.get(0)
 		).unwrap_or_default();
 		let mut items = Vec::with_capacity(image_ids.len());
 		for &image_id in &image_ids {
-			if let Ok(raw_path) = conn.query_row::<String, _, _>(
-				"SELECT image_path FROM images WHERE id = ?", params![image_id], |row| row.get(0)
-			) {
-				let full_path = meme_fs::resolve_meme_path(&meme_dir, &raw_path).to_string_lossy().to_string();
+			if let Ok(sticker_path) = ensure_sticker_path(&conn, image_id, &meme_dir) {
 				let _ = increment_share_count_internal(&conn, image_id, None);
-				items.push((image_id, full_path));
+				items.push((image_id, sticker_path));
 			}
 		}
 		items
@@ -219,6 +214,13 @@ pub fn delete_images(state: tauri::State<'_, DbState>, image_ids: Vec<i32>) -> R
 						.map_err(|e| AppError(format!("删除缩略图失败 {}: {}", thumb, e)))?;
 				}
 			}
+			// 删除表情图缓存文件
+			let cache_path = std::path::Path::new(&meme_dir)
+				.join(".sticker_cache")
+				.join(format!("{}.gif", image_id));
+			if cache_path.exists() {
+				let _ = std::fs::remove_file(&cache_path);
+			}
 		}
 		conn.execute("DELETE FROM images WHERE id = ?", params![image_id])?;
 	}
@@ -271,13 +273,10 @@ pub fn share_image_to_app<R: tauri::Runtime>(
 	_target_app: String,
 ) -> Result<(), AppError> {
 	let conn = state.lock().map_err(|e| AppError(e.to_string()))?;
-	let raw_path: String = conn.query_row(
-		"SELECT image_path FROM images WHERE id = ?", params![image_id], |row| row.get(0)
-	)?;
 	let meme_dir: String = conn.query_row(
 		"SELECT meme_dir FROM config WHERE id = 1", [], |row| row.get(0)
 	).unwrap_or_default();
-	let image_path = meme_fs::resolve_meme_path(&meme_dir, &raw_path).to_string_lossy().to_string();
+	let image_path = ensure_sticker_path(&conn, image_id, &meme_dir)?;
 	increment_share_count_internal(&conn, image_id, None)?;
 	#[cfg(target_os = "linux")]
 	{ std::process::Command::new("xdg-open").arg(&image_path).spawn().map_err(|e| AppError(format!("Failed to open image: {}", e)))?; }

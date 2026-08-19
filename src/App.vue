@@ -1360,13 +1360,29 @@ async function copySingleImage(img: Image) {
   }
 }
 
-// 分享图片到 App（Android 端）
+// 分享图片到 App（Android 端 / 桌面端 Tauri Share 回退）
 async function shareImageToApp(img: Image) {
   try {
-    const imagePath = img.image_path;
+    // 懒加载生成标准表情图(240x240 GIF)，获取其文件路径（不再使用原图）
+    const stickerPath = await invoke<string>("get_sticker_path", { imageId: img.id });
+    if (!stickerPath) {
+      throw new Error('无法生成表情图路径');
+    }
     const app = shareApp.value;
-    debug.log(`[Android] 分享图片到 ${app}:`, imagePath);
-    
+    debug.log(`[Share] 分享表情图到 ${app}:`, stickerPath);
+
+    // 根据返回路径后缀推导 MIME（正常为 .gif；解码失败回退时沿用原图格式）
+    const ext = stickerPath.split('.').pop()?.toLowerCase() || 'png';
+    const mimeMap: Record<string, string> = {
+      png: 'image/png',
+      jpg: 'image/jpeg',
+      jpeg: 'image/jpeg',
+      gif: 'image/gif',
+      webp: 'image/webp',
+      bmp: 'image/bmp',
+    };
+    const mime = mimeMap[ext] || 'image/png';
+
     // 如果选择的是"所有应用"或未指定特定应用，传递空字符串以显示系统分享菜单
     const targetApp = (app === 'all' || !app) ? '' : app;
 
@@ -1390,12 +1406,12 @@ async function shareImageToApp(img: Image) {
       }
       
       if (androidNative && typeof androidNative.shareImageToApp === 'function') {
-        debug.log(`[Android] 调用原生分享接口:`, imagePath, targetApp);
+        debug.log(`[Android] 调用原生分享接口:`, stickerPath, targetApp);
         // 激活自动发送流程：用户已点击图片，准备打开系统分享
         if (typeof androidNative.activateSendFlow === 'function') {
           androidNative.activateSendFlow();
         }
-        androidNative.shareImageToApp(imagePath, targetApp);
+        androidNative.shareImageToApp(stickerPath, targetApp);
         await invoke("share_image", { imageId: img.id });
         
         if (!targetApp) {
@@ -1411,17 +1427,7 @@ async function shareImageToApp(img: Image) {
         try {
           debug.log('[Android] Falling back to tauri-plugin-share');
           const { shareFile } = await import('tauri-plugin-share');
-          const ext = imagePath.split('.').pop()?.toLowerCase() || 'png';
-          const mimeMap: Record<string, string> = {
-            png: 'image/png',
-            jpg: 'image/jpeg',
-            jpeg: 'image/jpeg',
-            gif: 'image/gif',
-            webp: 'image/webp',
-            bmp: 'image/bmp',
-          };
-          const mime = mimeMap[ext] || 'image/png';
-          await shareFile(imagePath, mime);
+          await shareFile(stickerPath, mime);
           await invoke("share_image", { imageId: img.id });
           Snackbar.success('已打开分享菜单');
         } catch (fallbackError) {
@@ -1432,17 +1438,7 @@ async function shareImageToApp(img: Image) {
     } else {
       // 桌面端使用 Tauri Share 插件
       const { shareFile } = await import('tauri-plugin-share');
-      const ext = imagePath.split('.').pop()?.toLowerCase() || 'png';
-      const mimeMap: Record<string, string> = {
-        png: 'image/png',
-        jpg: 'image/jpeg',
-        jpeg: 'image/jpeg',
-        gif: 'image/gif',
-        webp: 'image/webp',
-        bmp: 'image/bmp',
-      };
-      const mime = mimeMap[ext] || 'image/png';
-      await shareFile(imagePath, mime);
+      await shareFile(stickerPath, mime);
       await invoke("share_image", { imageId: img.id });
       Snackbar.success('已打开分享菜单');
     }

@@ -85,6 +85,8 @@ pub fn run() {
         commands::image::share_image_to_app,
         commands::image::increment_share_count,
         commands::image::copy_images,
+        // 表情图(懒生成)路径获取
+        commands::sticker::get_sticker_path,
         // 剪贴板粘贴（桌面端支持，Android 返回错误）
         commands::clipboard::paste_image_from_clipboard,
         commands::clipboard::paste_image_from_clipboard_raw,
