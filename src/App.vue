@@ -1656,7 +1656,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
               </div>
             </div>
           </div>
-          <div v-if="!isAndroidTauri() && !isGlobalEditMode" class="share-app-icons">
+          <div v-if="isAndroidTauri() && !isGlobalEditMode" class="share-app-icons">
             <div
               class="share-app-icon" :class="{ active: shareApp === 'qq' }"
               @click="shareApp = 'qq'; handleShareAppChange('qq')">
