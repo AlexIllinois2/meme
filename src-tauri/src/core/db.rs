@@ -35,7 +35,10 @@ pub fn init_db() -> Result<Connection, AppError> {
     }
     
     let conn = Connection::open(&db_path)?;
-    
+
+    // 后台任务(如表情图异步生成)使用独立连接，设置忙等待超时避免并发写冲突
+    conn.busy_timeout(std::time::Duration::from_secs(10))?;
+
     // 启用外键支持
     conn.execute_batch("PRAGMA foreign_keys = ON;")?;
     

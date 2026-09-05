@@ -8,7 +8,7 @@ use rusqlite::params;
 use std::path::PathBuf;
 use crate::core::{db_state::DbState, models::Image, meme_fs};
 use crate::core::error::AppError;
-use crate::commands::sticker::ensure_sticker_path;
+use crate::commands::sticker;
 
 #[cfg(not(target_os = "android"))]
 use clipboard_rs::{Clipboard, ClipboardContext};
@@ -67,6 +67,32 @@ pub fn search_images(state: tauri::State<'_, DbState>, keyword: String, pinyin: 
 	Ok(images)
 }
 
+/// 内部函数：为复制/分享挑选本次使用的文件路径
+///
+/// 表情图(GIF)已就绪时返回其缓存路径；未就绪时返回原图路径并触发后台异步生成，
+/// 保证首次复制/分享不阻塞等待生成，下次直接使用已生成的表情图。
+fn choose_share_file(
+	conn: &rusqlite::Connection,
+	image_id: i32,
+	meme_dir: &str,
+) -> Result<PathBuf, AppError> {
+	if let Some(sticker_path) = sticker::get_ready_sticker_path(conn, image_id, meme_dir)? {
+		return Ok(sticker_path);
+	}
+	let raw_path: String = conn.query_row(
+		"SELECT image_path FROM images WHERE id = ?",
+		params![image_id],
+		|row| row.get(0)
+	)?;
+	let path = meme_fs::resolve_meme_path(meme_dir, &raw_path);
+	if !path.exists() {
+		return Err(AppError(format!("原图不存在: {}", path.display())));
+	}
+	// 表情图未就绪：本次先用原图，同时安排后台生成，下次直接复用 GIF
+	sticker::spawn_sticker_generation(image_id);
+	Ok(path)
+}
+
 /// 内部函数：增加分享次数
 fn increment_share_count_internal(
 	conn: &rusqlite::Connection, 
@@ -114,7 +140,7 @@ pub fn copy_image(state: tauri::State<'_, DbState>, image_id: i32) -> Result<(),
 	let meme_dir: String = conn.query_row(
 		"SELECT meme_dir FROM config WHERE id = 1", [], |row| row.get(0)
 	).unwrap_or_default();
-	let image_path = ensure_sticker_path(&conn, image_id, &meme_dir)?;
+	let image_path = choose_share_file(&conn, image_id, &meme_dir)?;
 	increment_share_count_internal(&conn, image_id, None)?;
 	let ctx = ClipboardContext::new().map_err(|e| AppError(format!("Failed to create clipboard context: {}", e)))?;
 	let abs_path = std::fs::canonicalize(&image_path).map_err(|e| AppError(format!("Failed to get absolute path: {}", e)))?;
@@ -146,7 +172,7 @@ pub fn copy_images(state: tauri::State<'_, DbState>, image_ids: Vec<i32>) -> Res
 		return Ok(());
 	}
 
-	// 先持锁确保表情图已生成(懒加载，首次分享时生成)，并收集路径、更新分享次数，尽快释放锁
+	// 先持锁挑选文件(表情图已就绪用 GIF，否则原图并安排后台生成)并更新分享次数，尽快释放锁
 	let collected: Vec<(i32, PathBuf)> = {
 		let conn = state.lock().map_err(|e| AppError(e.to_string()))?;
 		let meme_dir: String = conn.query_row(
@@ -154,9 +180,14 @@ pub fn copy_images(state: tauri::State<'_, DbState>, image_ids: Vec<i32>) -> Res
 		).unwrap_or_default();
 		let mut items = Vec::with_capacity(image_ids.len());
 		for &image_id in &image_ids {
-			if let Ok(sticker_path) = ensure_sticker_path(&conn, image_id, &meme_dir) {
-				let _ = increment_share_count_internal(&conn, image_id, None);
-				items.push((image_id, sticker_path));
+			match choose_share_file(&conn, image_id, &meme_dir) {
+				Ok(file_path) => {
+					let _ = increment_share_count_internal(&conn, image_id, None);
+					items.push((image_id, file_path));
+				}
+				Err(e) => {
+					log::warn!("跳过复制图片 {}: {}", image_id, e);
+				}
 			}
 		}
 		items
@@ -214,10 +245,8 @@ pub fn delete_images(state: tauri::State<'_, DbState>, image_ids: Vec<i32>) -> R
 						.map_err(|e| AppError(format!("删除缩略图失败 {}: {}", thumb, e)))?;
 				}
 			}
-			// 删除表情图缓存文件
-			let cache_path = std::path::Path::new(&meme_dir)
-				.join(".sticker_cache")
-				.join(format!("{}.gif", image_id));
+			// 删除表情图缓存文件(文件名与相对路径哈希绑定)
+			let cache_path = sticker::sticker_cache_path(&meme_dir, &raw_path);
 			if cache_path.exists() {
 				let _ = std::fs::remove_file(&cache_path);
 			}
@@ -276,7 +305,7 @@ pub fn share_image_to_app<R: tauri::Runtime>(
 	let meme_dir: String = conn.query_row(
 		"SELECT meme_dir FROM config WHERE id = 1", [], |row| row.get(0)
 	).unwrap_or_default();
-	let image_path = ensure_sticker_path(&conn, image_id, &meme_dir)?;
+	let image_path = choose_share_file(&conn, image_id, &meme_dir)?;
 	increment_share_count_internal(&conn, image_id, None)?;
 	#[cfg(target_os = "linux")]
 	{ std::process::Command::new("xdg-open").arg(&image_path).spawn().map_err(|e| AppError(format!("Failed to open image: {}", e)))?; }
@@ -707,6 +736,26 @@ fn refresh_everything(conn: &rusqlite::Connection, meme_dir: &str) -> Result<Str
 		diff.insert_images.len(), diff.delete_images.len(),
 		diff.insert_keywords.len(), diff.delete_keywords.len());
 	apply_diff(conn, &diff)?;
+	// 清理表情图缓存中的孤儿文件：缓存按相对路径哈希命名，凡是不在当前索引里的
+	// (已删除/改名/换库后 id 对不上的)一律删除，避免旧缓存错配或越积越多。
+	let valid_keys: HashSet<String> = snapshot
+		.images
+		.iter()
+		.map(|(rp, _)| sticker::sticker_cache_key(rp))
+		.collect();
+	let cache_dir = std::path::Path::new(meme_dir).join(".sticker_cache");
+	if let Ok(entries) = std::fs::read_dir(&cache_dir) {
+		for entry in entries.flatten() {
+			let path = entry.path();
+			if path.extension().and_then(|e| e.to_str()) != Some("gif") {
+				continue;
+			}
+			let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+			if !valid_keys.contains(stem) {
+				let _ = std::fs::remove_file(&path);
+			}
+		}
+	}
 	Ok("数据刷新完成".to_string())
 }
 

@@ -1,12 +1,18 @@
 //! 表情图(sticker)生成与缓存模块
 //!
-//! 懒加载策略：第一次分享某张图片时才用原图生成一张标准表情图
-//! (GIF, 240x240, 256 色调色板压缩)，存入 images 表的 `sticker_data`(BLOB) 字段，
-//! 并写出磁盘缓存 `<meme_dir>/.sticker_cache/<id>.gif` 供复制/分享使用。
-//! 后续分享直接复用缓存，不再读取或处理原图。
+//! 策略：表情图(GIF, 240x240, 256 色调色板压缩)在**后台异步生成**，不阻塞分享。
+//! 首次分享某张图片时先直接发送原图，同时触发后台任务用原图生成标准表情图，
+//! 存入 images 表的 `sticker_data`(BLOB) 字段并写出磁盘缓存
+//! `<meme_dir>/.sticker_cache/<hash>.gif`；下次分享同一张图时表情图已就绪，
+//! 直接复用缓存，不再读取或处理原图。
+//!
+//! 缓存文件名用图片**相对路径的哈希**而非自增 id：清除应用数据/重建索引后
+//! id 会重新分配，按路径哈希命名可保证缓存仍能正确复用，也不会错配给别的图片。
 
+use std::collections::HashSet;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 
 use image::imageops;
 use image::AnimationDecoder;
@@ -20,6 +26,69 @@ const STICKER_SIZE: u32 = 240;
 /// 动画帧上限：兼顾流畅度与体积(目标 < 1MB)
 const MAX_FRAMES: usize = 50;
 const CACHE_DIR_NAME: &str = ".sticker_cache";
+
+/// 根据数据库中的 `image_path`(相对路径)计算稳定的表情图缓存键。
+///
+/// 使用相对路径而非自增 id：用户清除应用数据或重建索引后 id 会重新分配，
+/// 若以 id 命名缓存文件，旧缓存可能被错配给另一张图。相对路径在重扫/换库
+/// 后保持不变，同一文件仍能命中同一缓存。
+pub fn sticker_cache_key(image_path: &str) -> String {
+    // FNV-1a 64位哈希(固定算法，跨平台/跨版本结果稳定)
+    let mut hash: u64 = 0xcbf29ce484222325;
+    for b in image_path.as_bytes() {
+        hash ^= *b as u64;
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    format!("{:016x}", hash)
+}
+
+/// 表情图缓存文件路径：`<meme_dir>/.sticker_cache/<key>.gif`
+pub fn sticker_cache_path(meme_dir: &str, image_path: &str) -> PathBuf {
+    Path::new(meme_dir)
+        .join(CACHE_DIR_NAME)
+        .join(format!("{}.gif", sticker_cache_key(image_path)))
+}
+
+/// 后台生成任务去重集合：同一图片同一时刻只保留一个生成任务
+static PENDING_GENERATIONS: OnceLock<Mutex<HashSet<i32>>> = OnceLock::new();
+
+/// 查询表情图是否已就绪(磁盘缓存或 DB BLOB)。
+///
+/// 已就绪时确保缓存文件存在并返回其路径；未就绪返回 `Ok(None)`（**不触发**生成），
+/// 调用方应先分享原图，再通过 [`spawn_sticker_generation`] 在后台异步生成。
+pub fn get_ready_sticker_path(
+    conn: &rusqlite::Connection,
+    image_id: i32,
+    meme_dir: &str,
+) -> Result<Option<PathBuf>, AppError> {
+    let (sticker_blob, image_path): (Option<Vec<u8>>, String) = conn
+        .query_row(
+            "SELECT sticker_data, image_path FROM images WHERE id = ?",
+            params![image_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|e| AppError(format!("查询图片失败: {}", e)))?;
+
+    let cache_dir = Path::new(meme_dir).join(CACHE_DIR_NAME);
+    // 文件名与图片相对路径绑定(而非自增 id)，文件存在即说明属于当前图片
+    let cache_path = sticker_cache_path(meme_dir, &image_path);
+
+    // 快速路径：缓存文件已存在，直接复用
+    if cache_path.exists() {
+        return Ok(Some(cache_path));
+    }
+
+    // 已有 BLOB：补写缓存文件后复用
+    if let Some(blob) = sticker_blob {
+        std::fs::create_dir_all(&cache_dir)
+            .map_err(|e| AppError(format!("创建表情图缓存目录失败: {}", e)))?;
+        std::fs::write(&cache_path, &blob)
+            .map_err(|e| AppError(format!("写出表情图缓存失败: {}", e)))?;
+        return Ok(Some(cache_path));
+    }
+
+    Ok(None)
+}
 
 /// 将图片等比缩放并居中铺在 `STICKER_SIZE x STICKER_SIZE` 的透明画布上
 fn fit_and_pad(img: &image::DynamicImage) -> image::DynamicImage {
@@ -130,39 +199,30 @@ fn generate_sticker_bytes(src_bytes: &[u8]) -> Result<Vec<u8>, AppError> {
 
 /// 确保某图片的表情图已生成，返回其磁盘缓存路径。
 ///
-/// 优先复用已有缓存/BLOB；均不存在时执行懒生成(第一次分享)。
+/// 优先复用已有缓存/BLOB；均不存在时执行生成(供后台生成任务与兼容调用使用)。
 /// 若原图格式无法解码(如 webp 未启用解码)，则回退返回原图路径，分享仍可用。
 pub fn ensure_sticker_path(
     conn: &rusqlite::Connection,
     image_id: i32,
     meme_dir: &str,
 ) -> Result<PathBuf, AppError> {
-    let (sticker_blob, raw_path): (Option<Vec<u8>>, String) = conn
+    // 已就绪(缓存文件或 BLOB)直接复用，不再处理原图
+    if let Some(path) = get_ready_sticker_path(conn, image_id, meme_dir)? {
+        return Ok(path);
+    }
+
+    // 没有缓存/BLOB：读取原图并生成
+    let raw_path: String = conn
         .query_row(
-            "SELECT sticker_data, image_path FROM images WHERE id = ?",
+            "SELECT image_path FROM images WHERE id = ?",
             params![image_id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
+            |row| row.get(0),
         )
         .map_err(|e| AppError(format!("查询图片失败: {}", e)))?;
-
     let cache_dir = Path::new(meme_dir).join(CACHE_DIR_NAME);
     std::fs::create_dir_all(&cache_dir)
         .map_err(|e| AppError(format!("创建表情图缓存目录失败: {}", e)))?;
-    let cache_path = cache_dir.join(format!("{}.gif", image_id));
-
-    // 快速路径：缓存文件已存在，直接复用
-    if cache_path.exists() {
-        return Ok(cache_path);
-    }
-
-    // 已有 BLOB：写出即可
-    if let Some(blob) = sticker_blob {
-        std::fs::write(&cache_path, &blob)
-            .map_err(|e| AppError(format!("写出表情图缓存失败: {}", e)))?;
-        return Ok(cache_path);
-    }
-
-    // 没有 BLOB：懒生成(第一次分享时)
+    let cache_path = sticker_cache_path(meme_dir, &raw_path);
     let src_path = meme_fs::resolve_meme_path(meme_dir, &raw_path);
     if !src_path.exists() {
         return Err(AppError(format!("原图不存在: {}", src_path.display())));
@@ -189,19 +249,82 @@ pub fn ensure_sticker_path(
     }
 }
 
-/// 获取某图片的表情图磁盘路径(供前端复制/分享使用)
+/// 后台异步生成某图片的表情图(立即返回，不阻塞调用方)。
 ///
-/// 该命令只负责确保表情图存在并返回路径，不增加分享计数
-/// (分享计数由 `share_image` 单独维护)。
+/// 同一图片同一时刻只保留一个生成任务；生成结果写入 DB(`sticker_data`)与磁盘缓存，
+/// 供下次复制/分享直接使用。任务失败仅记录日志，不影响本次已发出的原图。
+pub fn spawn_sticker_generation(image_id: i32) {
+    let pending = PENDING_GENERATIONS.get_or_init(|| Mutex::new(HashSet::new()));
+    {
+        let mut set = pending.lock().unwrap_or_else(|e| e.into_inner());
+        if !set.insert(image_id) {
+            return; // 已在生成中，跳过
+        }
+    }
+
+    let spawned = std::thread::Builder::new()
+        .name(format!("sticker-gen-{}", image_id))
+        .spawn(move || {
+            let result = generate_sticker_job(image_id);
+            if let Err(e) = result {
+                log::warn!("后台生成表情图失败 image_id={}: {}", image_id, e);
+            }
+            // 无论成败都解除去重，允许后续再次触发
+            pending
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .remove(&image_id);
+        });
+
+    if let Err(e) = spawned {
+        // 线程创建失败(极罕见)：解除去重，允许下次重试
+        log::warn!("启动表情图后台生成线程失败 image_id={}: {}", image_id, e);
+        pending
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&image_id);
+    }
+}
+
+/// 后台生成任务：使用独立数据库连接执行生成，避免占用主连接/主线程。
+fn generate_sticker_job(image_id: i32) -> Result<(), AppError> {
+    let conn = rusqlite::Connection::open(crate::core::db::get_db_path())?;
+    conn.busy_timeout(std::time::Duration::from_secs(15))?;
+    let meme_dir: String = conn
+        .query_row("SELECT meme_dir FROM config WHERE id = 1", [], |row| row.get(0))
+        .unwrap_or_default();
+    if meme_dir.trim().is_empty() {
+        return Err(AppError("未设置表情包目录，跳过表情图生成".to_string()));
+    }
+    // 已就绪(如并发已生成)时内部直接复用，否则执行生成
+    ensure_sticker_path(&conn, image_id, &meme_dir)?;
+    Ok(())
+}
+
+/// 获取某图片已就绪的表情图磁盘路径(供前端分享/复制使用，**不触发**生成)
+///
+/// 已生成时返回 `.gif` 缓存路径；未生成返回 `null`。前端收到 `null` 时应
+/// 先直接发送原图，再调用 [`generate_sticker_async`] 触发后台异步生成。
+/// 该命令不增加分享计数(分享计数由 `share_image` 等单独维护)。
 #[tauri::command]
-pub fn get_sticker_path(
+pub fn get_sticker_if_ready(
     state: tauri::State<'_, crate::core::db_state::DbState>,
     image_id: i32,
-) -> Result<String, AppError> {
+) -> Result<Option<String>, AppError> {
     let conn = state.lock().map_err(|e| AppError(e.to_string()))?;
     let meme_dir: String = conn
         .query_row("SELECT meme_dir FROM config WHERE id = 1", [], |row| row.get(0))
         .unwrap_or_default();
-    let path = ensure_sticker_path(&conn, image_id, &meme_dir)?;
-    Ok(path.to_string_lossy().to_string())
+    Ok(get_ready_sticker_path(&conn, image_id, &meme_dir)?
+        .map(|p| p.to_string_lossy().to_string()))
+}
+
+/// 触发某图片表情图的后台异步生成(立即返回，不阻塞)
+#[tauri::command]
+pub fn generate_sticker_async(
+    _state: tauri::State<'_, crate::core::db_state::DbState>,
+    image_id: i32,
+) -> Result<(), AppError> {
+    spawn_sticker_generation(image_id);
+    Ok(())
 }
