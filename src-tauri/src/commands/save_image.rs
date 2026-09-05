@@ -1,10 +1,12 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 #[cfg(target_os = "android")]
 use tauri::Emitter;
+#[cfg(target_os = "android")]
 use tauri::Manager;
 use crate::core::error::AppError;
 
 #[tauri::command]
+#[cfg_attr(not(target_os = "android"), allow(unused_variables))]
 pub async fn save_image_to_gallery(
     app_handle: tauri::AppHandle,
     image_data: String,
@@ -23,11 +25,8 @@ pub async fn save_image_to_gallery(
 
     #[cfg(not(target_os = "android"))]
     {
-        let save_dir = app_handle
-            .path()
-            .app_data_dir()
-            .unwrap_or_else(|_| std::env::temp_dir())
-            .join("saved_images");
+        // 桌面端统一存到 ~/.local/share/meme/saved_images（与 DB 同目录，而非 Tauri 的 com.v.meme）
+        let save_dir = crate::core::db::get_app_data_dir().join("saved_images");
 
         std::fs::create_dir_all(&save_dir)
             .map_err(|e| AppError(format!("创建目录失败: {}", e)))?;

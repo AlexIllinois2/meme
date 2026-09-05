@@ -400,26 +400,19 @@ class MainActivity : TauriActivity() {
   }
   
   private fun requestRuntimePermissions() {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+      // Android 11+ (API 30+)：MANAGE_EXTERNAL_STORAGE（"所有文件访问"）已涵盖全部文件读写，
+      // READ_MEDIA_* 与 READ/WRITE_EXTERNAL_STORAGE 均不需要，直接进入下一步，
+      // 避免重复弹窗（只让用户授权一次"所有文件访问"）
+      Log.d(TAG, "Android 11+: runtime storage permissions not needed, MANAGE_EXTERNAL_STORAGE covers all files")
+      onRuntimePermissionsDone()
+      return
+    }
+
     val permissionsToRequest = mutableListOf<String>()
-    
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-      // Android 13+ (API 33+): 请求新的媒体权限
-      if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES) 
-          != PackageManager.PERMISSION_GRANTED) {
-        permissionsToRequest.add(Manifest.permission.READ_MEDIA_IMAGES)
-      }
-      
-      if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_VIDEO) 
-          != PackageManager.PERMISSION_GRANTED) {
-        permissionsToRequest.add(Manifest.permission.READ_MEDIA_VIDEO)
-      }
-      
-      if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_AUDIO) 
-          != PackageManager.PERMISSION_GRANTED) {
-        permissionsToRequest.add(Manifest.permission.READ_MEDIA_AUDIO)
-      }
-    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-      // Android 6.0 - 12 (API 23-32): 请求传统存储权限
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+      // Android 6.0 - 10 (API 23-29): 请求传统存储权限（一次对话框同时请求读写）
       if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) 
           != PackageManager.PERMISSION_GRANTED) {
         permissionsToRequest.add(Manifest.permission.READ_EXTERNAL_STORAGE)

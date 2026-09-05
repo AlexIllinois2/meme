@@ -12,12 +12,23 @@ pub use core::db_state::DbState;
 
 #[cfg(target_os = "android")]
 use tauri::Emitter;
+use tauri::Manager;
+use std::sync::{Arc, Mutex};
 
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // 应用启动时初始化一次数据库连接（全局共享）
     let db_conn = core::db::init_db().expect("Failed to initialize database");
+
+    // 桌面端：把旧版数据目录统一迁移到 meme 下
+    #[cfg(not(target_os = "android"))]
+    {
+        // WebKit 数据目录（~/.local/share/com.v.meme -> meme/webview）
+        core::meme_fs::migrate_legacy_webview_data_dir();
+        // 窗口状态文件（~/.config/com.v.meme -> meme/window-state.json）
+        core::window_state::migrate_legacy_config_dir();
+    }
 
     let mut builder = tauri::Builder::default()
         .manage(DbState(std::sync::Mutex::new(db_conn)))
@@ -26,11 +37,40 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_clipboard_manager::init());
 
-    // 桌面端：记住窗口的位置和尺寸，下次启动时恢复
-    #[cfg(not(target_os = "android"))]
-    {
-        builder = builder.plugin(tauri_plugin_window_state::Builder::default().build());
-    }
+    // 窗口在 setup 中代码创建：为 webview 指定数据目录（localStorage 等），
+    // 使桌面端所有数据统一放在 ~/.local/share/meme 下，而非 Tauri 默认的 com.v.meme。
+    builder = builder.setup(|app| {
+        // 窗口状态缓存（内存中实时更新，退出时写盘）
+        let cache = Arc::new(Mutex::new(core::window_state::load_cached_state()));
+        app.manage(core::window_state::WindowStateCache(cache.clone()));
+
+        let Some(window_config) = app.config().app.windows.first() else {
+            return Ok(());
+        };
+        let mut window_builder =
+            tauri::WebviewWindowBuilder::from_config(app.handle(), window_config)?;
+        // Android 不支持 data_directory；桌面端(Linux/Windows)统一指向 meme/webview
+        #[cfg(not(target_os = "android"))]
+        {
+            window_builder =
+                window_builder.data_directory(core::db::get_app_data_dir().join("webview"));
+        }
+        let window = window_builder.build()?;
+
+        // 窗口以 visible:false 创建，恢复/初始化完再显示
+        #[cfg(not(target_os = "android"))]
+        {
+            // 恢复窗口位置/尺寸/最大化，并挂载状态监听（避免先出现在默认位置再跳变的闪烁）
+            core::window_state::restore_and_track(&window, cache);
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
+        #[cfg(target_os = "android")]
+        {
+            let _ = window.show();
+        }
+        Ok(())
+    });
 
     // Android 平台添加 share 插件
     #[cfg(target_os = "android")]
@@ -117,8 +157,14 @@ pub fn run() {
     ]);
 
     builder
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            // 退出时保存所有窗口状态（替代原 window-state 插件）
+            if let tauri::RunEvent::Exit = event {
+                core::window_state::save_all(app_handle);
+            }
+        });
 }
 
 // 退出应用命令（使用 app.exit 触发正常退出流程，确保窗口状态被保存）
