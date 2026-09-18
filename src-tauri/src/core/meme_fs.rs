@@ -3,7 +3,9 @@
 //! 全平台统一：数据库中只存储相对于 meme 根目录的路径，
 //! 所有实际文件操作前通过本模块将相对路径解析为绝对路径。
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+#[cfg(not(target_os = "android"))]
+use std::path::Path;
 use crate::core::error::AppError;
 /// 非法文件名字符
 pub const INVALID_CHARS: &[char] = &['/', '\\', ':', '*', '?', '"', '<', '>', '|'];

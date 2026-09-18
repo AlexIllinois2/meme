@@ -183,10 +183,23 @@ export function useMemeData(
 
       const accessible = await invoke<boolean>('check_storage_accessible', { memeDir });
       if (!accessible) {
-        if (typeof (window as any).AndroidNative?.requestStoragePermission === 'function') {
-          (window as any).AndroidNative.requestStoragePermission();
+        if ((window as any).AndroidNative?.hasStoragePermission?.() === false) {
+          // 合规要求：发起权限申请前，先在页面以顶部浮层同步告知申请目的
+          Snackbar.info('需要存储权限：用于读取表情包文件夹中的图片');
+          if (typeof (window as any).AndroidNative?.requestStoragePermission === 'function') {
+            (window as any).AndroidNative.requestStoragePermission();
+          }
+        } else {
+          // 权限已授予但访问仍失败：Android 6-10 上运行中授予的存储权限按
+          // 进程 GID 判定，需重建进程才生效，直接重启
+          Snackbar.warning('存储权限生效需要重启应用，正在重启...');
+          await new Promise(r => setTimeout(r, 1000));
+          try {
+            await invoke('restart_app');
+          } catch {
+            await invoke('exit_app');
+          }
         }
-        Snackbar.warning('请授予存储权限后重试');
         return;
       }
 

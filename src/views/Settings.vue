@@ -196,6 +196,8 @@ async function toggleGlobalFloatingWindow(enabled: boolean) {
   if (isAndroidTauri()) {
     if (enabled) {
       if (typeof window.AndroidNative?.startFloatingWindow === 'function') {
+        // 合规要求：发起权限申请前，先在页面以顶部浮层同步告知申请目的
+        Snackbar.info('需要悬浮窗权限：用于在悬浮窗中快捷搜索和发送表情包');
         window.AndroidNative.startFloatingWindow();
       }
     } else {
@@ -291,6 +293,17 @@ async function selectMemeDir() {
   // Android Tauri 环境使用 tauri-plugin-android-fs 插件的目录选择器
   if (isAndroidTauri()) {
     try {
+      // 权限前置：选目录前先确认存储权限，避免选完目录、保存配置后才发现没权限。
+      // Android 6-10 上运行中授予的存储权限对当前进程不生效（按进程 GID 判定），
+      // 把授权提前到选目录之前可让大多数换目录场景免于重启
+      if (window.AndroidNative?.hasStoragePermission?.() === false) {
+        Snackbar.info('需要存储权限：用于读取表情包文件夹，请按提示授权后重新选择');
+        if (typeof window.AndroidNative?.requestStoragePermission === 'function') {
+          window.AndroidNative.requestStoragePermission();
+        }
+        return;
+      }
+
       // 调用 Rust 后端的 Android 目录选择器
       const selectedPath = await invoke<string>('select_directory_android');
       
@@ -343,6 +356,29 @@ async function selectMemeDir() {
         localStorage.setItem('meme_restore_state', JSON.stringify({
           page: savedPage,
         }));
+
+        // 选完目录先预检真实访问性，而不是让 full_refresh 撞权限错误：
+        // - 权限已授予但 read_dir 仍失败：Android 6-10 上运行中授予的权限需重建
+        //   进程才生效，直接重启，不再盲目重试
+        // - 权限未授予（选目录过程中被系统回收）：告知并申请
+        const accessible = await invoke<boolean>('check_storage_accessible', { memeDir: selectedPath });
+        if (!accessible) {
+          if (window.AndroidNative?.hasStoragePermission?.() === false) {
+            Snackbar.info('需要存储权限：用于读取表情包文件夹，请按提示授权后重新进入应用');
+            if (typeof window.AndroidNative?.requestStoragePermission === 'function') {
+              window.AndroidNative.requestStoragePermission();
+            }
+          } else {
+            Snackbar.warning('存储权限生效需要重启应用，正在重启...');
+            await new Promise(r => setTimeout(r, 1000));
+            try {
+              await invoke('restart_app');
+            } catch {
+              await invoke('exit_app');
+            }
+          }
+          return;
+        }
 
         // SAF 选完路径后立即调 readDir 可能权限未稳定，延迟重试
         Snackbar.info('正在刷新数据...');

@@ -40,7 +40,6 @@ class MainActivity : TauriActivity() {
   private val ACTION_TRIGGER_SEARCH = "com.v.meme.ACTION_TRIGGER_SEARCH"
   private val ACTION_SHARE_RESULT = "com.v.meme.ACTION_SHARE_RESULT"
   
-  private var permissionFlowInProgress = false
   private var pendingSharePackage: String? = null
   
   // BroadcastReceiver 用于接收分享结果
@@ -97,7 +96,6 @@ class MainActivity : TauriActivity() {
     } else {
       Toast.makeText(this@MainActivity, "存储权限被拒绝，部分功能可能无法使用", Toast.LENGTH_LONG).show()
     }
-    onRuntimePermissionsDone()
   }
   
   private val manageStorageLauncher = registerForActivityResult(
@@ -110,7 +108,6 @@ class MainActivity : TauriActivity() {
                 Toast.makeText(this@MainActivity, "完整存储权限被拒绝，部分功能可能无法使用", Toast.LENGTH_LONG).show()
             }
         }
-        onManageStorageDone()
     }
 
     // 悬浮窗权限申请 launcher
@@ -125,7 +122,6 @@ class MainActivity : TauriActivity() {
                 Toast.makeText(this@MainActivity, "悬浮窗权限被拒绝", Toast.LENGTH_LONG).show()
             }
         }
-        onFloatingWindowDone()
     }
 
     // 应用选择器 launcher
@@ -167,7 +163,7 @@ class MainActivity : TauriActivity() {
     setupWindowInsets()
     
     setupBackPressHandler()
-    requestAllPermissions() // 请求所有需要的权限
+    // 合规要求：启动时不主动申请任何权限，权限均在实际使用相关功能时按需申请
     
     // 注册 ShareResultReceiver（在 onCreate 中注册，不在 onStop 中注销，
     // 确保 chooser 弹出后 Activity 进入后台时仍能接收分享结果）
@@ -286,24 +282,7 @@ class MainActivity : TauriActivity() {
       Log.d(TAG, "SYSTEM_ALERT_WINDOW (Floating Window): ${Settings.canDrawOverlays(this)}")
     }
     
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-      val appOps = getSystemService(android.app.AppOpsManager::class.java)
-      val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-        appOps.unsafeCheckOpNoThrow(
-          android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
-          android.os.Process.myUid(),
-          packageName
-        )
-      } else {
-        @Suppress("DEPRECATION")
-        appOps.checkOpNoThrow(
-          android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
-          android.os.Process.myUid(),
-          packageName
-        )
-      }
-      Log.d(TAG, "USAGE_STATS: ${mode == android.app.AppOpsManager.MODE_ALLOWED}")
-    }
+    Log.d(TAG, "USAGE_STATS: ${hasUsageStatsPermission()}")
     
     Log.d(TAG, "=== Permission Status Check Complete ===")
   }
@@ -388,200 +367,180 @@ class MainActivity : TauriActivity() {
     }
   }
   
-  // 幂等式请求所有需要的权限
-  private fun requestAllPermissions() {
-    Log.d(TAG, "requestAllPermissions called - starting sequential flow")
-    if (permissionFlowInProgress) {
-      Log.d(TAG, "Permission flow already in progress, skipping")
-      return
-    }
-    permissionFlowInProgress = true
-    requestRuntimePermissions()
-  }
-  
-  private fun requestRuntimePermissions() {
+  // 按需申请存储权限（由前端在实际使用场景中调用），申请前先弹窗告知用途
+  private fun requestStoragePermissions() {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
       // Android 11+ (API 30+)：MANAGE_EXTERNAL_STORAGE（"所有文件访问"）已涵盖全部文件读写，
-      // READ_MEDIA_* 与 READ/WRITE_EXTERNAL_STORAGE 均不需要，直接进入下一步，
-      // 避免重复弹窗（只让用户授权一次"所有文件访问"）
-      Log.d(TAG, "Android 11+: runtime storage permissions not needed, MANAGE_EXTERNAL_STORAGE covers all files")
-      onRuntimePermissionsDone()
+      // READ/WRITE_EXTERNAL_STORAGE 均不需要，只让用户授权一次"所有文件访问"
+      if (Environment.isExternalStorageManager()) {
+        Log.d(TAG, "MANAGE_EXTERNAL_STORAGE already granted")
+        Toast.makeText(this, "存储权限已授权", Toast.LENGTH_SHORT).show()
+      } else {
+        Log.d(TAG, "Storage permission not granted, showing purpose dialog")
+        showStoragePermissionDialog(emptyList())
+      }
       return
     }
-
-    val permissionsToRequest = mutableListOf<String>()
 
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
       // Android 6.0 - 10 (API 23-29): 请求传统存储权限（一次对话框同时请求读写）
-      if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) 
+      val permissionsToRequest = mutableListOf<String>()
+      if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
           != PackageManager.PERMISSION_GRANTED) {
         permissionsToRequest.add(Manifest.permission.READ_EXTERNAL_STORAGE)
       }
-      
-      if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) 
+      if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
           != PackageManager.PERMISSION_GRANTED) {
         permissionsToRequest.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
       }
-    }
-    
-    if (permissionsToRequest.isNotEmpty()) {
-      Log.d(TAG, "Requesting runtime permissions: ${permissionsToRequest.joinToString()}")
-      storagePermissionLauncher.launch(permissionsToRequest.toTypedArray())
-    } else {
-      Log.d(TAG, "All runtime permissions already granted")
-      onRuntimePermissionsDone()
+
+      if (permissionsToRequest.isNotEmpty()) {
+        Log.d(TAG, "Storage permissions not granted, showing purpose dialog")
+        showStoragePermissionDialog(permissionsToRequest)
+      } else {
+        Toast.makeText(this, "存储权限已授权", Toast.LENGTH_SHORT).show()
+      }
     }
   }
-  
-  private fun requestManageStoragePermission() {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-      if (!Environment.isExternalStorageManager()) {
-        Log.d(TAG, "Requesting MANAGE_EXTERNAL_STORAGE permission")
-        try {
-          val intent = android.content.Intent(
-            android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
-            android.net.Uri.parse("package:$packageName")
-          )
-          manageStorageLauncher.launch(intent)
-        } catch (e: Exception) {
-          val intent = android.content.Intent(
-            android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION
-          )
-          manageStorageLauncher.launch(intent)
+
+  // 申请前的用途告知弹窗，用户确认后才发起系统授权
+  private fun showStoragePermissionDialog(permissionsToRequest: List<String>) {
+    runOnUiThread {
+      try {
+        val builder = androidx.appcompat.app.AlertDialog.Builder(this)
+        builder.setTitle("需要存储权限")
+        builder.setMessage("存储权限用于读取您选择的表情包文件夹、整理图片，以及保存图片到相册。\n\n仅在您使用相关功能时申请，请点击\"确定\"继续授权。")
+        builder.setPositiveButton("确定") { dialog, _ ->
+          dialog.dismiss()
+          if (permissionsToRequest.isNotEmpty()) {
+            Log.d(TAG, "Requesting runtime permissions: ${permissionsToRequest.joinToString()}")
+            storagePermissionLauncher.launch(permissionsToRequest.toTypedArray())
+          } else {
+            requestManageStoragePermission()
+          }
         }
-      } else {
-        Log.d(TAG, "MANAGE_EXTERNAL_STORAGE already granted")
-        onManageStorageDone()
+        builder.setNegativeButton("取消") { dialog, _ ->
+          dialog.dismiss()
+          Log.d(TAG, "User cancelled storage permission request")
+        }
+
+        val dialog = builder.create()
+        dialog.show()
+        Log.d(TAG, "Storage permission dialog shown")
+      } catch (e: Exception) {
+        Log.e(TAG, "Failed to show storage permission dialog", e)
       }
-    } else {
-      Log.d(TAG, "Android < 11, skipping MANAGE_EXTERNAL_STORAGE")
-      onManageStorageDone()
     }
   }
-  
-  private fun requestFloatingWindowPermissionIfNeeded() {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-      if (!Settings.canDrawOverlays(this)) {
-        Log.d(TAG, "Floating window permission not granted, showing dialog")
-        showFloatingWindowPermissionDialog()
-      } else {
-        Log.d(TAG, "Floating window permission already granted")
-        onFloatingWindowDone()
+
+  private fun requestManageStoragePermission() {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) {
+      Log.d(TAG, "Requesting MANAGE_EXTERNAL_STORAGE permission")
+      try {
+        val intent = android.content.Intent(
+          android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+          android.net.Uri.parse("package:$packageName")
+        )
+        manageStorageLauncher.launch(intent)
+      } catch (e: Exception) {
+        val intent = android.content.Intent(
+          android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION
+        )
+        manageStorageLauncher.launch(intent)
       }
-    } else {
-      Log.d(TAG, "Android < 6.0, skipping floating window permission")
-      onFloatingWindowDone()
     }
   }
-  
+
   private fun showFloatingWindowPermissionDialog() {
     runOnUiThread {
       try {
         // 直接使用 androidx AlertDialog.Builder
         val builder = androidx.appcompat.app.AlertDialog.Builder(this)
         builder.setTitle("需要悬浮窗权限")
-        builder.setMessage("为了使用悬浮窗快捷搜索功能，需要授予悬浮窗权限。\n\n请点击\"确定\"前往设置页面授权。")
+        builder.setMessage("为了使用悬浮窗快捷搜索功能，需要授予悬浮窗权限。\n\n仅在您开启悬浮窗功能时申请，请点击\"确定\"前往设置页面授权。")
         builder.setPositiveButton("确定") { dialog, _ ->
           dialog.dismiss()
-          requestFloatingWindowPermission()
+          launchFloatingWindowSettings()
         }
         builder.setNegativeButton("取消") { dialog, _ ->
           dialog.dismiss()
           Log.d(TAG, "User cancelled floating window permission request")
-          onFloatingWindowDone()
         }
-        
+
         val dialog = builder.create()
         dialog.show()
         Log.d(TAG, "Floating window permission dialog shown")
       } catch (e: Exception) {
         Log.e(TAG, "Failed to show floating window permission dialog", e)
-        onFloatingWindowDone()
       }
     }
   }
-  
-  private fun requestUsageStatsPermissionIfNeeded() {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-      val appOps = getSystemService(android.app.AppOpsManager::class.java)
-      val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-        appOps.unsafeCheckOpNoThrow(
-          android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
-          android.os.Process.myUid(),
-          packageName
-        )
-      } else {
-        @Suppress("DEPRECATION")
-        appOps.checkOpNoThrow(
-          android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
-          android.os.Process.myUid(),
-          packageName
-        )
-      }
-      
-      if (mode != android.app.AppOpsManager.MODE_ALLOWED) {
-        Log.d(TAG, "Usage stats permission not granted, showing dialog")
-        showUsageStatsPermissionDialog()
-      } else {
-        Log.d(TAG, "Usage stats permission already granted")
-        onAllPermissionsDone()
-      }
+
+  private fun launchFloatingWindowSettings() {
+    try {
+      val intent = Intent(
+        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+        Uri.parse("package:$packageName")
+      )
+      floatingWindowPermissionLauncher.launch(intent)
+    } catch (e: Exception) {
+      Log.e(TAG, "Failed to launch floating window settings", e)
+    }
+  }
+
+  private fun hasUsageStatsPermission(): Boolean {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) return false
+    val appOps = getSystemService(android.app.AppOpsManager::class.java)
+    val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+      appOps.unsafeCheckOpNoThrow(
+        android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
+        android.os.Process.myUid(),
+        packageName
+      )
     } else {
-      Log.d(TAG, "Android < 5.0, skipping usage stats permission")
-      onAllPermissionsDone()
+      @Suppress("DEPRECATION")
+      appOps.checkOpNoThrow(
+        android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
+        android.os.Process.myUid(),
+        packageName
+      )
     }
+    return mode == android.app.AppOpsManager.MODE_ALLOWED
   }
-  
-  private fun onRuntimePermissionsDone() {
-    Log.d(TAG, "Runtime permissions step done, proceeding to manage storage")
-    requestManageStoragePermission()
-  }
-  
-  private fun onManageStorageDone() {
-    Log.d(TAG, "Manage storage step done, proceeding to floating window")
-    requestFloatingWindowPermissionIfNeeded()
-  }
-  
-  private fun onFloatingWindowDone() {
-    Log.d(TAG, "Floating window step done, proceeding to usage stats")
-    requestUsageStatsPermissionIfNeeded()
-  }
-  
-  private fun onAllPermissionsDone() {
-    Log.d(TAG, "All permissions flow completed")
-    permissionFlowInProgress = false
-  }
-  
+
   private fun showUsageStatsPermissionDialog() {
     runOnUiThread {
       try {
         // 直接使用 androidx AlertDialog.Builder
         val builder = androidx.appcompat.app.AlertDialog.Builder(this)
         builder.setTitle("需要使用情况访问权限")
-        builder.setMessage("为了让悬浮窗能够智能检测前台应用，需要授予使用情况访问权限。\n\n请点击\"确定\"前往设置页面授权。")
+        builder.setMessage("为了让悬浮窗能够智能检测前台应用，需要授予使用情况访问权限。\n\n仅在您开启悬浮窗相关功能时申请，请点击\"确定\"前往设置页面授权。")
         builder.setPositiveButton("确定") { dialog, _ ->
           dialog.dismiss()
-          requestUsageStatsPermission()
+          launchUsageStatsSettings()
         }
         builder.setNegativeButton("取消") { dialog, _ ->
           dialog.dismiss()
           Log.d(TAG, "User cancelled usage stats permission request")
-          onAllPermissionsDone()
         }
-        
+
         val dialog = builder.create()
         dialog.show()
         Log.d(TAG, "Usage stats permission dialog shown")
       } catch (e: Exception) {
         Log.e(TAG, "Failed to show usage stats permission dialog", e)
-        onAllPermissionsDone()
       }
     }
   }
-  
-  // 保留原有的 requestStoragePermissions 函数，供前端调用
-  private fun requestStoragePermissions() {
-    requestAllPermissions()
+
+  private fun launchUsageStatsSettings() {
+    try {
+      val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+      startActivity(intent)
+      Toast.makeText(this, "请授予\"使用情况访问权限\"以启用悬浮窗智能显示", Toast.LENGTH_LONG).show()
+    } catch (e: Exception) {
+      Log.e(TAG, "Failed to launch usage stats settings", e)
+    }
   }
   
   private fun findWebView(): WebView? {
@@ -790,12 +749,8 @@ class MainActivity : TauriActivity() {
     runOnUiThread {
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
         if (!Settings.canDrawOverlays(this)) {
-          // 跳转到悬浮窗权限设置页面
-          val intent = Intent(
-            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-            Uri.parse("package:$packageName")
-          )
-          floatingWindowPermissionLauncher.launch(intent)
+          // 先弹窗告知用途，用户确认后再跳转系统设置
+          showFloatingWindowPermissionDialog()
         } else {
           startFloatingWindowService()
         }
@@ -803,6 +758,25 @@ class MainActivity : TauriActivity() {
         // Android 6.0 以下，直接启动
         startFloatingWindowService()
       }
+    }
+  }
+
+  // 供前端判断悬浮窗权限是否已授予：已授予时才允许启动时自动恢复悬浮窗服务
+  @JavascriptInterface
+  fun hasFloatingWindowPermission(): Boolean {
+    return Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this)
+  }
+
+  // 供前端判断存储权限是否已授予（PackageManager/AppOps 层面的授权状态，
+  // 不代表当前进程的文件访问已生效——Android 6-10 需重建进程）
+  @JavascriptInterface
+  fun hasStoragePermission(): Boolean {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+      Environment.isExternalStorageManager()
+    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+      hasPermission(Manifest.permission.READ_EXTERNAL_STORAGE)
+    } else {
+      true
     }
   }
 
@@ -880,20 +854,16 @@ class MainActivity : TauriActivity() {
     Log.d(TAG, "requestUsageStatsPermission called")
     runOnUiThread {
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-        val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
-        startActivity(intent)
-        Toast.makeText(this, "请授予\"使用情况访问权限\"以启用悬浮窗智能显示", Toast.LENGTH_LONG).show()
+        if (hasUsageStatsPermission()) {
+          Toast.makeText(this, "使用情况访问权限已授权", Toast.LENGTH_SHORT).show()
+        } else {
+          // 先弹窗告知用途，用户确认后再跳转系统设置
+          showUsageStatsPermissionDialog()
+        }
       } else {
         Toast.makeText(this, "您的 Android 版本不支持此功能", Toast.LENGTH_SHORT).show()
       }
-      onAllPermissionsDone()
     }
-  }
-  
-  @JavascriptInterface
-  fun resetPermissionDialogFlag() {
-    Log.d(TAG, "resetPermissionDialogFlag called")
-    permissionFlowInProgress = false
   }
 
   @JavascriptInterface
@@ -906,15 +876,6 @@ class MainActivity : TauriActivity() {
     } catch (e: Exception) {
       Log.e(TAG, "Failed to get application name for $packageName", e)
       packageName
-    }
-  }
-  
-  @JavascriptInterface
-  fun requestAllPermissionsFromJS() {
-    Log.d(TAG, "requestAllPermissionsFromJS called")
-    runOnUiThread {
-      permissionFlowInProgress = false
-      requestAllPermissions()
     }
   }
 

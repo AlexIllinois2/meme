@@ -3,6 +3,7 @@ declare global {
     AndroidNative?: {
       shareImageToApp: (imagePath: string, targetApp: string) => void;
       requestStoragePermission: () => void;
+      hasStoragePermission: () => boolean;
       bringToFrontAndFocusSearch: () => void;
       isFloatingWindowEnabled: () => boolean;
       startFloatingWindow: () => void;
@@ -10,9 +11,8 @@ declare global {
       pickShareApp: () => void;
       syncCustomAppsToPrefs: (packagesJson: string) => void;
       requestUsageStatsPermission: () => void;
+      hasFloatingWindowPermission: () => boolean;
       getApplicationName: (packageName: string) => string;
-      requestAllPermissionsFromJS: () => void;
-      resetPermissionDialogFlag: () => void;
       isAutoSendEnabled: () => boolean;
       setAutoSendEnabled: (enabled: boolean) => void;
       isAccessibilityServiceEnabled: () => boolean;

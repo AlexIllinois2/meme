@@ -115,13 +115,17 @@ export function useConfig(invoke: (...args: any[]) => any) {
         pinyinSearchEnabled.value = config.value.pinyin_search || true;
         acronymSearchEnabled.value = config.value.acronym_search || true;
 
-        // Android 平台：从原生服务同步悬浮窗实际状态，并在需要时自动启动服务
+        // Android 平台：从原生服务同步悬浮窗实际状态，并在需要时自动启动服务。
+        // 合规要求：仅当悬浮窗权限已授予时才自动恢复服务；权限缺失时不代用户发起申请，
+        // 由用户在设置中手动开启（届时原生端会先弹窗告知用途）
         if (/Android/i.test(navigator.userAgent)) {
           try {
             const nativeEnabled = (window as any).AndroidNative?.isFloatingWindowEnabled?.();
             const shouldBeEnabled = config.value.global_floating_window === true;
+            const hasOverlayPermission =
+              (window as any).AndroidNative?.hasFloatingWindowPermission?.() === true;
 
-            if (shouldBeEnabled && nativeEnabled !== true) {
+            if (shouldBeEnabled && nativeEnabled !== true && hasOverlayPermission) {
               debug.log('[Floating] Config says enabled but service not running, starting...');
               (window as any).AndroidNative?.startFloatingWindow?.();
               globalFloatingWindowEnabled.value = true;

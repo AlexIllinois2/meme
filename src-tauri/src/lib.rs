@@ -12,7 +12,11 @@ pub use core::db_state::DbState;
 
 #[cfg(target_os = "android")]
 use tauri::Emitter;
+// Manager trait 用于 manage/state（窗口状态缓存），仅桌面端使用
+#[cfg(not(target_os = "android"))]
 use tauri::Manager;
+// Arc/Mutex 仅用于桌面端的窗口状态缓存
+#[cfg(not(target_os = "android"))]
 use std::sync::{Arc, Mutex};
 
 
@@ -40,13 +44,19 @@ pub fn run() {
     // 窗口在 setup 中代码创建：为 webview 指定数据目录（localStorage 等），
     // 使桌面端所有数据统一放在 ~/.local/share/meme 下，而非 Tauri 默认的 com.v.meme。
     builder = builder.setup(|app| {
-        // 窗口状态缓存（内存中实时更新，退出时写盘）
-        let cache = Arc::new(Mutex::new(core::window_state::load_cached_state()));
-        app.manage(core::window_state::WindowStateCache(cache.clone()));
+        // 窗口状态缓存（内存中实时更新，退出时写盘；仅桌面端有窗口状态概念）
+        #[cfg(not(target_os = "android"))]
+        let cache = {
+            let cache = Arc::new(Mutex::new(core::window_state::load_cached_state()));
+            app.manage(core::window_state::WindowStateCache(cache.clone()));
+            cache
+        };
 
         let Some(window_config) = app.config().app.windows.first() else {
             return Ok(());
         };
+        // data_directory 仅桌面端支持，mut 在 Android 下不再需要
+        #[cfg_attr(target_os = "android", allow(unused_mut))]
         let mut window_builder =
             tauri::WebviewWindowBuilder::from_config(app.handle(), window_config)?;
         // Android 不支持 data_directory；桌面端(Linux/Windows)统一指向 meme/webview
@@ -65,10 +75,9 @@ pub fn run() {
             let _ = window.show();
             let _ = window.set_focus();
         }
+        // Android 端窗口由 Activity 托管、始终可见，没有 show 等 API
         #[cfg(target_os = "android")]
-        {
-            let _ = window.show();
-        }
+        let _ = &window;
         Ok(())
     });
 
@@ -160,10 +169,13 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app_handle, event| {
-            // 退出时保存所有窗口状态（替代原 window-state 插件）
+            // 退出时保存所有窗口状态（替代原 window-state 插件；仅桌面端有窗口状态）
+            #[cfg(not(target_os = "android"))]
             if let tauri::RunEvent::Exit = event {
                 core::window_state::save_all(app_handle);
             }
+            #[cfg(target_os = "android")]
+            let _ = (app_handle, event);
         });
 }
 
