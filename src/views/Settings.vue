@@ -284,6 +284,14 @@ function handleAndroidBack(event: any) {
   return true;
 }
 
+// 通知首页 App.vue 重新拉取配置。
+// 设置页与首页各持有一份独立的 config ref，首页不知道这里改过什么；
+// 不同步的话，首页下一次 safeUpdateConfig（切分组、调列数等都会触发）
+// 会用自己那份旧值整份写回，把用户刚改的设置覆盖掉。
+function notifyConfigChanged() {
+  window.dispatchEvent(new CustomEvent('configNeedsReload'));
+}
+
 // 检测是否为桌面端
 const isDesktop = () => {
   return !(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
@@ -340,6 +348,7 @@ async function selectMemeDir() {
           if (verify.meme_dir === selectedPath) {
             console.log('[Settings] Verified: config.meme_dir is', verify.meme_dir);
             Snackbar.success('保存成功 ✓');
+            notifyConfigChanged();
           } else {
             console.error('[Settings] VERIFY FAILED: expected', selectedPath, 'got', verify.meme_dir);
             Snackbar.error('保存验证失败: 预期=' + selectedPath + ' 实际=' + verify.meme_dir);
@@ -504,6 +513,7 @@ async function autoSaveConfig() {
     await invoke('update_config', { config: safeConfig });
     console.log('[Config] update_config returned successfully');
     updateColorMode(safeConfig.color_mode);
+    notifyConfigChanged();
   } catch (error) {
     console.error('Failed to save config:', error);
     Snackbar.error('配置保存失败');

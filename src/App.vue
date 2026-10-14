@@ -15,7 +15,7 @@ const UserAgreement = defineAsyncComponent(() => import("./views/UserAgreement.v
 const PrivacyPolicy = defineAsyncComponent(() => import("./views/PrivacyPolicy.vue"));
 const ContextMenu = defineAsyncComponent(() => import("./components/ContextMenu.vue"));
 const KeywordManager = defineAsyncComponent(() => import("./components/KeywordManager.vue"));
-import type { Mode, Group, Image } from "./types";
+import type { Mode, Group, Image, Config } from "./types";
 import { debug } from './utils/debug';
 import { useVisibility } from './composables/useVisibility';
 
@@ -29,13 +29,42 @@ const handleWindowFocus = () => {
   }
 };
 
+// 设置页改动了配置，重新拉取对齐本地副本（不带回调，避免重复加载历史应用）
+async function handleConfigNeedsReload() {
+  await loadConfig();
+}
+
+// 页面恢复前台：同步系统主题并让搜索框重新聚焦。
+// 必须具名 —— 原先注册的是匿名闭包、卸载时移除的却是另一个引用，等于没移除
+async function handleVisibilityChange() {
+  try {
+    if (document.visibilityState === 'visible') {
+      debug.log('[Theme] App resumed to foreground');
+      await syncSystemTheme();
+      handleAppResume();
+    }
+  } catch (e) {
+    console.error('[Theme] Failed to handle visibility change:', e);
+  }
+}
+
 const { config, currentColorMode, gridColumns, pinyinSearchEnabled, acronymSearchEnabled, globalFloatingWindowEnabled, themeKey, safeUpdateConfig, loadConfig, applyTheme, syncSystemTheme, handleResize, handleWheel, handleTouchStart, handleTouchMove } = useConfig(invoke);
 
-const { modes, groups, images, selectedModeId, selectedGroupId, loadModes, loadGroups, loadImages, switchMode, switchGroup, fullRefresh } = useMemeData(config, safeUpdateConfig);
+// searchKeyword 提前声明并由 useSearch 复用：
+// useMemeData 切换模式后需要重跑搜索，而 useSearch 又依赖 useMemeData 的数据，
+// 两者初始化顺序互相牵制，共享同一个 ref 才能同时满足。
+const searchKeyword = ref('');
+
+const { modes, groups, images, selectedModeId, selectedGroupId, loadModes, loadGroups, loadImages, switchMode, switchGroup, fullRefresh } = useMemeData(
+  config,
+  safeUpdateConfig,
+  searchKeyword,
+  async () => { await searchImages(); },
+);
 
 import { useSearch } from './composables/useSearch';
 
-const { searchKeyword, searchInputRef, searchImages, handleFloatingSearchClick } = useSearch(invoke, {
+const { searchInputRef, searchImages, handleFloatingSearchClick } = useSearch(invoke, {
   selectedModeId,
   pinyinSearchEnabled,
   acronymSearchEnabled,
@@ -43,7 +72,7 @@ const { searchKeyword, searchInputRef, searchImages, handleFloatingSearchClick }
   images,
   selectedGroupId,
   loadImages,
-});
+}, searchKeyword);
 
 import { useEditMode } from './composables/useEditMode';
 
@@ -430,7 +459,7 @@ onMounted(async () => {
   }
 
   // 并行加载配置和模式列表（两者互不依赖）
-  await Promise.all([loadConfig(), loadModes()]);
+  await Promise.all([loadConfig({ onConfigLoaded: handleConfigLoaded }), loadModes()]);
   
   if (selectedModeId.value) {
     await loadGroups(selectedModeId.value);
@@ -562,20 +591,12 @@ onMounted(async () => {
   });
 
   // 监听应用恢复前台事件，自动同步系统颜色模式
-  document.addEventListener('visibilitychange', async () => {
-    try {
-      if (document.visibilityState === 'visible') {
-        // 应用恢复到前台
-        debug.log('[Theme] App resumed to foreground');
-        await syncSystemTheme(); 
-        handleAppResume();
-      }
-    } catch (e) {
-      console.error('[Theme] Failed to handle visibility change:', e);
-    }
-  });
+  document.addEventListener('visibilitychange', handleVisibilityChange);
 
   // 桌面端窗口重新获得焦点时同样触发搜索框聚焦
+  // 设置页改写配置后同步本地副本，防止下一次 safeUpdateConfig 用旧值覆盖回去
+  window.addEventListener('configNeedsReload', handleConfigNeedsReload);
+
   window.addEventListener('focus', handleWindowFocus);
 
   // 添加悬浮窗触发搜索的全局方法
@@ -686,7 +707,8 @@ onUnmounted(() => {
   // 清理事件监听
   document.removeEventListener('touchstart', handleUserInteraction);
   document.removeEventListener('click', handleUserInteraction);
-  document.removeEventListener('visibilitychange', handleAppResume);
+  document.removeEventListener('visibilitychange', handleVisibilityChange);
+  window.removeEventListener('configNeedsReload', handleConfigNeedsReload);
   window.removeEventListener('focus', handleWindowFocus);
 });
 
@@ -766,6 +788,22 @@ async function loadCustomApps() {
     }
   } catch (error) {
     console.error("Failed to load custom apps:", error);
+  }
+}
+
+// 配置加载成功后的 UI 态恢复入口（由 useConfig.loadConfig 回调触发）。
+// 顺序有依赖：必须先 loadCustomApps 拿到历史应用列表，才能确认 shareApp
+// 指向的包名是否仍存在，否则合法包名会被误判成已卸载并回退到 'all'。
+async function handleConfigLoaded(cfg: Config) {
+  await loadCustomApps();
+  shareApp.value = cfg.share_app || 'all';
+
+  // 包名指向的应用已不在历史列表里（被卸载或用户删过条目），回退到默认目标
+  if (shareApp.value.startsWith('pkg:')) {
+    const pkg = shareApp.value.slice(4);
+    if (!customShareApps.value.some(app => app.package_name === pkg)) {
+      shareApp.value = 'all';
+    }
   }
 }
 
@@ -962,6 +1000,15 @@ function handleShareAppChange(app: string) {
 
 
 function handleKeyDown(event: KeyboardEvent) {
+  // 焦点在输入框或弹窗内时不抢快捷键：否则在搜索框 Ctrl+V 粘贴关键词
+  // 会被当成粘贴图片，Ctrl+= 调列数也会误触发
+  const target = event.target as HTMLElement | null;
+  if (target) {
+    const tag = target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) return;
+    if (target.closest('.var-popup, .var-dialog')) return;
+  }
+
   if (event.ctrlKey && event.key === 'v') {
     handlePasteImage();
     return;

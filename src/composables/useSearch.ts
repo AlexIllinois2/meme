@@ -12,8 +12,11 @@ export function useSearch(
     selectedGroupId: Ref<number | null>;
     loadImages: (groupId: number) => Promise<void>;
   },
+  // 外部持有的关键词 ref：供 useMemeData 在切换模式后复用同一份关键词。
+  // 不传则自建（部件独立使用时不受影响）。
+  externalKeyword?: Ref<string>,
 ) {
-  const searchKeyword = ref('');
+  const searchKeyword = externalKeyword ?? ref('');
   const searchInputRef = ref<any>(null);
 
   async function searchImages() {

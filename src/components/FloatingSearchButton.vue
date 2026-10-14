@@ -96,7 +96,7 @@ function handleTouchMove(e: TouchEvent) {
 function updatePosition(x: number, y: number) {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
-  const btnSize = 56; // 按钮大小
+  const btnSize = 42; // 按钮大小（与 .floating-search-btn 的 CSS 尺寸保持一致）
   
   // 获取安全区域大小（从 CSS 变量读取，单位是 px）
   const rootStyle = getComputedStyle(document.documentElement);

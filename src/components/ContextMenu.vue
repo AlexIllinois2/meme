@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import Icon from "./Icon.vue";
 
 interface MenuItem {
@@ -136,25 +136,30 @@ function handleEscKey(event: KeyboardEvent) {
   }
 }
 
-onMounted(() => {
-  if (typeof window !== 'undefined') {
+// 只在菜单真正打开时才挂载全局快捷键：
+// 列表里每张图都有一个 ContextMenu 实例，静态注册等于每多一张图就多一个监听器
+function bindGlobalKeys(bind: boolean) {
+  if (typeof window === 'undefined') return;
+  if (bind) {
     window.addEventListener('tauri-android-back', handleBackButton);
-    // 桌面端添加ESC键监听
     if (!/Android/i.test(navigator.userAgent)) {
       window.addEventListener('keydown', handleEscKey);
     }
-  }
-});
-
-onUnmounted(() => {
-  if (typeof window !== 'undefined') {
+  } else {
     window.removeEventListener('tauri-android-back', handleBackButton);
-    // 桌面端移除ESC键监听
     if (!/Android/i.test(navigator.userAgent)) {
       window.removeEventListener('keydown', handleEscKey);
     }
   }
+}
+
+watch(show, (isOpen) => bindGlobalKeys(isOpen));
+
+onMounted(() => {
+  if (show.value) bindGlobalKeys(true);
 });
+
+onUnmounted(() => bindGlobalKeys(false));
 </script>
 
 <template>
