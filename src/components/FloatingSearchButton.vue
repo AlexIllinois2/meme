@@ -154,66 +154,49 @@ onUnmounted(() => {
       @touchstart="handleTouchStart"
       @click="handleClick"
     >
-      <Icon name="search" color="rgba(256, 256, 256, 0.7)" :size="24" />
+      <Icon name="search" :size="22" color="var(--color-on-primary)" />
     </div>
   </Transition>
 </template>
 
 <style scoped>
+/* 颜色全部走主题变量：--color-primary-rgb / --color-on-primary 由 ThemeProvider
+   按主题风格（modern/minimal/default）与明暗模式注入，避免硬编码导致换主题后失调 */
 .floating-search-btn {
   position: fixed;
   width: 42px;
   height: 42px;
   border-radius: 50%;
-  background: rgba(125, 211, 252, 0.507);
+  background: rgba(var(--color-primary-rgb), 0.55);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 
-    0 4px 12px rgba(125, 211, 252, 0.4),
+  box-shadow:
+    0 4px 12px rgba(var(--color-primary-rgb), 0.35),
     0 2px 4px rgba(0, 0, 0, 0.1);
   z-index: 1000;
   user-select: none;
   touch-action: none;
-  transition: 
+  transition:
     transform 0.2s ease,
     background 0.2s ease,
     box-shadow 0.2s ease;
 }
 
 .floating-search-btn:hover {
-  background: rgba(125, 211, 252, 0.692);
+  background: rgba(var(--color-primary-rgb), 0.75);
   transform: scale(1.05);
-  box-shadow: 
-    0 6px 20px rgba(125, 211, 252, 0.5),
+  box-shadow:
+    0 6px 20px rgba(var(--color-primary-rgb), 0.45),
     0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .floating-search-btn:active {
   transform: scale(0.95);
-  background: rgba(125, 211, 252, 0.692);
-}
-
-/* 深色模式适配 */
-:global(.dark-mode) .floating-search-btn {
-  background: rgba(103, 232, 249, 0.507);
-  box-shadow: 
-    0 4px 12px rgba(103, 232, 249, 0.4),
-    0 2px 4px rgba(0, 0, 0, 0.2);
-}
-
-:global(.dark-mode) .floating-search-btn:hover {
-  background: rgba(103, 232, 249, 0.692);
-  box-shadow: 
-    0 6px 20px rgba(103, 232, 249, 0.5),
-    0 2px 8px rgba(0, 0, 0, 0.25);
-}
-
-:global(.dark-mode) .floating-search-btn:active {
-  background: rgba(103, 232, 249, 0.692);
+  background: rgba(var(--color-primary-rgb), 0.75);
 }
 
 /* 过渡动画 */

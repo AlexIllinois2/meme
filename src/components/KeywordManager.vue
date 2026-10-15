@@ -384,7 +384,8 @@ onUnmounted(() => {
   opacity: 0.9;
 }
 
-:global(.var-dark .keyword-manager .var-button--primary .var-icon) {
+/* 修复深色模式下加号按钮颜色（图标为 svg，继承按钮文字色） */
+:global(.var-dark .keyword-manager .var-button--primary svg) {
   color: white !important;
 }
 </style>

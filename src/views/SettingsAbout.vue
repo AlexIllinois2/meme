@@ -5,22 +5,23 @@
       关于
     </h2>
 
-    <div class="setting-row" @click="openUserAgreement">
+    <!-- 用户协议/隐私政策仅商店版展示，开源版不放入口 -->
+    <div class="setting-row" v-if="isStoreVersion" @click="openUserAgreement">
       <Icon name="file-text" :size="22" class="setting-icon" />
       <div class="setting-label">
         <label>用户协议</label>
         <p class="setting-desc">查看用户使用协议</p>
       </div>
-      <Icon name="chevron-right" :size="20" class="arrow-icon" />
+      <Icon name="arrow-right-s" :size="20" class="arrow-icon" />
     </div>
 
-    <div class="setting-row" @click="openPrivacyPolicy">
+    <div class="setting-row" v-if="isStoreVersion" @click="openPrivacyPolicy">
       <Icon name="shield" :size="22" class="setting-icon" />
       <div class="setting-label">
         <label>隐私政策</label>
         <p class="setting-desc">查看隐私保护政策</p>
       </div>
-      <Icon name="chevron-right" :size="20" class="arrow-icon" />
+      <Icon name="arrow-right-s" :size="20" class="arrow-icon" />
     </div>
 
     <div class="setting-row" @click="openGitHubRepo">
@@ -29,7 +30,7 @@
         <label>开源地址</label>
         <p class="setting-desc">Web 版已开源</p>
       </div>
-      <Icon name="chevron-right" :size="20" class="arrow-icon" />
+      <Icon name="arrow-right-s" :size="20" class="arrow-icon" />
     </div>
 
     <div class="setting-row" @click="goSupport">
@@ -38,7 +39,7 @@
         <label>支持一下</label>
         <p class="setting-desc">喜欢本应用吗? 豪我一下吧</p>
       </div>
-      <Icon name="chevron-right" :size="20" class="arrow-icon" />
+      <Icon name="arrow-right-s" :size="20" class="arrow-icon" />
     </div>
 
     <div class="card about-card">
@@ -46,9 +47,6 @@
         <div class="app-logo">≧▽≦</div>
         <p class="version">v{{ appVersion }}</p>
         <p class="description">本地表情包管理和分享工具</p>
-        <div class="platform-info">
-          <p>支持平台：Linux (x86_64) / Android (aarch64)</p>
-        </div>
       </div>
     </div>
   </div>
@@ -58,13 +56,15 @@
 import { ref, onMounted } from 'vue';
 import Icon from '../components/Icon.vue';
 import { invoke } from '../utils/tauri';
+import { isStoreVersion } from '../utils/channel';
 
 const appVersion = ref('0.0.0');
 
 onMounted(async () => {
   try {
     const version = await invoke('get_version');
-    appVersion.value = version as string;
+    // 非 Tauri 环境 invoke 返回 null，保持默认值避免渲染出 "v"
+    if (version) appVersion.value = version as string;
   } catch { /* ignore */ }
 });
 
@@ -93,6 +93,11 @@ function goSupport() {
   margin: 0 0 16px 0;
   font-size: 18px;
   color: var(--color-text);
+}
+
+/* 分组标题图标用主色强调，与设置行图标形成层次 */
+.settings-section h2 :deep(svg) {
+  color: var(--color-primary);
 }
 
 .setting-row {
@@ -179,15 +184,5 @@ function goSupport() {
   font-size: 14px;
   color: var(--color-text-2);
   margin: 0;
-}
-
-.platform-info {
-  text-align: center;
-  font-size: 12px;
-  color: var(--color-text-3);
-}
-
-.platform-info p {
-  margin: 2px 0;
 }
 </style>

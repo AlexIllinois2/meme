@@ -1,4 +1,6 @@
 import { createApp } from "vue";
+// 先注册离线图标数据，再挂载应用（顺序依赖：组件渲染前图标必须已注册）
+import "./icons";
 import App from "./App.vue";
 import { Button, Icon, Input, Image, Popup, Tabs, Tab, TabsItems, TabItem, Switch, Card, Loading, Result, AppBar } from '@varlet/ui';
 import '@varlet/ui/es/button/style';

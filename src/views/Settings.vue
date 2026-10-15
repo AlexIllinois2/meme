@@ -29,10 +29,10 @@ const showColorModePopup = ref(false);
 const autoSendEnabled = ref(false);
 const accessibilityServiceEnabled = ref(false);
 
-const colorModeOptions: { value: 'system' | 'light' | 'dark'; label: string }[] = [
-  { value: 'system', label: '系统' },
-  { value: 'light', label: '浅色' },
-  { value: 'dark', label: '深色' }
+const colorModeOptions: { value: 'system' | 'light' | 'dark'; label: string; icon: string }[] = [
+  { value: 'system', label: '系统', icon: 'computer' },
+  { value: 'light', label: '浅色', icon: 'sun' },
+  { value: 'dark', label: '深色', icon: 'moon' }
 ];
 
 const colorModeLabel = computed(() => {
@@ -390,7 +390,7 @@ async function selectMemeDir() {
         }
 
         // SAF 选完路径后立即调 readDir 可能权限未稳定，延迟重试
-        Snackbar.info('正在刷新数据...');
+        Snackbar.info('正在重建索引...');
         await refreshWithRetry(selectedPath, 3);
       }
     } catch (error) {
@@ -410,7 +410,7 @@ async function refreshWithRetry(dir: string, maxRetries = 5, delayMs = 2000) {
       }
       const result = await invoke<string>('full_refresh', { memeDir: dir });
       console.log('[Refresh] Success:', result);
-      Snackbar.success('数据刷新完成 ✓');
+      Snackbar.success('索引重建完成 ✓');
       // 刷新成功后重载页面显示数据
       setTimeout(() => location.reload(), 500);
       return;
@@ -469,7 +469,7 @@ async function refreshWithRetry(dir: string, maxRetries = 5, delayMs = 2000) {
       } catch (refreshError) {
         console.error('[Settings] Auto refresh failed:', refreshError);
         localStorage.setItem('meme_restore_state', JSON.stringify({ page: 'settings' }));
-        Snackbar.warning('数据初始化失败，请手动刷新');
+        Snackbar.warning('数据初始化失败，请手动重建索引');
         setTimeout(() => location.reload(), 1500);
       }
     }
@@ -551,21 +551,23 @@ async function autoSaveConfig() {
             <label>表情包文件夹</label>
             <p class="setting-path">{{ config.meme_dir || '点击选择文件夹' }}</p>
           </div>
-          <Icon name="chevron-right" :size="20" class="arrow-icon" />
+          <Icon name="arrow-right-s" :size="20" class="arrow-icon" />
         </div>
         
         <div class="setting-row" @click="showColorModePopup = true">
+          <Icon name="contrast-2" :size="22" class="setting-icon" />
           <div class="setting-label">
             <label>主题</label>
           </div>
           <div class="setting-control">
             <span class="selected-value">{{ colorModeLabel }}</span>
-            <Icon name="chevron-right" :size="20" class="arrow-icon" />
+            <Icon name="arrow-right-s" :size="20" class="arrow-icon" />
           </div>
         </div>
-        
+
         <!-- 全局悬浮窗开关 - 仅 Android 显示 -->
         <div class="setting-row" v-if="isAndroidTauri()">
+          <Icon name="picture-in-picture-2" :size="22" class="setting-icon" />
           <div class="setting-label">
             <label>全局悬浮窗</label>
             <p class="setting-desc">在其他应用中快速打开搜索</p>
@@ -574,9 +576,10 @@ async function autoSaveConfig() {
             <var-switch v-model="config.global_floating_window" @change="toggleGlobalFloatingWindow" />
           </div>
         </div>
-        
+
         <!-- 自动发送开关 - 仅 Android 显示 -->
         <div class="setting-row" v-if="isAndroidTauri()">
+          <Icon name="send-plane" :size="22" class="setting-icon" />
           <div class="setting-label">
             <label>自动发送</label>
             <p class="setting-desc">分享图片到微信/QQ后自动点击发送按钮</p>
@@ -588,9 +591,10 @@ async function autoSaveConfig() {
             <var-switch v-model="autoSendEnabled" @change="toggleAutoSend" />
           </div>
         </div>
-        
+
         <!-- 无障碍服务状态 - 仅 Android 且自动发送开启时显示 -->
         <div class="setting-row" v-if="isAndroidTauri() && autoSendEnabled" @click="openAccessibilitySettings">
+          <Icon name="hand-heart" :size="22" class="setting-icon" />
           <div class="setting-label">
             <label>无障碍服务</label>
             <p class="setting-desc">
@@ -599,7 +603,7 @@ async function autoSaveConfig() {
             </p>
           </div>
           <div class="setting-control">
-            <Icon name="chevron-right" :size="20" class="arrow-icon" />
+            <Icon name="arrow-right-s" :size="20" class="arrow-icon" />
           </div>
         </div>
         
@@ -621,14 +625,14 @@ async function autoSaveConfig() {
     <div class="settings-popup-content">
       <div class="settings-popup-header">
         <h3>主题</h3>
-        <var-button text round @click="showColorModePopup = false">
-          <Icon name="x" :size="20" />
-        </var-button>
+        <button class="btn-icon" @click="showColorModePopup = false" title="关闭">
+          <Icon name="close" :size="20" />
+        </button>
       </div>
       <div class="settings-popup-body">
-        <div 
-          v-for="option in colorModeOptions" 
-          :key="option.value" 
+        <div
+          v-for="option in colorModeOptions"
+          :key="option.value"
           class="popup-option"
           :class="{ active: config.color_mode === option.value }"
           @click="selectColorMode(option.value)"
@@ -636,6 +640,7 @@ async function autoSaveConfig() {
           <div class="radio-wrapper">
             <div class="radio" :class="{ checked: config.color_mode === option.value }"></div>
           </div>
+          <Icon :name="option.icon" :size="20" class="option-icon" />
           <span class="option-label">{{ option.label }}</span>
         </div>
       </div>
@@ -670,7 +675,12 @@ async function autoSaveConfig() {
   gap: 10px;
   margin: 0 0 16px 0;
   font-size: 18px;
-  color: var(--text-color);
+  color: var(--color-text);
+}
+
+/* 分组标题图标用主色强调，与设置行图标形成层次 */
+.settings-section h2 :deep(svg) {
+  color: var(--color-primary);
 }
 
 .setting-row {
@@ -705,14 +715,14 @@ async function autoSaveConfig() {
   display: block;
   font-weight: 600;
   font-size: 14px;
-  color: var(--text-color);
+  color: var(--color-text);
   margin-bottom: 4px;
 }
 
 .setting-desc {
   margin: 0;
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
 }
 
 .setting-hint {
@@ -733,11 +743,11 @@ async function autoSaveConfig() {
 
 .selected-value {
   font-size: 14px;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
 }
 
 .arrow-icon {
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
 }
 
 .dir-input {
@@ -759,7 +769,7 @@ async function autoSaveConfig() {
   min-width: 60px;
   text-align: right;
   font-weight: 600;
-  color: var(--primary-color);
+  color: var(--color-primary);
   font-size: 14px;
 }
 
@@ -867,13 +877,6 @@ async function autoSaveConfig() {
   color: var(--color-text-tertiary);
 }
 
-.floating-app-bar {
-  margin: 16px;
-  margin-top: max(16px, env(safe-area-inset-top));
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
-}
-
 .setting-item {
   background: var(--color-surface);
   border-radius: var(--radius-md);
@@ -933,7 +936,8 @@ async function autoSaveConfig() {
 .popup-option {
   display: flex;
   align-items: center;
-  padding: 16px 0;
+  gap: 12px;
+  padding: 14px 16px;
   cursor: pointer;
   transition: background-color 0.2s ease;
   border-radius: 12px;
@@ -945,11 +949,11 @@ async function autoSaveConfig() {
 }
 
 .popup-option.active {
-  background-color: var(--color-surface-variant);
+  background-color: var(--color-primary-light);
 }
 
 .radio-wrapper {
-  margin-right: 16px;
+  margin-right: 4px;
 }
 
 .radio {
@@ -975,6 +979,17 @@ async function autoSaveConfig() {
   height: 10px;
   border-radius: 50%;
   background-color: var(--color-primary);
+}
+
+/* 主题选项图标：未选中为次级色，选中项高亮为主色 */
+.option-icon {
+  flex-shrink: 0;
+  color: var(--color-text-2);
+  transition: color 0.2s ease;
+}
+
+.popup-option.active .option-icon {
+  color: var(--color-primary);
 }
 
 .option-label {

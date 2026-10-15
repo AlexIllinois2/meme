@@ -5,10 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:store": "vite --mode store",
     "build": "vue-tsc --noEmit && vite build",
+    "build:oss": "vue-tsc --noEmit && vite build --mode oss",
+    "build:store": "vue-tsc --noEmit && vite build --mode store",
     "preview": "vite preview",
     "tauri": "tauri",
-    "android:build": "tauri android build"
+    "tauri:build:store": "tauri build --config src-tauri/tauri.store.conf.json",
+    "android:build": "tauri android build",
+    "android:build:store": "tauri android build --config src-tauri/tauri.store.conf.json"
   },
   "dependencies": {
     "@iconify/vue": "^5.0.1",

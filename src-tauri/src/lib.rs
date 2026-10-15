@@ -143,6 +143,7 @@ pub fn run() {
         // 应用控制
         exit_app,
         restart_app,
+        get_version,
         // 索引刷新
         commands::image::refresh_index,
         commands::image::full_refresh,
@@ -189,6 +190,12 @@ fn exit_app(app_handle: tauri::AppHandle) {
 #[tauri::command]
 fn restart_app(app_handle: tauri::AppHandle) {
     app_handle.restart();
+}
+
+// 获取应用版本号（取 Cargo.toml 的 version，与 tauri.conf.json 保持一致）
+#[tauri::command]
+fn get_version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
 }
 
 // 悬浮窗触发搜索聚焦的命令 - Android 平台

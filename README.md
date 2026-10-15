@@ -45,12 +45,28 @@ bun install
 # 开发模式
 bun run tauri dev
 
-# 构建生产版本
+# 构建生产版本（开源版，默认渠道）
 bun run tauri build
 
-# 构建 Android apk
+# 构建 Android apk（开源版，默认渠道）
 bun run android:build
 ```
+
+### 构建渠道：开源版（默认）vs 商店版（需显式指定）
+
+渠道在构建期由 Vite 环境变量 `VITE_APP_CHANNEL` 注入（见 `.env.oss` / `.env.store`）。
+**不指定 mode 时按开源版处理**，只有显式传 store 才打商店版。
+
+| 渠道 | 前端开发 | 前端构建 | 桌面端打包 | Android 打包 |
+| --- | --- | --- | --- | --- |
+| 开源版 oss（默认） | `bun run dev` | `bun run build` 或 `bun run build:oss` | `bun run tauri build` | `bun run android:build` |
+| 商店版 store | `bun run dev:store` | `bun run build:store` | `bun run tauri:build:store` | `bun run android:build:store` |
+
+两者的行为差异（见 `src/utils/channel.ts`）：
+
+- **开源版**：启动不弹《用户协议和隐私政策》确认弹窗；设置页「关于」中不展示
+  「用户协议」「隐私政策」入口。
+- **商店版**：协议弹窗与协议入口均保留。
 
 ### 代码检查
 

@@ -18,6 +18,7 @@ const KeywordManager = defineAsyncComponent(() => import("./components/KeywordMa
 import type { Mode, Group, Image, Config } from "./types";
 import { debug } from './utils/debug';
 import { useVisibility } from './composables/useVisibility';
+import { isStoreVersion } from './utils/channel';
 
 // 窗口非活动时隐藏图片区域（停止 CSS 动画 + GIF 解码）
 const { isActive } = useVisibility();
@@ -450,11 +451,11 @@ onMounted(async () => {
     }
   }
 
-  // 检查是否已接受用户协议
+  // 检查是否已接受用户协议（仅商店版需要协议确认，开源版直接进入）
   const agreementAccepted = localStorage.getItem('meme_agreement_accepted');
   hasAcceptedAgreement.value = agreementAccepted === 'true';
-  
-  if (!hasAcceptedAgreement.value) {
+
+  if (isStoreVersion && !hasAcceptedAgreement.value) {
     showAgreementConfirm.value = true;
   }
 
@@ -1210,19 +1211,19 @@ function toggleAcronymSearch() {
 // 模式菜单配置
 const modeMenuItems = [
   { label: '编辑', value: 'rename', icon: 'pencil' },
-  { label: '删除', value: 'delete', icon: 'delete', danger: true },
+  { label: '删除', value: 'delete', icon: 'delete-bin', danger: true },
 ];
 
 // 分组菜单配置
 const groupMenuItems = [
   { label: '重命名', value: 'rename', icon: 'pencil' },
-  { label: '关键词', value: 'keywords', icon: 'label' },
-  { label: '删除', value: 'delete', icon: 'delete', danger: true },
+  { label: '关键词', value: 'keywords', icon: 'price-tag-3' },
+  { label: '删除', value: 'delete', icon: 'delete-bin', danger: true },
 ];
 
 // 图片菜单配置
 const imageMenuItems = [
-  { label: '删除', value: 'delete', icon: 'delete', danger: true },
+  { label: '删除', value: 'delete', icon: 'delete-bin', danger: true },
 ];
 
 // 处理模式菜单选择
@@ -1557,12 +1558,12 @@ async function handleImageMenuSelect(img: Image, action: string) {
               class="search-input"
             >
               <template #prepend-icon>
-                <var-icon name="magnify" />
+                <Icon name="search" :size="20" color="var(--color-text-3)" />
               </template>
             </var-input>
           <div class="search-actions">
             <button class="btn-icon" @click="uploadImages" title="添加图片">
-              <Icon name="image" :size="24" />
+              <Icon name="image-add" :size="24" />
             </button>
             <!-- 全局编辑模式按钮 -->
             <button 
@@ -1605,25 +1606,25 @@ async function handleImageMenuSelect(img: Image, action: string) {
             >
               <div class="menu-popup-content">
                 <div class="menu-item" @click="togglePinyinSearch">
-                  <var-icon :name="pinyinSearchEnabled ? 'checkbox-marked' : 'checkbox-blank-outline'" size="18" />
+                  <Icon name="checkbox-circle" :fill="pinyinSearchEnabled" :size="18" class="menu-item-icon" />
                   <span>拼音搜索</span>
                 </div>
                 <div class="menu-item" @click="toggleAcronymSearch">
-                  <var-icon :name="acronymSearchEnabled ? 'checkbox-marked' : 'checkbox-blank-outline'" size="18" />
+                  <Icon name="checkbox-circle" :fill="acronymSearchEnabled" :size="18" class="menu-item-icon" />
                   <span>首字母搜索</span>
                 </div>
                 <div class="menu-divider"></div>
                 <div class="menu-item" @click="handleMenuAction('refresh')">
-                  <var-icon name="refresh" size="18" />
-                  <span>刷新数据</span>
+                  <Icon name="restart" :size="18" class="menu-item-icon" />
+                  <span>重建索引</span>
                 </div>
                 <div class="menu-item" @click="handleMenuAction('reload')">
-                  <var-icon name="replay" size="18" />
+                  <Icon name="refresh" :size="18" class="menu-item-icon" />
                   <span>刷新页面</span>
                 </div>
                 <div class="menu-divider"></div>
                 <div class="menu-item" @click="handleMenuAction('settings')">
-                  <var-icon name="cog" size="18" />
+                  <Icon name="settings-3" :size="18" class="menu-item-icon" />
                   <span>设置</span>
                 </div>
               </div>
@@ -1637,22 +1638,22 @@ async function handleImageMenuSelect(img: Image, action: string) {
             <div class="group-action-menu" @click.stop>
               <div class="group-action-header">
                 <h3>{{ currentEditingGroup?.name }}</h3>
-                <var-button text round @click="closeGroupActionMenu">
-                <var-icon name="window-close" size="20" color="var(--color-text)" />
-              </var-button>
+                <button class="btn-icon" @click="closeGroupActionMenu" title="关闭">
+                  <Icon name="close" :size="20" />
+                </button>
               </div>
               <div class="group-action-list">
                 <div class="group-action-item" @click="handleRenameGroup">
-                  <var-icon name="pencil" size="20" />
+                  <Icon name="pencil" :size="20" class="group-action-icon" />
                   <span>重命名分组</span>
                 </div>
                 <div class="group-action-item" @click="selectedGroupForMenu = currentEditingGroup; showKeywordManager = true; closeGroupActionMenu()">
-                  <var-icon name="label" size="20" />
+                  <Icon name="price-tag-3" :size="20" class="group-action-icon" />
                   <span>关键词</span>
                 </div>
                 <div class="group-action-divider"></div>
                 <div class="group-action-item danger" @click="handleDeleteGroup">
-                  <var-icon name="delete" size="20" />
+                  <Icon name="delete-bin" :size="20" class="group-action-icon" />
                   <span>删除分组</span>
                 </div>
               </div>
@@ -1671,7 +1672,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
                 @click="showAddModeDialog"
               >
                 <div class="add-tab-content">
-                  <var-icon name="plus" size="18" />
+                  <Icon name="add" :size="16" />
                   <span class="add-tab-text">添加模式</span>
                 </div>
               </div>
@@ -1689,8 +1690,8 @@ async function handleImageMenuSelect(img: Image, action: string) {
                   :class="{ 'is-checked': selectedModeIds.includes(mode.id) }"
                   @click.stop="toggleModeSelection(mode.id)"
                 >
-                  <var-icon v-if="selectedModeIds.includes(mode.id)" name="checkbox-marked" size="18" color="var(--color-primary)" />
-                  <var-icon v-else name="checkbox-blank-outline" size="18" color="var(--color-text)" />
+                  <Icon v-if="selectedModeIds.includes(mode.id)" name="checkbox-circle" :fill="true" :size="18" color="var(--color-primary)" />
+                  <Icon v-else name="checkbox-blank-circle" :size="18" color="var(--color-text-2)" />
                 </div>
                 <ContextMenu
                   :items="modeMenuItems"
@@ -1755,7 +1756,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
                 @click="showAddGroupDialog"
               >
                 <div class="add-tab-content">
-                  <var-icon name="plus" size="18" />
+                  <Icon name="add" :size="16" />
                   <span class="add-tab-text">添加分组</span>
                 </div>
               </div>
@@ -1773,8 +1774,8 @@ async function handleImageMenuSelect(img: Image, action: string) {
                   :class="{ 'is-checked': selectedGroupIds.includes(group.id) }"
                   @click.stop="toggleGroupSelection(group.id)"
                 >
-                  <var-icon v-if="selectedGroupIds.includes(group.id)" name="checkbox-marked" size="18" color="var(--color-primary)" />
-                  <var-icon v-else name="checkbox-blank-outline" size="18" color="var(--color-text)" />
+                  <Icon v-if="selectedGroupIds.includes(group.id)" name="checkbox-circle" :fill="true" :size="18" color="var(--color-primary)" />
+                  <Icon v-else name="checkbox-blank-circle" :size="18" color="var(--color-text-2)" />
                 </div>
                 <ContextMenu
                   :items="groupMenuItems"
@@ -1816,7 +1817,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
             @click="uploadImages"
           >
             <div class="add-image-content">
-              <var-icon name="plus" size="32" color="var(--color-primary)" />
+              <Icon name="image-add" :size="32" />
               <span>添加图片</span>
             </div>
           </div>
@@ -1838,17 +1839,18 @@ async function handleImageMenuSelect(img: Image, action: string) {
               :class="{ 'is-checked': selectedImages.includes(img.id) }"
               @click.stop="toggleImageSelection(img.id)"
             >
-              <var-icon 
-                v-if="selectedImages.includes(img.id)" 
-                name="checkbox-marked" 
-                size="20" 
-                color="var(--color-primary)" 
+              <Icon
+                v-if="selectedImages.includes(img.id)"
+                name="checkbox-circle"
+                :fill="true"
+                :size="20"
+                color="var(--color-primary)"
               />
-              <var-icon 
-                v-else 
-                name="checkbox-blank-outline" 
-                size="20" 
-                color="white" 
+              <Icon
+                v-else
+                name="checkbox-blank-circle"
+                :size="20"
+                color="var(--color-text-3)"
               />
             </div>
             <ContextMenu
@@ -1870,7 +1872,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
               class="image-content"
             />
             <div v-if="selectedImages.includes(img.id) && !isGlobalEditMode" class="check-overlay">
-              <var-icon name="check-circle" size="24" color="#fff" />
+              <Icon name="checkbox-circle" :fill="true" :size="24" color="#fff" />
             </div>
           </div>
         </div>
@@ -1878,10 +1880,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
         <!-- 窗口非活动时的暂停占位（仅桌面端） -->
         <div v-if="!isActive && !isAndroidTauri()" class="inactive-overlay">
           <div class="inactive-overlay-content">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="6" y="4" width="4" height="16"/>
-              <rect x="14" y="4" width="4" height="16"/>
-            </svg>
+            <Icon name="pause" :size="48" />
             <span>窗口非活跃，已暂停渲染</span>
           </div>
         </div>
@@ -1891,9 +1890,9 @@ async function handleImageMenuSelect(img: Image, action: string) {
           <div class="edit-popup">
             <div class="edit-popup-header">
               <h3>编辑模式</h3>
-              <var-button text round @click="showModeEditPopup = false">
-        <var-icon name="window-close" size="20" color="var(--color-text)" />
-      </var-button>
+              <button class="btn-icon" @click="showModeEditPopup = false" title="关闭">
+                <Icon name="close" :size="20" />
+              </button>
             </div>
             <div class="edit-popup-body">
               <var-input
@@ -1923,9 +1922,9 @@ async function handleImageMenuSelect(img: Image, action: string) {
           <div class="edit-popup">
             <div class="edit-popup-header">
               <h3>重命名分组</h3>
-              <var-button text round @click="showGroupEditPopup = false">
-        <var-icon name="window-close" size="20" color="var(--color-text)" />
-      </var-button>
+              <button class="btn-icon" @click="showGroupEditPopup = false" title="关闭">
+                <Icon name="close" :size="20" />
+              </button>
             </div>
             <div class="edit-popup-body">
               <var-input
@@ -1948,9 +1947,9 @@ async function handleImageMenuSelect(img: Image, action: string) {
           <div class="edit-popup">
             <div class="edit-popup-header">
               <h3>新增模式</h3>
-              <var-button text round @click="showAddModePopup = false">
-        <var-icon name="window-close" size="20" color="var(--color-text)" />
-      </var-button>
+              <button class="btn-icon" @click="showAddModePopup = false" title="关闭">
+                <Icon name="close" :size="20" />
+              </button>
             </div>
             <div class="edit-popup-body">
               <var-input
@@ -1981,13 +1980,13 @@ async function handleImageMenuSelect(img: Image, action: string) {
           <div class="edit-popup">
             <div class="edit-popup-header">
               <h3>新增分组</h3>
-              <var-button text round @click="showAddGroupPopup = false">
-        <var-icon name="window-close" size="20" color="var(--color-text)" />
-      </var-button>
+              <button class="btn-icon" @click="showAddGroupPopup = false" title="关闭">
+                <Icon name="close" :size="20" />
+              </button>
             </div>
             <div class="edit-popup-body">
               <div class="current-mode-display" v-if="selectedModeId">
-                <var-icon name="folder" size="16" />
+                <Icon name="folder-3" :size="16" />
                 <span>当前模式: {{ modes.find(m => m.id === selectedModeId)?.name }}</span>
               </div>
               <var-input
@@ -2279,24 +2278,27 @@ async function handleImageMenuSelect(img: Image, action: string) {
   border: 2px solid var(--color-primary);
 }
 
-/* 选择复选框 */
+/* 选择复选框 - 与图片网格复选框保持一致的圆形视觉语言 */
 .select-checkbox {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: 50%;
+  background-color: var(--color-surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
   transition: all 0.2s ease;
 }
 
 .select-checkbox:hover {
-  background-color: var(--color-surface-variant);
+  transform: scale(1.08);
 }
 
 .select-checkbox.is-checked {
   background-color: var(--color-primary-light);
+  box-shadow: none;
 }
 
 /* 分享目标 app 图标 */
@@ -2492,6 +2494,12 @@ async function handleImageMenuSelect(img: Image, action: string) {
   gap: 8px;
 }
 
+/* 占位图标颜色跟随主题主色，hover 时随容器变白 */
+.add-image-content :deep(svg) {
+  color: var(--color-primary);
+  transition: color 0.2s ease;
+}
+
 .add-image-content span {
   font-size: 14px;
   font-weight: 500;
@@ -2502,7 +2510,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
   color: white;
 }
 
-.image-item.add-image-item:hover :deep(.var-icon) {
+.image-item.add-image-item:hover :deep(svg) {
   color: white !important;
 }
 
@@ -2722,6 +2730,17 @@ async function handleImageMenuSelect(img: Image, action: string) {
   flex: 1;
 }
 
+/* 菜单项图标统一为次级文字色，hover/激活时强调为主色 */
+.menu-item :deep(svg) {
+  flex-shrink: 0;
+  color: var(--color-text-2);
+  transition: color 0.2s ease;
+}
+
+.menu-item:hover :deep(svg) {
+  color: var(--color-primary);
+}
+
 .menu-divider {
   height: 1px;
   background-color: var(--color-border);
@@ -2808,8 +2827,23 @@ async function handleImageMenuSelect(img: Image, action: string) {
   transform: scale(0.98);
 }
 
+/* 菜单项图标统一为次级文字色，危险项继承文字色 */
+.group-action-item :deep(svg) {
+  flex-shrink: 0;
+  color: var(--color-text-2);
+  transition: color 0.2s ease;
+}
+
+.group-action-item:hover :deep(svg) {
+  color: var(--color-primary);
+}
+
 .group-action-item.danger {
   color: var(--color-danger, #f44336);
+}
+
+.group-action-item.danger :deep(svg) {
+  color: inherit;
 }
 
 .group-action-item.danger:hover {
@@ -2975,13 +3009,13 @@ async function handleImageMenuSelect(img: Image, action: string) {
   display: flex;
   align-items: center;
   gap: 10px;
-  background: #4A90E2;
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
   padding: 12px 24px;
   border-radius: 12px;
   font-size: 16px;
   font-weight: 500;
-  box-shadow: 0 4px 20px rgba(74, 144, 226, 0.4);
+  box-shadow: 0 4px 20px rgba(var(--color-primary-rgb), 0.4);
   white-space: nowrap;
   cursor: pointer;
 }
@@ -2992,7 +3026,7 @@ async function handleImageMenuSelect(img: Image, action: string) {
   margin-left: 24px;
   border-left: 10px solid transparent;
   border-right: 10px solid transparent;
-  border-bottom: 10px solid #4A90E2;
+  border-bottom: 10px solid var(--color-primary);
 }
 
 @keyframes popupFadeIn {
@@ -3026,14 +3060,14 @@ async function handleImageMenuSelect(img: Image, action: string) {
   text-align: center;
   font-size: 20px;
   margin-bottom: 20px;
-  color: var(--text-color);
+  color: var(--color-text);
 }
 
 .agreement-content p {
   font-size: 14px;
   line-height: 1.6;
   margin-bottom: 12px;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
 }
 
 .agreement-content .link {
@@ -3232,8 +3266,8 @@ async function handleImageMenuSelect(img: Image, action: string) {
   transform: translateY(-50%);
   width: 18px;
   height: 18px;
-  background-color: var(--color-success);
-  color: white;
+  background-color: var(--color-primary);
+  color: var(--color-on-primary, #fff);
   border-radius: 50%;
   display: flex;
   align-items: center;

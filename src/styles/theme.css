@@ -146,6 +146,21 @@ html, body {
   background-color: transparent;
 }
 
+/* 危险操作图标按钮（批量删除等） */
+.btn-icon.btn-danger {
+  color: var(--color-danger, #ef4444);
+}
+
+.btn-icon.btn-danger:hover {
+  color: var(--color-danger, #ef4444);
+  background-color: var(--color-danger-light, rgba(239, 68, 68, 0.12));
+}
+
+.btn-icon.btn-danger:active {
+  color: var(--color-danger, #ef4444);
+  background-color: var(--color-danger-light, rgba(239, 68, 68, 0.12));
+}
+
 /* 窗口非活动时暂停所有 CSS 动画以释放 CPU */
 .window-inactive,
 .window-inactive * {
@@ -236,6 +251,17 @@ button:focus-visible {
   background: transparent;
   border: 1.5px solid var(--theme-border);
   border-radius: var(--theme-radius-2xl);
+}
+
+/* 次级页面统一的浮动卡片式 AppBar（设置/支持/协议/隐私政策） */
+/* 圆角/阴影优先取主题变量（minimal 主题圆角更小），回退到本文件定义 */
+.floating-app-bar {
+  margin: 16px;
+  margin-top: max(16px, env(safe-area-inset-top));
+  border-radius: var(--radius-lg, var(--theme-radius-lg));
+  box-shadow: var(--shadow-md, var(--theme-shadow-md));
+  overflow: hidden;
+  flex-shrink: 0;
 }
 
 /* 浮动 AppBar */

@@ -27,6 +27,10 @@ const modernLightVars = {
   '--color-primary': '#7dd3fc',
   '--color-primary-light': 'rgba(125, 211, 252, 0.15)',
   '--color-primary-dark': '#38bdf8',
+  // 主色上的文字/图标色（浅粉蓝底需用深色保证对比度）
+  '--color-on-primary': '#0c4a6e',
+  // 主色三元组，供 rgba(var(--color-primary-rgb), x) 使用
+  '--color-primary-rgb': '125, 211, 252',
   
   // 背景
   '--color-body': '#f8fafc',
@@ -43,6 +47,14 @@ const modernLightVars = {
   // 边框
   '--color-border': '#e2e8f0',
   '--color-outline': 'rgba(125, 211, 252, 0.2)',
+
+  // 功能色
+  '--color-success': '#10b981',
+  '--color-success-light': 'rgba(16, 185, 129, 0.12)',
+  '--color-warning': '#f59e0b',
+  '--color-warning-light': 'rgba(245, 158, 11, 0.12)',
+  '--color-danger': '#ef4444',
+  '--color-danger-light': 'rgba(239, 68, 68, 0.12)',
   
   // 圆角
   '--radius-sm': '8px',
@@ -75,6 +87,8 @@ const modernDarkVars = {
   '--color-primary': '#67e8f9',
   '--color-primary-light': 'rgba(103, 232, 249, 0.18)',
   '--color-primary-dark': '#22d3ee',
+  '--color-on-primary': '#155e75',
+  '--color-primary-rgb': '103, 232, 249',
   
   '--color-body': '#0f172a',
   '--color-surface': '#1e293b',
@@ -88,6 +102,14 @@ const modernDarkVars = {
   
   '--color-border': '#334155',
   '--color-outline': 'rgba(103, 232, 249, 0.25)',
+
+  // 功能色
+  '--color-success': '#34d399',
+  '--color-success-light': 'rgba(52, 211, 153, 0.18)',
+  '--color-warning': '#fbbf24',
+  '--color-warning-light': 'rgba(251, 191, 36, 0.18)',
+  '--color-danger': '#f87171',
+  '--color-danger-light': 'rgba(248, 113, 113, 0.18)',
   
   '--radius-sm': '8px',
   '--radius-md': '12px',
@@ -115,6 +137,8 @@ const minimalLightVars = {
   '--color-primary': '#18181b',
   '--color-primary-light': 'rgba(24, 24, 27, 0.05)',
   '--color-primary-dark': '#000000',
+  '--color-on-primary': '#ffffff',
+  '--color-primary-rgb': '24, 24, 27',
   
   '--color-body': '#ffffff',
   '--color-surface': '#ffffff',
@@ -128,6 +152,14 @@ const minimalLightVars = {
   
   '--color-border': '#e4e4e7',
   '--color-outline': 'rgba(24, 24, 27, 0.1)',
+
+  // 功能色
+  '--color-success': '#10b981',
+  '--color-success-light': 'rgba(16, 185, 129, 0.12)',
+  '--color-warning': '#f59e0b',
+  '--color-warning-light': 'rgba(245, 158, 11, 0.12)',
+  '--color-danger': '#ef4444',
+  '--color-danger-light': 'rgba(239, 68, 68, 0.12)',
   
   '--radius-sm': '4px',
   '--radius-md': '6px',
@@ -155,6 +187,8 @@ const minimalDarkVars = {
   '--color-primary': '#fafafa',
   '--color-primary-light': 'rgba(250, 250, 250, 0.1)',
   '--color-primary-dark': '#ffffff',
+  '--color-on-primary': '#18181b',
+  '--color-primary-rgb': '250, 250, 250',
   
   '--color-body': '#09090b',
   '--color-surface': '#18181b',
@@ -168,6 +202,14 @@ const minimalDarkVars = {
   
   '--color-border': '#27272a',
   '--color-outline': 'rgba(250, 250, 250, 0.1)',
+
+  // 功能色
+  '--color-success': '#34d399',
+  '--color-success-light': 'rgba(52, 211, 153, 0.18)',
+  '--color-warning': '#fbbf24',
+  '--color-warning-light': 'rgba(251, 191, 36, 0.18)',
+  '--color-danger': '#f87171',
+  '--color-danger-light': 'rgba(248, 113, 113, 0.18)',
   
   '--radius-sm': '4px',
   '--radius-md': '6px',
@@ -195,6 +237,8 @@ const defaultLightVars = {
   '--color-primary': '#3b82f6',
   '--color-primary-light': 'rgba(59, 130, 246, 0.1)',
   '--color-primary-dark': '#2563eb',
+  '--color-on-primary': '#ffffff',
+  '--color-primary-rgb': '59, 130, 246',
   
   '--color-body': '#ffffff',
   '--color-surface': '#ffffff',
@@ -208,6 +252,14 @@ const defaultLightVars = {
   
   '--color-border': '#e5e7eb',
   '--color-outline': 'rgba(59, 130, 246, 0.15)',
+
+  // 功能色
+  '--color-success': '#10b981',
+  '--color-success-light': 'rgba(16, 185, 129, 0.12)',
+  '--color-warning': '#f59e0b',
+  '--color-warning-light': 'rgba(245, 158, 11, 0.12)',
+  '--color-danger': '#ef4444',
+  '--color-danger-light': 'rgba(239, 68, 68, 0.12)',
   
   '--radius-sm': '6px',
   '--radius-md': '8px',
@@ -235,6 +287,8 @@ const defaultDarkVars = {
   '--color-primary': '#60a5fa',
   '--color-primary-light': 'rgba(96, 165, 250, 0.15)',
   '--color-primary-dark': '#3b82f6',
+  '--color-on-primary': '#ffffff',
+  '--color-primary-rgb': '96, 165, 250',
   
   '--color-body': '#111827',
   '--color-surface': '#1f2937',
@@ -248,6 +302,14 @@ const defaultDarkVars = {
   
   '--color-border': '#374151',
   '--color-outline': 'rgba(96, 165, 250, 0.2)',
+
+  // 功能色
+  '--color-success': '#34d399',
+  '--color-success-light': 'rgba(52, 211, 153, 0.18)',
+  '--color-warning': '#fbbf24',
+  '--color-warning-light': 'rgba(251, 191, 36, 0.18)',
+  '--color-danger': '#f87171',
+  '--color-danger-light': 'rgba(248, 113, 113, 0.18)',
   
   '--radius-sm': '6px',
   '--radius-md': '8px',

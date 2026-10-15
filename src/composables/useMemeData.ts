@@ -203,15 +203,15 @@ export function useMemeData(
         return;
       }
 
-      Snackbar.info('正在刷新数据...');
+      Snackbar.info('正在重建索引...');
       const result = await invoke<string>("full_refresh", { memeDir });
       debug.log('Full refresh result:', result);
       await reloadPageState();
-      Snackbar.success('数据刷新完成');
+      Snackbar.success('索引重建完成');
     } catch (error) {
       console.error("Failed to refresh:", error);
       try { await reloadPageState(); } catch (e) { /* ignore */ }
-      Snackbar.error('数据刷新失败: ' + error);
+      Snackbar.error('索引重建失败: ' + error);
     }
   }
 

@@ -186,7 +186,7 @@ export function useConfig(invoke: (...args: any[]) => any) {
       await safeUpdateConfig(config.value);
       applyTheme();
 
-      // 首次启动，自动刷新数据到数据库并加载
+      // 首次启动，自动重建索引到数据库并加载
       if (context?.autoRefreshAfterDirChange) {
         await context.autoRefreshAfterDirChange(selectedDir);
       }
@@ -211,7 +211,7 @@ export function useConfig(invoke: (...args: any[]) => any) {
       await safeUpdateConfig(config.value);
       applyTheme();
 
-      // 使用默认目录时，也尝试刷新数据并加载
+      // 使用默认目录时，也尝试重建索引并加载
       if (context?.autoRefreshAfterDirChange) {
         await context.autoRefreshAfterDirChange(defaultMemeDir);
       }

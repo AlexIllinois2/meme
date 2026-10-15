@@ -208,10 +208,6 @@ onUnmounted(() => {
   background-color: var(--color-body);
 }
 
-.floating-app-bar {
-  flex-shrink: 0;
-}
-
 .content {
   flex: 1;
   overflow-y: auto;

@@ -8,7 +8,9 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { Icon } from '@iconify/vue';
+// 使用 offline 版本：图标数据来自本地注册的 remix-icons.json 子集，
+// 避免运行时请求 Iconify 在线 API（离线/弱网时图标会缺失）
+import { Icon } from '@iconify/vue/offline';
 
 interface Props {
   name: string;
